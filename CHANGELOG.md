@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.3
+
 - `bin/install --only a,b` and `--skip a,b` pick skills, also for `--uninstall`
   and `--dry-run`.
 - `bin/install` reports project skills that a pack skill would shadow (from
