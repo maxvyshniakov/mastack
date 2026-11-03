@@ -1,0 +1,64 @@
+{
+  "comment": "Lease guard: a kill, pkill or killall that reaches a process inside another holder's slotfather lease (must deny, naming the lease) and look-alikes that signal the caller's own lease, a process in no lease, or only look (must allow). The test starts a real process for each {name}, puts them in the leases below, and serves them through a stand-in `slotfather status --json [--pid]`; {name} in a command is that process's pid, {group:name} its process group, {name:marker} the unique name it runs under, {pidfile:name} a file holding its pid. The caller works in the worktree of lane 650-test, session session-mine, as the session's main thread (deny, allow) or as a subagent of it (subagent_deny, subagent_allow); {descendant} runs under the stand-in for the session's Claude Code process (CLAUDE_PID). The 2026-11-03 replay: an agent cleaning up stray test processes with `pkill -f verify.sh` would have reached every lane's gate.",
+  "leases": {
+    "other-lane": {"label": "lane-641-desktop-shared-host", "meta": {"lane": "641-desktop-shared-host", "ticket": "641", "phase": "check"}, "cwd": "elsewhere", "holder": "other_holder", "tree": ["other_holder", "other"], "env": ["other_detached"]},
+    "mine": {"label": "lane-650-test", "meta": {"lane": "650-test", "ticket": "650", "phase": "check", "session": "session-mine"}, "cwd": "worktree", "holder": "mine_holder", "tree": ["mine_holder", "mine"]},
+    "other-session": {"label": "scripts", "meta": {"session": "session-other", "kind": "repro"}, "cwd": "worktree", "holder": "session_other", "tree": ["session_other"]},
+    "my-session": {"label": "scripts-mine", "meta": {"session": "session-mine"}, "cwd": "elsewhere", "holder": "session_mine", "tree": ["session_mine"]},
+    "no-meta-here": {"label": "suite", "meta": {}, "cwd": "worktree", "holder": "here", "tree": ["here"]},
+    "no-meta-elsewhere": {"label": "kit-verify", "meta": {}, "cwd": "elsewhere", "holder": "elsewhere", "tree": ["elsewhere"]},
+    "reused": {"label": "lane-642-plan", "meta": {"lane": "642-plan"}, "cwd": "elsewhere", "holder": "reused", "tree": ["reused"], "start": "Thu Jan  1 00:00:00 1970"},
+    "held-by-caller": {"label": "lane-999-other", "meta": {"lane": "999-other"}, "cwd": "elsewhere", "holder": "own_lease", "tree": ["own_lease"], "caller_lease": true},
+    "orchestrator-land": {"label": "land-641-review", "meta": {"lane": "641-desktop-shared-host", "session": "session-mine", "kind": "land"}, "cwd": "elsewhere", "holder": "orch_land", "tree": ["orch_land"]},
+    "session-measure": {"label": "measure-all", "meta": {}, "cwd": "elsewhere", "holder": "descendant", "tree": ["descendant"]}
+  },
+  "processes": ["other_holder", "other", "other_detached", "mine_holder", "mine", "session_other", "session_mine", "here", "elsewhere", "reused", "own_lease", "free", "orch_land"],
+  "deny": [
+    {"name": "a descendant of another lane's lease", "command": "kill -9 {other}", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "another lane's holder by signal name", "command": "kill -s TERM {other_holder}", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "a process that left the tree but carries the lease", "command": "kill {other_detached}", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "2026-11-03 shape: pkill by pattern", "command": "pkill -f {other:marker}", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "killall by name", "command": "killall -9 {other:marker}", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "the process group of another lane's holder", "command": "kill -TERM -- -{group:other_holder}", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "a pgrep substitution", "command": "kill $(pgrep -f {other:marker})", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "pgrep piped into xargs kill", "command": "pgrep -f {other:marker} | xargs -n 1 kill -9", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "a pid file", "command": "kill \"$(cat {pidfile:other})\"", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "every process", "command": "kill -9 -1", "leases": ["lane-641-desktop-shared-host", "scripts", "kit-verify", "lane-642-plan"]},
+    {"name": "inside a chain and a subshell", "command": "cd /tmp && (sleep 0; kill {other}) || true", "leases": ["lane-641-desktop-shared-host"]},
+    {"name": "a lease without a lane names another session", "command": "kill {session_other}", "leases": ["scripts"]},
+    {"name": "a lease without metadata in another worktree", "command": "kill {elsewhere}", "leases": ["kit-verify"]},
+    {"name": "a pid reused while the guard looked", "command": "kill {reused}", "leases": [], "reused": true}
+  ],
+  "allow": [
+    {"name": "the caller's own lane", "command": "kill -9 {mine} {mine_holder}"},
+    {"name": "pkill of the caller's own processes", "command": "pkill -f {mine:marker}"},
+    {"name": "the lease the caller runs under", "command": "kill {own_lease}"},
+    {"name": "a lease without a lane in the caller's session", "command": "kill {session_mine}"},
+    {"name": "a lease without metadata in the caller's worktree", "command": "kill {here}"},
+    {"name": "a process in no lease", "command": "kill {free}"},
+    {"name": "signal 0 only looks", "command": "kill -0 {other} && echo alive"},
+    {"name": "signal 0 by name", "command": "kill -s 0 {other}"},
+    {"name": "listing signals", "command": "kill -l"},
+    {"name": "a pid that does not exist", "command": "kill 99999999"},
+    {"name": "a pid in a variable is not seen", "command": "P={other}; kill $P"},
+    {"name": "a job", "command": "kill %1"},
+    {"name": "only text", "command": "echo 'kill {other}' && grep -c kill notes.txt"},
+    {"name": "the main thread stops a lane lease its session started", "command": "kill {orch_land}"},
+    {"name": "the main thread stops a lease started under its process", "command": "kill -TERM {descendant}"}
+  ],
+  "session_children": ["descendant"],
+  "asked": [
+    {"name": "an override asks the owner", "command": "LEASE_GUARD_OK=\"owner asked to stop the stuck 641 gate\" kill {other}", "leases": ["lane-641-desktop-shared-host"]}
+  ],
+  "subagent_deny": [
+    {"name": "a sibling lane's lease of the same session", "command": "kill {orch_land}", "leases": ["land-641-review"]},
+    {"name": "a lease without a lane of the same session in another worktree", "command": "kill {session_mine}", "leases": ["scripts-mine"]},
+    {"name": "a lease started under the session's process", "command": "kill {descendant}", "leases": ["measure-all"]},
+    {"name": "an override from a subagent is asked too, never passed", "command": "LEASE_GUARD_OK=\"cleanup\" kill {other}", "leases": ["lane-641-desktop-shared-host"], "asked": true}
+  ],
+  "subagent_allow": [
+    {"name": "its own lane", "command": "kill -9 {mine} {mine_holder}"},
+    {"name": "a lease without metadata in its worktree", "command": "kill {here}"},
+    {"name": "the lease it runs under", "command": "kill {own_lease}"}
+  ]
+}

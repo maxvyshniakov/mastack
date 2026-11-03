@@ -1,0 +1,23 @@
+{
+  "comment": "pgrep self-match: a pgrep -f or pkill -f whose literal pattern matches the command's own text, so it finds every agent shell running a command with the same text, such as an earlier wait loop (must deny, naming the pattern), and forms that do not (must allow). The first deny case is the 2026-11-04 wait-loop shape verbatim.",
+  "deny": [
+    {"name": "2026-11-04 replay: wait loop on a lane check", "command": "until ! pgrep -f \"lane check X\" >/dev/null; do sleep 15; done", "patterns": ["lane check X"]},
+    {"name": "while loop, then a step after it", "command": "while pgrep -f 'tools/lane land 597-x' > /dev/null; do sleep 30; done; echo landed", "patterns": ["tools/lane land 597-x"]},
+    {"name": "-f in a short-option cluster", "command": "pgrep -fl \"slotfather run\"", "patterns": ["slotfather run"]},
+    {"name": "inside a command substitution", "command": "n=$(pgrep -f verify.sh | wc -l); echo $n", "patterns": ["verify.sh"]},
+    {"name": "as an if condition", "command": "if pgrep -f lane-check >/dev/null; then echo busy; fi", "patterns": ["lane-check"]},
+    {"name": "pkill -f signals its own shell", "command": "pkill -9 -f \"sleep 300\"", "patterns": ["sleep 300"]},
+    {"name": "a regular expression that matches its own text", "command": "pgrep -f 'lane.check 5'", "patterns": ["lane.check 5"]}
+  ],
+  "allow": [
+    {"name": "one character bracketed", "command": "until ! pgrep -f \"[l]ane check X\" >/dev/null; do sleep 15; done"},
+    {"name": "pattern in a variable from another command", "command": "P=$(cat /tmp/pattern); until ! pgrep -f \"$P\" >/dev/null; do sleep 15; done"},
+    {"name": "plain pgrep without -f matches names only", "command": "until ! pgrep vite >/dev/null; do sleep 5; done"},
+    {"name": "pgrep -l by name", "command": "pgrep -l node"},
+    {"name": "anchored at the start of the command line", "command": "for i in $(seq 1 200); do pgrep -f '^python3 tools/lane land' >/dev/null || break; sleep 15; done"},
+    {"name": "a regular expression that does not match its own text", "command": "pgrep -f 'lane (check|land) 5'"},
+    {"name": "exact match", "command": "pgrep -x -f 'sleep 300'"},
+    {"name": "only text", "command": "echo \"pgrep -f lane\" && grep -c pgrep notes.txt"},
+    {"name": "waiting on a pid", "command": "while kill -0 $pid 2>/dev/null; do sleep 5; done"}
+  ]
+}
