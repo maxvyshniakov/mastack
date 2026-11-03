@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `bin/install --only a,b` and `--skip a,b` pick skills, also for `--uninstall`
+  and `--dry-run`.
+- `bin/install` reports project skills that a pack skill would shadow (from
+  `--project` or `~/.config/mastack/projects`) and holds those pack skills back
+  unless `--force`.
+- README and CONTRACT.md state the real precedence: in Claude Code a user skill
+  beats a project skill of the same name; Codex shows both, and its choice is
+  undocumented.
+- `bin/check` also runs the tracked tests.
+
 ## 0.2.2
 
 - `cleanup` handles a worktree folder that git leaves behind with ignored files:

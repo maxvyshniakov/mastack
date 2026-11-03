@@ -108,3 +108,21 @@ UPSTREAM(owner/repo#123): what this works around; remove when <condition>.
 A lint rule should require the link on every mark. Then the list of workarounds
 to revisit after a dependency update is a `grep`, not a memory. Pins kept for a
 reason are listed in `checks.md` or next to the pin itself.
+
+## Skills with a pack skill's name
+
+A pack skill installed for the user and a project skill with the same name do
+not combine:
+
+- Claude Code runs the user-level one: enterprise beats personal, personal beats
+  project ([Claude Code docs](https://code.claude.com/docs/en/skills), "Resolve
+  skills that share a name"). A project's own `push` stops running the moment
+  the pack's `push` is installed.
+- Codex does not merge two skills that share a `name`, and both can appear in
+  skill selectors; which one it picks is not documented
+  ([Codex docs](https://learn.chatgpt.com/docs/build-skills)).
+
+So install a pack skill that a project also has only after that project's copy
+is removed and the `docs/agents/*.md` files the pack skill reads are in place
+(for `push`, `release` and `finish`: `publishing.md`). `bin/install` reports
+each such project skill as a shadow and holds the pack skill back until then.

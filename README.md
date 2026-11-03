@@ -104,13 +104,28 @@ skill, in English: the model matches requests against it, so keep it short.
 
 ```sh
 git clone https://github.com/maxvyshniakov/mastack ~/mastack
-~/mastack/bin/install            # symlink every skill into ~/.claude/skills and ~/.agents/skills
-~/mastack/bin/install --dry-run  # show what it would do
-~/mastack/bin/install --uninstall
+~/mastack/bin/install --dry-run                    # show what it would do
+~/mastack/bin/install --skip push,release,finish   # symlink the rest into ~/.claude/skills and ~/.agents/skills
+~/mastack/bin/install --only push                  # add one later
+~/mastack/bin/install --uninstall --only push      # remove one; without --only/--skip, all
 ```
 
 Links point at the checkout, so `git pull` updates every agent at once. An
-existing skill directory with the same name is left alone and reported.
+existing entry with the same name in the user skill directories is left alone
+and reported.
+
+A user-level skill beats a project skill of the same name in Claude Code, and
+Codex shows both (see [CONTRACT.md](CONTRACT.md#skills-with-a-pack-skills-name)).
+So the installer checks your projects, from `--project DIR` or from
+`~/.config/mastack/projects` (one directory per line), and holds back any pack
+skill a project also has in `.claude/skills` or `.agents/skills`:
+
+```
+shadow push: ~/app/.claude/skills/push (project has docs/agents/publishing.md)
+```
+
+Remove the project's copy first, then install the pack skill; `--force`
+installs it anyway.
 
 Before installing:
 
@@ -127,7 +142,8 @@ Before installing:
 - `bin/check` scans the tree for private details: IP addresses, home paths,
   e-mail addresses, issue references, tokens, plus your own patterns from
   `~/.config/mastack/private-patterns` (one regular expression per line, kept
-  out of the repository). `bin/check --history` scans every commit.
+  out of the repository). `bin/check --history` scans every commit. Without
+  `--history` it then runs the tests (`*_test.sh`, `*_test.py`).
   `.githooks/pre-push` runs it; enable with `git config core.hooksPath .githooks`.
 - `bin/eval <skill> [scenario]` runs a scenario from `evals/` against a scratch
   repository and grades what the agent did. See [evals/README.md](evals/README.md).

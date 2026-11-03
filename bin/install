@@ -1,60 +1,122 @@
 #!/usr/bin/env bash
-# Symlink every skill directory of this checkout into the user-level skill
+# Symlink the skill directories of this checkout into the user-level skill
 # directories that Claude Code and Codex read.
 #
-#   bin/install [--dry-run] [--force] [--uninstall] [--target DIR]...
+#   bin/install [--dry-run] [--force] [--uninstall] [--only a,b] [--skip a,b]
+#               [--target DIR]... [--project DIR]...
 #
 # Without --target it installs into ~/.claude/skills and ~/.agents/skills.
-# An existing entry that is not our link is left alone and reported; --force
-# replaces a foreign symlink, never a real directory or file.
+# --only and --skip pick skills; --uninstall removes only the picked ones.
+# A user-level skill wins over a project skill of the same name, so a picked
+# skill that a project also has (.claude/skills or .agents/skills) is reported
+# as a shadow and held back. Projects come from --project, else from
+# ~/.config/mastack/projects (one directory per line, # comments).
+# An existing entry that is not our link is left alone and reported. --force
+# installs shadowing skills and replaces foreign symlinks, never a real
+# directory or file.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd -P)
-dry=0 force=0 uninstall=0 targets=()
+config=${MASTACK_CONFIG:-$HOME/.config/mastack}
+dry=0 force=0 uninstall=0 only='' skip=''
+targets=() projects=()
 
 while (($#)); do
   case $1 in
     --dry-run) dry=1 ;;
     --force) force=1 ;;
     --uninstall) uninstall=1 ;;
+    --only) only=${2:?--only needs a list}; shift ;;
+    --skip) skip=${2:?--skip needs a list}; shift ;;
     --target) targets+=("${2:?--target needs a directory}"); shift ;;
-    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --project) projects+=("${2:?--project needs a directory}"); shift ;;
+    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install: unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
 done
 ((${#targets[@]})) || targets=("$HOME/.claude/skills" "$HOME/.agents/skills")
 
-run() { if ((dry)); then echo "  would: $*"; else "$@"; fi; }
+# Comma lists: "has LIST NAME" is true when NAME is in LIST.
+has() { [[ ,$1, == *,"$2",* ]]; }
+tilde() { local home=$HOME; [[ $1 == "$home"/* ]] && echo "~${1#"$home"}" || echo "$1"; }
+
+all=''
+for dir in "$root"/skills/*/; do
+  [[ -f $dir/SKILL.md ]] && all+=,$(basename "$dir")
+done
+for name in ${only//,/ } ${skip//,/ }; do
+  has "$all" "$name" || { echo "install: no skill named $name" >&2; exit 2; }
+done
+picked=''
+for name in ${all//,/ }; do
+  [[ -n $only ]] && ! has "$only" "$name" && continue
+  has "$skip" "$name" && continue
+  picked+=,$name
+done
+
+if ((!${#projects[@]})) && [[ -f $config/projects ]]; then
+  while IFS= read -r line || [[ -n $line ]]; do
+    line=${line%%#*}
+    line=$(echo "$line" | xargs)
+    [[ -n $line ]] && projects+=("${line/#\~/$HOME}")
+  done < "$config/projects"
+fi
+
+# Project skills whose directory name or frontmatter name matches a picked skill.
+shadowed=''
+if ((!uninstall)); then
+  ((${#projects[@]})) || echo "note: no projects to check for shadowing; pass --project or list them in $(tilde "$config/projects")"
+  for project in ${projects[@]+"${projects[@]}"}; do
+    [[ -d $project ]] || { echo "note: project $(tilde "$project") does not exist"; continue; }
+    note=''
+    [[ -f $project/docs/agents/publishing.md ]] && note=' (project has docs/agents/publishing.md)'
+    for skill in "$project"/.claude/skills/*/ "$project"/.agents/skills/*/; do
+      [[ -d $skill ]] || continue
+      skill=${skill%/}
+      names=$(basename "$skill")
+      [[ -f $skill/SKILL.md ]] && names+=" $(sed -n 's/^name:[[:space:]]*//p' "$skill/SKILL.md" | head -1 | tr -d "\"'")"
+      for name in $(printf '%s\n' $names | sort -u); do
+        has "$picked" "$name" || continue
+        echo "shadow $name: $(tilde "$skill")$note"
+        has "$shadowed" "$name" || shadowed+=,$name
+      done
+    done
+  done
+fi
+
+run() { ((dry)) || "$@"; }
 ours() { [[ -L $1 && $(readlink "$1") == "$root/skills/"* ]]; }
 
-conflicts=0
+((dry)) && echo "dry run: nothing below is changed"
+conflicts=0 held=''
 for target in "${targets[@]}"; do
-  echo "$target"
-  [[ -d $target ]] || run mkdir -p "$target"
+  tilde "$target"
+  [[ -d $target ]] || { echo "  create $(tilde "$target")"; run mkdir -p "$target"; }
 
-  # Links into this checkout whose skill no longer exists, or every link on uninstall.
+  # Links into this checkout whose skill no longer exists, or the picked ones on uninstall.
   for entry in "$target"/*; do
     ours "$entry" || continue
-    if ((uninstall)) || [[ ! -e $entry ]]; then
+    if [[ ! -e $entry ]] || { ((uninstall)) && has "$picked" "$(basename "$entry")"; }; then
       echo "  remove $(basename "$entry")"
       run rm "$entry"
     fi
   done
   ((uninstall)) && continue
 
-  for dir in "$root"/skills/*/; do
-    dir=${dir%/}
-    name=$(basename "$dir")
-    [[ -f $dir/SKILL.md ]] || continue
+  for name in ${picked//,/ }; do
+    dir=$root/skills/$name
     dest=$target/$name
     if [[ -L $dest && $(readlink "$dest") == "$dir" ]]; then
       echo "  ok     $name"
+    elif has "$shadowed" "$name" && ((!force)); then
+      echo "  hold   $name: shadows a project skill"
+      has "$held" "$name" || held+=,$name
     elif [[ -L $dest ]] && ((force)); then
       echo "  relink $name (was $(readlink "$dest"))"
       run ln -sfn "$dir" "$dest"
     elif [[ -e $dest || -L $dest ]]; then
-      echo "  skip   $name: $dest exists and is not ours"
+      echo "  skip   $name: $(tilde "$dest") exists and is not ours"
       conflicts=$((conflicts + 1))
     else
       echo "  link   $name"
@@ -67,12 +129,18 @@ done
 if ((!uninstall)); then
   for target in "${targets[@]}"; do
     for old in what-do-you-think; do
-      [[ -e $target/$old ]] && echo "note: critique replaces $target/$old; remove it yourself, and any matching global rule."
+      [[ -e $target/$old ]] && echo "note: critique replaces $(tilde "$target/$old"); remove it yourself, and any matching global rule."
     done
   done
 fi
 
+status=0
+if [[ -n $held ]]; then
+  echo "held back: ${held#,} (remove the project's copy first, or --force)" >&2
+  status=1
+fi
 if ((conflicts)); then
   echo "$conflicts skill(s) not installed; remove or rename the existing entries, or use --force for symlinks." >&2
-  exit 1
+  status=1
 fi
+exit $status

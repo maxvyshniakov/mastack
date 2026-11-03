@@ -5,10 +5,11 @@
   this without the line?) and run its scenarios: `bin/eval <skill>`.
 - A changed scenario or `evals/lib.sh`: `bin/eval <skill> --agent none` must
   fail its grade, then a real run must pass.
-- `bin/install --dry-run --target <scratch dir>` after changing the installer.
+- `tests/install_test.sh` after changing the installer.
 
 ## Full gate
-- `bin/check`. The pre-push hook runs it.
+- `bin/check`: the private-detail scan, then every tracked `*_test.sh` and
+  `*_test.py`. The pre-push hook runs it.
 
 ## Heavy checks
 - `bin/eval` starts real agent sessions and costs tokens, not CPU; run it on

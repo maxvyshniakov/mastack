@@ -12,7 +12,10 @@ outside the repository, since the list itself is private.
 
 --history scans every blob and commit message reachable from any ref instead.
 A line containing `check:allow` is skipped; issue references under the
-placeholder owners `owner/` and `acme/` are allowed. Exit status 1 when anything is found.
+placeholder owners `owner/` and `acme/` are allowed.
+
+Without --history it then runs the tests: tracked files named `*_test.sh` or
+`*_test.py`. Exit status 1 when anything is found or a test fails.
 """
 
 import argparse
@@ -77,6 +80,21 @@ def scan(label, data, patterns, findings):
                     findings.append(f"{label}:{n}: {kind}: {match.group(0)}")
 
 
+def run_tests():
+    failed = []
+    for path in git("ls-files", "-z", "*_test.sh", "*_test.py").decode().split("\0"):
+        if not path:
+            continue
+        command = ["bash", path] if path.endswith(".sh") else [sys.executable, path]
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+        if result.returncode:
+            sys.stdout.write(result.stdout + result.stderr)
+            failed.append(path)
+        else:
+            print(f"check: {path} passed", file=sys.stderr)
+    return failed
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--history", action="store_true", help="scan every reachable blob and commit message")
@@ -116,6 +134,9 @@ def main():
         print(f"check: {len(findings)} finding(s); fix them or mark a deliberate line with check:allow", file=sys.stderr)
         return 1
     print("check: clean", file=sys.stderr)
+    if not args.history and (failed := run_tests()):
+        print(f"check: tests failed: {', '.join(failed)}", file=sys.stderr)
+        return 1
     return 0
 
 
