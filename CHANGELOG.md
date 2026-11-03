@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.2
+
 - `cleanup` handles a worktree folder that git leaves behind with ignored files:
   compare with the main checkout, delete only when nothing is unique.
 
