@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0
+
 - CONTRACT.md: new `docs/agents/orchestration.md` (lane tool, report labels,
   review policy, owner queue, implementer brief additions), read by
   `orchestrate`.
