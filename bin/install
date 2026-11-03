@@ -63,6 +63,15 @@ for target in "${targets[@]}"; do
   done
 done
 
+# Skills that a mastack skill replaces: report them, never remove them.
+if ((!uninstall)); then
+  for target in "${targets[@]}"; do
+    for old in what-do-you-think; do
+      [[ -e $target/$old ]] && echo "note: critique replaces $target/$old; remove it yourself, and any matching global rule."
+    done
+  done
+fi
+
 if ((conflicts)); then
   echo "$conflicts skill(s) not installed; remove or rename the existing entries, or use --force for symlinks." >&2
   exit 1

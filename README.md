@@ -89,6 +89,16 @@ git clone https://github.com/maxvyshniakov/mastack ~/mastack
 Links point at the checkout, so `git pull` updates every agent at once. An
 existing skill directory with the same name is left alone and reported.
 
+Before installing:
+
+- `push`, `release` and `finish` follow `docs/agents/publishing.md`. Give each
+  project you use them in that file first; without it they can only push to the
+  branch's upstream, which skips whatever the project's own push flow does.
+- `critique` replaces a standalone "what do you think" skill or global rule.
+  Remove those yourself (for example `what-do-you-think` in the skill
+  directories and the matching rule in your global agent instructions) so two
+  instructions do not compete.
+
 ## Develop
 
 - `bin/check` scans the tree for private details: IP addresses, home paths,

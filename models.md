@@ -10,7 +10,7 @@ evals, and update the reasons here if they changed.
 |---|---|---|---|
 | design | Fable, high | Opus, high | Plans and interfaces decide what everything after them costs. The most expensive tokens go here, and to the final synthesis. |
 | implement | Opus, high | Sol, xhigh | Implementation against a written contract is where most tokens go; a strong model with a clear brief is enough. |
-| visual | Opus, high | none | Work judged by eye stays with the Anthropic family; its taste in layout has been more reliable. |
+| visual | Opus, high | none | The author prefers to keep work judged by eye with the Anthropic family. |
 | review | Sol, medium | Opus, medium | The reviewer is of another family than the implementer, so it does not share the implementer's blind spots. |
 | routine | Sol, medium | Opus, medium | Bulk, low-risk work: renames, mirroring docs, running checks. |
 | research | Opus, medium | Sonnet, medium | Collecting facts needs care, not frontier judgment. Sonnet only for plain reading and search. |
@@ -25,8 +25,8 @@ evals, and update the reasons here if they changed.
   fixed or rejected. A strong reviewer can find something forever; a second
   round rarely pays for itself.
 - **Both lenses for dangerous surfaces.** Migrations, auth, money and
-  deletion get reviewers from both families in parallel. Each has found real
-  defects the other missed.
+  deletion get reviewers from both families in parallel, on the author's view
+  that two families are likely to catch different defects.
 - **Quota decides the order, not taste.** Codex leads review and routine while
   at least 15% of its weekly limit is left, because its tokens are cheaper; below
   that, work moves to Claude so the last of the quota stays for review.
