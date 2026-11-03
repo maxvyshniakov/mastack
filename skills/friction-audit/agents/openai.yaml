@@ -1,0 +1,3 @@
+interface:
+  display_name: "Friction audit"
+  short_description: "What confuses agents in a package, and which layer fixes it"

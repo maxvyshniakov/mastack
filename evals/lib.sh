@@ -72,3 +72,22 @@ TOOL
 install_gate() {
   printf '#!/usr/bin/env bash\necho run >> %q\n' "$EVAL/log/check.log" > check.sh && chmod +x check.sh
 }
+
+# tool_uses [name]: one line per tool call of the agent, "<tool>\t<input as JSON>",
+# optionally only calls of one tool. Claude runs only (reads $EVAL/agent.jsonl).
+tool_uses() {
+  python3 - "$EVAL/agent.jsonl" "${1:-}" <<'PY'
+import json, sys
+path, only = sys.argv[1], sys.argv[2]
+for line in open(path, encoding="utf-8"):
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if event.get("type") != "assistant":
+        continue
+    for block in event.get("message", {}).get("content", []):
+        if block.get("type") == "tool_use" and (not only or block.get("name") == only):
+            print(f"{block['name']}\t{json.dumps(block.get('input', {}), ensure_ascii=False)}")
+PY
+}

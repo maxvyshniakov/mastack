@@ -31,6 +31,9 @@ scenario, since an agent that hits one usually stops and asks. It prints `PASS` 
   `install_gate`. The stand-in promote tool and pre-push hook log every call,
   so the grade can tell a promoted push from a bare one.
 - Grade with `expect "<what>" <command>` and `refute "<what>" <command>`.
+- For Claude runs, `$EVAL/agent.jsonl` holds every event and `tool_uses [tool]`
+  prints one line per tool call (`<tool>\t<input JSON>`), so a grade can check
+  what the agent did and in which order, such as a subagent after the last edit.
 - A prompt that needs task history states it as context, since a headless run
   has no earlier conversation.
 

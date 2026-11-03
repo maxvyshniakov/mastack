@@ -9,7 +9,8 @@ block and a ```sh grade block. Setup runs with $EVAL (the scratch directory) and
 $MASTACK set, sources evals/lib.sh, and must create $EVAL/repo. Every mastack
 skill is linked into the repo's .claude/skills and .agents/skills (excluded from
 Git). The agent runs in $EVAL/repo with the prompt; its final message lands in
-$EVAL/out.txt. Grade calls `expect "<what>" <command...>` for each assertion
+$EVAL/out.txt; for Claude, every event of the run lands in $EVAL/agent.jsonl
+(`tool_uses` in lib.sh lists the tool calls). Grade calls `expect "<what>" <command...>` for each assertion
 that must hold and `refute "<what>" <command...>` for each that must not.
 
 The scratch directory is kept when a scenario fails or with --keep. --agent none
@@ -62,16 +63,16 @@ def model_id(alias):
 
 # What the agent may do in the scratch repository: file tools, Git, and the
 # fixture's own scripts pass at once; anything else goes to the auto-mode classifier.
-CLAUDE_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Skill", "Bash(git *)", "Bash(GIT_INDEX_FILE=*)",
+CLAUDE_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Skill", "Agent", "Bash(git *)", "Bash(GIT_INDEX_FILE=*)",
                 "Bash(export GIT_INDEX_FILE=*)", "Bash(tools/*)", "Bash(./check.sh*)", "Bash(ls *)", "Bash(cat *)",
                 "Bash(diff *)", "Bash(mktemp *)", "Bash(mkdir *)", "Bash(cp *)"]
 
 
 def agent_command(agent, model, prompt, repo):
     if agent == "claude":
-        return ["claude", "-p", prompt, "--model", model, "--output-format", "json", "--permission-mode", "auto",
-                "--add-dir", str(repo.parent), "--setting-sources", "project,local", "--strict-mcp-config",
-                "--allowedTools", *CLAUDE_TOOLS]
+        return ["claude", "-p", prompt, "--model", model, "--output-format", "stream-json", "--verbose",
+                "--permission-mode", "auto", "--add-dir", str(repo.parent), "--setting-sources", "project,local",
+                "--strict-mcp-config", "--allowedTools", *CLAUDE_TOOLS]
     return ["codex", "exec", "-C", str(repo), "-s", "workspace-write", "-c", 'approval_policy="never"',
             "-c", f'sandbox_workspace_write.writable_roots=["{repo.parent}"]', "-c", f'model="{model}"',
             "--output-last-message", str(repo.parent / "out.txt"), prompt]
@@ -112,12 +113,17 @@ def run_one(skill, path, agent, model, keep):
         except subprocess.TimeoutExpired as error:
             output, status = str(error.stdout or ""), "timeout"
     if agent == "claude":
-        try:
-            reply = json.loads(output)
-            denials = [d.get("tool_input", {}).get("command") or d.get("tool_name") for d in reply.get("permission_denials", [])]
-            (scratch / "out.txt").write_text(reply.get("result") or "")
-        except (json.JSONDecodeError, AttributeError):
-            (scratch / "out.txt").write_text(output)
+        # stream-json: one event per line; agent.jsonl keeps them for tool_uses in grade blocks.
+        (scratch / "agent.jsonl").write_text(result.stdout if status != "timeout" else output)
+        events = []
+        for line in (scratch / "agent.jsonl").read_text().splitlines():
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+        reply = next((e for e in reversed(events) if e.get("type") == "result"), {})
+        denials = [d.get("tool_input", {}).get("command") or d.get("tool_name") for d in reply.get("permission_denials", [])]
+        (scratch / "out.txt").write_text(reply.get("result") or "")
     elif agent == "none":
         (scratch / "out.txt").write_text("")
     (scratch / "agent.log").write_text(f"exit: {status}\n{output}")

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Deps update"
+  short_description: "Update pins, then remove fixed workarounds"

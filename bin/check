@@ -11,7 +11,8 @@ $MASTACK_PRIVATE_PATTERNS or ~/.config/mastack/private-patterns and lives
 outside the repository, since the list itself is private.
 
 --history scans every blob and commit message reachable from any ref instead.
-A line containing `check:allow` is skipped. Exit status 1 when anything is found.
+A line containing `check:allow` is skipped; issue references under the
+placeholder owners `owner/` and `acme/` are allowed. Exit status 1 when anything is found.
 """
 
 import argparse
@@ -31,7 +32,7 @@ GENERIC = [
     ("ip", re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])")),
     ("home path", re.compile(r"/(?:Users|home)/(?!<|\$|runner\b)[A-Za-z0-9._-]+|[A-Za-z]:\\Users\\[^\\\s]+")),
     ("email", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")),
-    ("issue ref", re.compile(r"(?<![\w/&#])#\d+\b|\b(?!owner/repo#)[\w.-]+/[\w.-]+#\d+\b")),
+    ("issue ref", re.compile(r"(?<![\w/&#])#\d+\b|\b(?!(?:owner|acme)/)[\w.-]+/[\w.-]+#\d+\b")),
     ("token", re.compile(
         r"\bgh[pousr]_[A-Za-z0-9]{20,}|\bgithub_pat_\w{20,}|\bsk-(?:ant-)?[A-Za-z0-9_-]{20,}"
         r"|\bxox[abposr]-[A-Za-z0-9-]{10,}|\bAKIA[0-9A-Z]{16}\b|-----BEGIN [A-Z ]*" + "PRIVATE KEY-----")),

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Rate"
+  short_description: "Fixed rubric, fix, blind re-score until 10/10"

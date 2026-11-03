@@ -1,0 +1,5 @@
+interface:
+  display_name: "Reprompt"
+  short_description: "Deepen the task, then rewrite the prompt"
+policy:
+  allow_implicit_invocation: false

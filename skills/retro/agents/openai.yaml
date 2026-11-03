@@ -1,0 +1,3 @@
+interface:
+  display_name: "Retro"
+  short_description: "Fix the environment after a session went wrong"

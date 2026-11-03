@@ -14,30 +14,41 @@ that owns the main branches, CI followed to the end.
 ```mermaid
 flowchart LR
   idea([idea]) --> grill[grill-me]
-  grill --> build
+  grill --> spec[to-spec]
+  roadmap -.-> spec
+  grill <-.-> prototype
+  grill <-.-> research
+  spec --> orchestrate
   subgraph build [build]
     tdd --> debug
     debug --> tdd
   end
+  orchestrate --> build
+  spec --> build
   build --> review[cross-review]
   review --> finish
   subgraph finish [finish]
     commit --> push --> release --> cleanup
   end
-  critique -.-> grill
-  architecture -.-> grill
-  status -.-> handoff
+  finish -.-> retro
 ```
 
-- **Think**: `grill-me` turns an idea into decisions, one question at a time.
-  `critique` gives a verdict instead of doing the work. `architecture` finds
-  shallow modules and designs deeper ones; a candidate it finds goes back into
-  `grill-me`.
-- **Build**: `tdd` for checkable behavior, `debug` when something is broken.
-  A bug without a good seam for its test is an `architecture` finding.
+- **Think**: `grill-me` turns an idea into decisions, one question at a time;
+  `prototype` and `research` answer the questions talk cannot. `critique` gives
+  a verdict instead of doing the work. Work bigger than one session starts in
+  `roadmap`, a map of decisions, and joins at `to-spec`.
+- **Plan**: `to-spec` writes the spec and slices it into tickets whose briefs
+  are contracts.
+- **Build**: `orchestrate` runs tickets in parallel lanes; each lane, or a
+  single session, builds with `tdd` and `debug`. A bug without a good seam for
+  its test is an `architecture` finding.
 - **Check**: `cross-review` by a model of another family, one round of fixes.
+  `rate` scores anything against a fixed rubric and improves it to 10.
 - **Ship**: `finish` runs `commit`, `push`, `release` and `cleanup` in order,
   each under its own rules, and reports risk and what is unverified.
+- **Keep the environment good**: `retro` after a session that went wrong,
+  `agent-docs` for what agents read, `friction-audit` for what keeps confusing
+  agents in a package, `deps-update` to update pins and retire workarounds.
 - **Between sessions**: `status` shows what runs and what waits for you;
   `handoff` pauses cleanly for the next agent.
 
@@ -47,21 +58,33 @@ flowchart LR
 |---|---|
 | [grill-me](skills/grill-me/SKILL.md) | Settling a plan by interview; glossary and ADRs as you go |
 | [critique](skills/critique/SKILL.md) | "What do you think?": judgment, no execution |
+| [roadmap](skills/roadmap/SKILL.md) | A map of decision tickets for work bigger than one session |
+| [prototype](skills/prototype/SKILL.md) | Throwaway code that answers one design question |
+| [research](skills/research/SKILL.md) | A background agent, primary sources, one cited file |
+| [to-spec](skills/to-spec/SKILL.md) | The agreed design as a spec and contract tickets |
 | [architecture](skills/architecture/SKILL.md) | Finding shallow modules, designing an interface twice |
+| [orchestrate](skills/orchestrate/SKILL.md) | Parallel lanes, blind review, one gate per batch |
 | [tdd](skills/tdd/SKILL.md) | Red-green slices at public seams |
 | [debug](skills/debug/SKILL.md) | Reproduce first, falsifiable hypotheses, fix the class |
 | [cross-review](skills/cross-review/SKILL.md) | Blind two-axis review by another model family |
+| [rate](skills/rate/SKILL.md) | A fixed rubric, fixes, a blind re-score until 10/10 |
 | [commit](skills/commit/SKILL.md) | Committing a task's work in a shared tree |
 | [push](skills/push/SKILL.md) | Publishing the chain by SHA, CI to a final result |
 | [release](skills/release/SKILL.md) | Cutting a version late, publishing from a clean checkout |
 | [finish](skills/finish/SKILL.md) | The whole chain in one request, with a risk report |
 | [cleanup](skills/cleanup/SKILL.md) | Merged branches, worktrees, stray processes |
+| [deps-update](skills/deps-update/SKILL.md) | Updating every pin, then retiring fixed workarounds |
 | [status](skills/status/SKILL.md) | What runs, what waits for you, what is blocked |
 | [handoff](skills/handoff/SKILL.md) | A clean pause and a handoff file |
+| [retro](skills/retro/SKILL.md) | Fixing the environment after a session went wrong |
+| [agent-docs](skills/agent-docs/SKILL.md) | Writing and auditing what agents read |
+| [friction-audit](skills/friction-audit/SKILL.md) | What confuses agents in a package, and the layer that fixes it |
+| [video-feedback](skills/video-feedback/SKILL.md) | Recorded feedback to timestamped, verified requirements |
+| [reprompt](skills/reprompt/SKILL.md) | Deepening a task, then rewriting the prompt (user-invoked) |
 
-Every skill can be invoked by the model, so a request in your own words
-("пуш", "что в работе?") reaches it. Descriptions carry trigger phrases in the
-languages the author works in; add yours.
+Every skill except `reprompt` can be invoked by the model, so a request in your
+own words ("пуш", "что в работе?") reaches it. Descriptions carry trigger
+phrases in the languages the author works in; add yours.
 
 ## Conventions
 
@@ -113,6 +136,7 @@ Before installing:
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Ideas in `grill-me`, `architecture`, `tdd`, `debug`
-and `cross-review` come from [Matt Pocock's skills](https://github.com/mattpocock/skills),
+MIT. See [LICENSE](LICENSE). Ideas in `grill-me`, `roadmap`, `prototype`,
+`research`, `to-spec`, `orchestrate`, `architecture`, `tdd`, `debug`,
+`cross-review`, `agent-docs` and `retro` come from [Matt Pocock's skills](https://github.com/mattpocock/skills),
 also MIT; the texts here are rewritten, and his notice is kept in LICENSE.

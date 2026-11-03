@@ -1,0 +1,3 @@
+interface:
+  display_name: "Video feedback"
+  short_description: "Transcribe recorded feedback into tracked requirements"

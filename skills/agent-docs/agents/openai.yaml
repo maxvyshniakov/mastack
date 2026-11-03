@@ -1,0 +1,3 @@
+interface:
+  display_name: "Agent docs"
+  short_description: "Write and audit what agents read"
