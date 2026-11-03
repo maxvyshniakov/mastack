@@ -7,6 +7,7 @@ root=$(cd "$(dirname "$0")/.." && pwd -P)
 scratch=$(cd "$(mktemp -d)" && pwd -P)
 trap 'rm -rf "$scratch"' EXIT
 export MASTACK_CONFIG=$scratch/config MASTACK_SCAN_ROOT=$scratch/home
+export MASTACK_CLAUDE_SETTINGS=$scratch/settings.json  # never the real settings
 mkdir -p "$MASTACK_CONFIG" "$MASTACK_SCAN_ROOT"
 
 failures=0
@@ -115,6 +116,65 @@ mkdir -p "$h/other/.claude/skills/push"
 install --only push || true
 check "a repository not in the ignore list is still checked" said "shadow push: $h/other/.claude/skills/push"
 rm "$MASTACK_CONFIG/ignore"
+
+# The Bash hook in the Claude Code settings.
+sf=$MASTACK_CLAUDE_SETTINGS
+cat > "$sf" <<'EOF'
+{
+  "permissions": {"allow": ["Bash(make:*)"]},
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "bash ~/.claude/hooks/macos-shell-pitfalls.sh", "timeout": 5}]},
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 /opt/app/tools/agent-hooks/zsh-word-split.py", "timeout": 5}]},
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 /opt/app/tools/agent-hooks/git-guard.py", "timeout": 5},
+                                    {"type": "command", "command": "python3 /opt/other/audit.py", "timeout": 5}]},
+      {"matcher": "Edit", "hooks": [{"type": "command", "command": "python3 /opt/app/tools/agent-hooks/unguarded-sequence.py"}]},
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 /opt/app/tools/agent-hooks/lease-guard.py", "timeout": 10}]}
+    ],
+    "SubagentStop": [{"hooks": [{"type": "command", "command": "python3 /opt/app/tools/agent-hooks/lane-stop.py"}]}]
+  }
+}
+EOF
+cp "$sf" "$scratch/settings.orig"
+rm -f "$scratch"/settings.json.mastack-backup-*  # from the uninstall cases above
+py() { python3 -c "import json, sys; s = json.load(open(sys.argv[1])); sys.exit(0 if ($1) else 1)" "$sf"; }
+commands="[h['command'] for g in s['hooks']['PreToolUse'] for h in g['hooks']]"
+backups() { find "$scratch" -maxdepth 1 -name 'settings.json.mastack-backup-*' | wc -l | tr -d ' '; }
+
+fresh
+install --dry-run || true  # earlier cases leave shadowed skills
+check "hooks --dry-run changes nothing" cmp -s "$sf" "$scratch/settings.orig"
+check "hooks --dry-run shows the new entry" grep -qE "^\+ +\"command\": \"python3 $root/hooks/bash_guard.py\"" "$scratch/out"
+check "hooks --dry-run shows a replaced entry" grep -qE "^-.*agent-hooks/git-guard.py" "$scratch/out"
+install --only rate
+check "--only without hooks leaves the settings alone" cmp -s "$sf" "$scratch/settings.orig"
+install --skip hooks || true
+check "--skip hooks leaves the settings alone" cmp -s "$sf" "$scratch/settings.orig"
+install --only hooks
+check "install says what it replaced" said "remove PreToolUse Bash: bash ~/.claude/hooks/macos-shell-pitfalls.sh"
+check "install registers one dispatcher" py "$commands.count('python3 $root/hooks/bash_guard.py') == 1"
+check "it runs for Bash with a timeout" py "any(g['matcher'] == 'Bash' and g['hooks'][0].get('timeout') == 10 for g in s['hooks']['PreToolUse'] if 'bash_guard' in g['hooks'][0]['command'])"
+check "the replaced checks are gone" py "not any('agent-hooks/' in c or 'pitfalls' in c for c in $commands)"
+check "a foreign handler in a replaced group stays" py "'python3 /opt/other/audit.py' in $commands"
+check "other events and settings stay" py "s['hooks']['SubagentStop'][0]['hooks'][0]['command'].endswith('lane-stop.py') and s['permissions']['allow'] == ['Bash(make:*)']"
+check "a backup of the original is written" sh -c "[ $(backups) -eq 1 ] && cmp -s '$scratch/settings.orig' \"\$(ls '$scratch'/settings.json.mastack-backup-*)\""
+cp "$sf" "$scratch/settings.installed"
+install --only hooks
+check "a second install is a no-op" cmp -s "$sf" "$scratch/settings.installed"
+check "a second install says ok" said "ok     hooks"
+check "a second install writes no backup" test "$(backups)" -eq 1
+install --uninstall --only push
+check "uninstalling a skill keeps the hook" cmp -s "$sf" "$scratch/settings.installed"
+install --uninstall --only hooks
+check "uninstall removes mastack's entry" py "not any('bash_guard' in c for c in $commands)"
+check "uninstall keeps every other entry" py "'python3 /opt/other/audit.py' in $commands and 'SubagentStop' in s['hooks']"
+rm -f "$sf" "$scratch"/settings.json.mastack-backup-*
+install --only hooks
+check "a missing settings file is created" py "$commands == ['python3 $root/hooks/bash_guard.py']"
+printf '{"hooks": ' > "$sf"
+check "an unreadable settings file is refused" sh -c "! '$root/bin/install' --target '$t' --only hooks >'$scratch/out' 2>&1"
+check "an unreadable settings file is left alone" test "$(cat "$sf")" = '{"hooks": '
+check "--settings names another file" sh -c "'$root/bin/install' --target '$t' --only hooks --settings '$scratch/other.json' >/dev/null && grep -q bash_guard '$scratch/other.json'"
 
 if ((failures)); then
   echo "install_test: $failures failure(s)" >&2

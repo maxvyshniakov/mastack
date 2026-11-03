@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Bash hooks for Claude Code: `hooks/bash_guard.py` runs git-guard,
+  unguarded-sequence, zsh word-split, a new pgrep self-match check, the
+  slotfather lease guard and the macOS shell pitfalls in one process (about
+  30 ms per Bash call instead of five processes). `bin/install` registers it in
+  `~/.claude/settings.json` (name `hooks` in `--only`/`--skip`, `--settings
+  FILE`), replaces the per-check entries it supersedes and backs the file up;
+  `--dry-run` prints the diff. Machine settings live in
+  `~/.config/mastack/hooks.json`; a project names its own mutating steps in
+  `docs/agents/hooks.json` (CONTRACT.md).
+
 - New `browser-verify` skill: real Chromium, Firefox, WebKit and Safari
   (Technology Preview) without taking the owner's screen, the waits a
   screenshot needs, and what no driver can check. `checks.md` names each
