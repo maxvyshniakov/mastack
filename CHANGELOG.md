@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.4
+
 - `bin/install` checks every Git repository directly under `~` for shadowed
   skills, plus `--project` and `~/.config/mastack/projects`; worktrees are
   marked as copies of their repository.
