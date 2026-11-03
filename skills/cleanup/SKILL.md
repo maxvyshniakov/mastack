@@ -49,9 +49,11 @@ Never, without the user's yes:
 
 Plain folders and clones next to the repository are always asked about, never
 assumed to be leftovers. Remove worktrees with `git worktree remove`, never
-`rm -rf`. Delete merged
-branches with `git branch -d`; reach for `-D` only for content-merged branches
-you just verified with `git cherry`.
+`rm -rf`. If git unregisters a worktree but leaves its folder behind (ignored
+files: dependencies, generated media), compare what is left with the main
+checkout and the branch; delete the folder only when nothing in it is unique,
+otherwise report it. Delete merged branches with `git branch -d`; reach for
+`-D` only for content-merged branches you just verified with `git cherry`.
 
 ## Keep
 

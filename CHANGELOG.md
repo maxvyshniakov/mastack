@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `cleanup` handles a worktree folder that git leaves behind with ignored files:
+  compare with the main checkout, delete only when nothing is unique.
+
 ## 0.2.1
 
 - Descriptions rewritten as invocation instructions: when to use the skill
