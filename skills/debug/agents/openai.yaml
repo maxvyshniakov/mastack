@@ -1,0 +1,3 @@
+interface:
+  display_name: "Debug"
+  short_description: "Reproduce, hypothesize, fix the class of defect"

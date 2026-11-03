@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Run skill scenarios against scratch repositories and grade what the agent did.
+
+    bin/eval <skill> [scenario...] [--agent claude|codex] [--model ID] [--keep] [--jobs N]
+    bin/eval --list
+
+A scenario is evals/<skill>/<name>.md with a `## Prompt` section, a ```sh setup
+block and a ```sh grade block. Setup runs with $EVAL (the scratch directory) and
+$MASTACK set, sources evals/lib.sh, and must create $EVAL/repo. Every mastack
+skill is linked into the repo's .claude/skills and .agents/skills (excluded from
+Git). The agent runs in $EVAL/repo with the prompt; its final message lands in
+$EVAL/out.txt. Grade calls `expect "<what>" <command...>` for each assertion
+that must hold and `refute "<what>" <command...>` for each that must not.
+
+The scratch directory is kept when a scenario fails or with --keep. --agent none
+skips the agent, to check that a scenario's grade fails when nothing is done.
+"""
+
+import argparse
+import concurrent.futures
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+EVALS = ROOT / "evals"
+
+GRADE_PRELUDE = r"""
+fails=0
+expect() {
+  local what=$1; shift
+  if "$@" >/dev/null 2>&1; then echo "PASS  $what"; else echo "FAIL  $what"; fails=$((fails + 1)); fi
+}
+refute() {
+  local what=$1; shift
+  if "$@" >/dev/null 2>&1; then echo "FAIL  $what"; fails=$((fails + 1)); else echo "PASS  $what"; fi
+}
+"""
+
+
+def parse(path):
+    text = path.read_text()
+    prompt = re.search(r"^## Prompt\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    blocks = dict(re.findall(r"^```sh (setup|grade)\n(.*?)^```", text, re.S | re.M))
+    if not prompt or set(blocks) != {"setup", "grade"}:
+        sys.exit(f"eval: {path}: needs a ## Prompt section and sh setup and grade blocks")
+    body = prompt.group(1).strip()
+    body = re.sub(r"^```\w*\n|^```$", "", body, flags=re.M).strip()
+    return body, blocks["setup"], blocks["grade"]
+
+
+def model_id(alias):
+    table = tomllib.loads((ROOT / "models.toml").read_text())
+    return table["models"].get(alias, {}).get("id", alias)
+
+
+# What the agent may do in the scratch repository: file tools, Git, and the
+# fixture's own scripts pass at once; anything else goes to the auto-mode classifier.
+CLAUDE_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Skill", "Bash(git *)", "Bash(GIT_INDEX_FILE=*)",
+                "Bash(export GIT_INDEX_FILE=*)", "Bash(tools/*)", "Bash(./check.sh*)", "Bash(ls *)", "Bash(cat *)",
+                "Bash(diff *)", "Bash(mktemp *)", "Bash(mkdir *)", "Bash(cp *)"]
+
+
+def agent_command(agent, model, prompt, repo):
+    if agent == "claude":
+        return ["claude", "-p", prompt, "--model", model, "--output-format", "json", "--permission-mode", "auto",
+                "--add-dir", str(repo.parent), "--setting-sources", "project,local", "--strict-mcp-config",
+                "--allowedTools", *CLAUDE_TOOLS]
+    return ["codex", "exec", "-C", str(repo), "-s", "workspace-write", "-c", 'approval_policy="never"',
+            "-c", f'sandbox_workspace_write.writable_roots=["{repo.parent}"]', "-c", f'model="{model}"',
+            "--output-last-message", str(repo.parent / "out.txt"), prompt]
+
+
+def run_one(skill, path, agent, model, keep):
+    name = f"{skill}/{path.stem}"
+    prompt, setup, grade = parse(path)
+    scratch = Path(tempfile.mkdtemp(prefix=f"mastack-eval-{skill}-{path.stem}-")).resolve()
+    env = {**os.environ, "EVAL": str(scratch), "MASTACK": str(ROOT)}
+    lines = [f"== {name} ({agent}, {model})  {scratch}"]
+
+    def shell(script, **kwargs):
+        return subprocess.run(["bash", "-c", script], cwd=scratch, env=env, text=True,
+                              capture_output=True, **kwargs)
+
+    done = shell(f'set -e\n. "$MASTACK/evals/lib.sh"\n{setup}')
+    repo = scratch / "repo"
+    if done.returncode or not repo.is_dir():
+        lines.append(f"SETUP FAILED\n{done.stdout}{done.stderr}")
+        return False, "\n".join(lines)
+
+    for skills_dir in (repo / ".claude/skills", repo / ".agents/skills"):
+        skills_dir.mkdir(parents=True, exist_ok=True)
+        for skill_dir in sorted((ROOT / "skills").iterdir()):
+            if (skill_dir / "SKILL.md").is_file():
+                (skills_dir / skill_dir.name).symlink_to(skill_dir)
+    with open(repo / ".git/info/exclude", "a") as exclude:
+        exclude.write(".claude/\n.agents/\n")
+
+    agent_env = {k: v for k, v in env.items() if k not in ("EVAL", "MASTACK")}
+    output, status, denials = "", 0, []
+    if agent != "none":
+        try:
+            result = subprocess.run(agent_command(agent, model, prompt, repo), cwd=repo, env=agent_env,
+                                    text=True, capture_output=True, timeout=1200, stdin=subprocess.DEVNULL)
+            output, status = result.stdout + result.stderr, result.returncode
+        except subprocess.TimeoutExpired as error:
+            output, status = str(error.stdout or ""), "timeout"
+    if agent == "claude":
+        try:
+            reply = json.loads(output)
+            denials = [d.get("tool_input", {}).get("command") or d.get("tool_name") for d in reply.get("permission_denials", [])]
+            (scratch / "out.txt").write_text(reply.get("result") or "")
+        except (json.JSONDecodeError, AttributeError):
+            (scratch / "out.txt").write_text(output)
+    elif agent == "none":
+        (scratch / "out.txt").write_text("")
+    (scratch / "agent.log").write_text(f"exit: {status}\n{output}")
+
+    graded = shell(f'. "$MASTACK/evals/lib.sh"\n{GRADE_PRELUDE}\n{grade}\nexit $((fails > 0))')
+    lines.append(graded.stdout.rstrip() + (f"\n{graded.stderr.rstrip()}" if graded.stderr.strip() else ""))
+    passed = graded.returncode == 0 and status == 0
+    if status != 0:
+        lines.append(f"agent exit: {status}")
+    for denial in denials:
+        lines.append(f"denied: {denial}")
+    if passed and not keep:
+        shutil.rmtree(scratch)
+    else:
+        lines.append(f"kept: {scratch}")
+    return passed, "\n".join(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("skill", nargs="?")
+    parser.add_argument("scenarios", nargs="*")
+    parser.add_argument("--agent", choices=("claude", "codex", "none"), default="claude")
+    parser.add_argument("--model", help="model id or a models.toml alias (default: opus for claude, sol for codex)")
+    parser.add_argument("--keep", action="store_true", help="keep scratch directories of passing scenarios")
+    parser.add_argument("--jobs", type=int, default=3, help="scenarios run at once")
+    parser.add_argument("--list", action="store_true")
+    args = parser.parse_args()
+
+    if args.list or not args.skill:
+        for path in sorted(EVALS.glob("*/*.md")):
+            print(f"{path.parent.name} {path.stem}")
+        return 0
+
+    paths = [EVALS / args.skill / f"{name}.md" for name in args.scenarios] or sorted((EVALS / args.skill).glob("*.md"))
+    missing = [p for p in paths if not p.is_file()]
+    if not paths or missing:
+        sys.exit(f"eval: no scenario {', '.join(map(str, missing)) or 'in ' + str(EVALS / args.skill)}")
+    if args.agent != "none" and not shutil.which(args.agent):
+        sys.exit(f"eval: {args.agent} not on PATH")
+    model = "-" if args.agent == "none" else model_id(args.model or ("opus" if args.agent == "claude" else "sol"))
+
+    failed = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
+        for passed, report in pool.map(lambda p: run_one(args.skill, p, args.agent, model, args.keep), paths):
+            print(report, flush=True)
+            failed += not passed
+    print(f"\n{len(paths) - failed}/{len(paths)} scenarios passed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

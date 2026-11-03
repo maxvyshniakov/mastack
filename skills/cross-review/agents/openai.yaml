@@ -1,0 +1,3 @@
+interface:
+  display_name: "Cross-review"
+  short_description: "Blind two-axis review by another model family"

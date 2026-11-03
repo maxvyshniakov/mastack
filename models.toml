@@ -1,0 +1,98 @@
+# Which model takes which role. Skills (cross-review) and tools read this file;
+# models.md explains the choices. When models change, edit only this file.
+#
+# A role lists choices in order. The first choice whose conditions hold wins:
+#   when.limit      remaining share of a quota, in percent, at least this value
+#   when.not_family the choice must not be of the implementer's family
+#   only_families   the role never goes to other families
+# A choice may carry `note`, shown to the person reading the plan.
+
+schema = 1
+
+[models.fable]
+id = "claude-fable-5-1"
+family = "anthropic"
+cli = "claude"
+tier = "frontier"
+
+[models.opus]
+id = "claude-opus-5-5"
+family = "anthropic"
+cli = "claude"
+tier = "strong"
+
+[models.sonnet]
+id = "claude-sonnet-5-5"
+family = "anthropic"
+cli = "claude"
+tier = "routine"
+
+[models.sol]
+id = "gpt-6.1-sol"
+family = "openai"
+cli = "codex"
+tier = "strong"
+
+# How to run a model headless. {id} and {effort} are substituted.
+[cli.claude]
+run = ["claude", "-p", "--model", "{id}", "--effort", "{effort}"]
+review = ["claude", "-p", "--model", "{id}", "--effort", "{effort}"]
+
+[cli.codex]
+run = ["codex", "exec", "-c", "model=\"{id}\"", "-c", "model_reasoning_effort=\"{effort}\""]
+review = ["codex", "review", "-c", "model=\"{id}\"", "-c", "model_reasoning_effort=\"{effort}\""]
+
+# Quotas the conditions refer to.
+[limits.codex_weekly]
+meaning = "percent of the weekly Codex limit left"
+read = "codex app-server, method account/rateLimits/read: 100 - primary.usedPercent (window 10080 min)"
+
+[roles.design]
+purpose = "plans, interface design, final synthesis, judgment calls"
+choices = [
+  { model = "fable", effort = "high" },
+  { model = "opus", effort = "high" },
+]
+
+[roles.implement]
+purpose = "writing code against a spec or brief"
+choices = [
+  { model = "opus", effort = "high" },
+  { model = "sol", effort = "xhigh", when = { limit = { codex_weekly = 15 } } },
+]
+
+[roles.visual]
+purpose = "UI, layout and anything judged by how it looks"
+only_families = ["anthropic"]
+choices = [
+  { model = "opus", effort = "high" },
+]
+
+[roles.review]
+purpose = "independent review of finished work"
+choices = [
+  { model = "sol", effort = "medium", when = { not_family = true, limit = { codex_weekly = 15 } } },
+  { model = "opus", effort = "medium", when = { not_family = true } },
+  { model = "opus", effort = "medium", note = "same family as the implementer: fresh context only, say so in the report" },
+]
+
+[roles.routine]
+purpose = "token-heavy, low-risk work: bulk edits, renames, running checks, doc mirroring"
+choices = [
+  { model = "sol", effort = "medium", when = { limit = { codex_weekly = 15 } } },
+  { model = "opus", effort = "medium" },
+]
+
+[roles.research]
+purpose = "reading docs and sources, collecting facts, release notes"
+choices = [
+  { model = "opus", effort = "medium" },
+  { model = "sonnet", effort = "medium", note = "plain reading and grep only" },
+]
+
+[roles.audit]
+purpose = "security and correctness audits; a strong model verifies every finding"
+choices = [
+  { model = "fable", effort = "high" },
+  { model = "opus", effort = "high" },
+]

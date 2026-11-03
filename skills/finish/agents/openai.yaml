@@ -1,0 +1,3 @@
+interface:
+  display_name: "Finish"
+  short_description: "Commit, push, clean up and install in one go"

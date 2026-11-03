@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Symlink every skill directory of this checkout into the user-level skill
+# directories that Claude Code and Codex read.
+#
+#   bin/install [--dry-run] [--force] [--uninstall] [--target DIR]...
+#
+# Without --target it installs into ~/.claude/skills and ~/.agents/skills.
+# An existing entry that is not our link is left alone and reported; --force
+# replaces a foreign symlink, never a real directory or file.
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")/.." && pwd -P)
+dry=0 force=0 uninstall=0 targets=()
+
+while (($#)); do
+  case $1 in
+    --dry-run) dry=1 ;;
+    --force) force=1 ;;
+    --uninstall) uninstall=1 ;;
+    --target) targets+=("${2:?--target needs a directory}"); shift ;;
+    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "install: unknown argument: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+((${#targets[@]})) || targets=("$HOME/.claude/skills" "$HOME/.agents/skills")
+
+run() { if ((dry)); then echo "  would: $*"; else "$@"; fi; }
+ours() { [[ -L $1 && $(readlink "$1") == "$root/skills/"* ]]; }
+
+conflicts=0
+for target in "${targets[@]}"; do
+  echo "$target"
+  [[ -d $target ]] || run mkdir -p "$target"
+
+  # Links into this checkout whose skill no longer exists, or every link on uninstall.
+  for entry in "$target"/*; do
+    ours "$entry" || continue
+    if ((uninstall)) || [[ ! -e $entry ]]; then
+      echo "  remove $(basename "$entry")"
+      run rm "$entry"
+    fi
+  done
+  ((uninstall)) && continue
+
+  for dir in "$root"/skills/*/; do
+    dir=${dir%/}
+    name=$(basename "$dir")
+    [[ -f $dir/SKILL.md ]] || continue
+    dest=$target/$name
+    if [[ -L $dest && $(readlink "$dest") == "$dir" ]]; then
+      echo "  ok     $name"
+    elif [[ -L $dest ]] && ((force)); then
+      echo "  relink $name (was $(readlink "$dest"))"
+      run ln -sfn "$dir" "$dest"
+    elif [[ -e $dest || -L $dest ]]; then
+      echo "  skip   $name: $dest exists and is not ours"
+      conflicts=$((conflicts + 1))
+    else
+      echo "  link   $name"
+      run ln -s "$dir" "$dest"
+    fi
+  done
+done
+
+if ((conflicts)); then
+  echo "$conflicts skill(s) not installed; remove or rename the existing entries, or use --force for symlinks." >&2
+  exit 1
+fi

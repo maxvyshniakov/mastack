@@ -1,0 +1,3 @@
+interface:
+  display_name: "Commit"
+  short_description: "Commit this task's work safely in a shared tree"

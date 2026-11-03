@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""Find private details before they are published.
+
+    bin/check [--history] [--patterns FILE] [--require-private]
+
+Scans the files Git would publish (tracked plus untracked, not ignored) for IP
+addresses, home-directory paths, e-mail addresses, issue references, tokens and
+tailnet hosts, plus the private patterns in FILE: one regular expression per
+line, matched case-insensitively, `#` starts a comment. FILE defaults to
+$MASTACK_PRIVATE_PATTERNS or ~/.config/mastack/private-patterns and lives
+outside the repository, since the list itself is private.
+
+--history scans every blob and commit message reachable from any ref instead.
+A line containing `check:allow` is skipped. Exit status 1 when anything is found.
+"""
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+ALLOWED_IPS = re.compile(r"^(127\.0\.0\.1|0\.0\.0\.0|192\.0\.2\.\d+|198\.51\.100\.\d+|203\.0\.113\.\d+)$")
+ALLOWED_EMAIL_DOMAINS = ("example.com", "example.org", "example.net", "anthropic.com")
+ALLOWED_EMAILS = ("git@github.com",)
+
+GENERIC = [
+    ("ip", re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])")),
+    ("home path", re.compile(r"/(?:Users|home)/(?!<|\$|runner\b)[A-Za-z0-9._-]+|[A-Za-z]:\\Users\\[^\\\s]+")),
+    ("email", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")),
+    ("issue ref", re.compile(r"(?<![\w/&#])#\d+\b|\b(?!owner/repo#)[\w.-]+/[\w.-]+#\d+\b")),
+    ("token", re.compile(
+        r"\bgh[pousr]_[A-Za-z0-9]{20,}|\bgithub_pat_\w{20,}|\bsk-(?:ant-)?[A-Za-z0-9_-]{20,}"
+        r"|\bxox[abposr]-[A-Za-z0-9-]{10,}|\bAKIA[0-9A-Z]{16}\b|-----BEGIN [A-Z ]*" + "PRIVATE KEY-----")),
+    ("tailnet host", re.compile(r"\b[\w-]+\.ts\.net\b")),
+]
+
+
+def allowed(kind, text):
+    if kind == "ip":
+        return bool(ALLOWED_IPS.match(text)) or any(int(o) > 255 for o in text.split("."))
+    if kind == "email":
+        return text in ALLOWED_EMAILS or text.split("@", 1)[1].lower().endswith(ALLOWED_EMAIL_DOMAINS)
+    return False
+
+
+def load_private(path):
+    patterns = []
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            patterns.append(("private", re.compile(line, re.IGNORECASE)))
+        except re.error as error:
+            sys.exit(f"check: {path}:{n}: bad pattern {line!r}: {error}")
+    return patterns
+
+
+def git(*args):
+    return subprocess.run(["git", "-C", str(ROOT), *args], check=True, capture_output=True).stdout
+
+
+def scan(label, data, patterns, findings):
+    if b"\0" in data[:8192]:
+        return
+    for n, line in enumerate(data.decode("utf-8", "replace").splitlines(), 1):
+        if "check:allow" in line:
+            continue
+        for kind, pattern in patterns:
+            for match in pattern.finditer(line):
+                if not allowed(kind, match.group(0)):
+                    findings.append(f"{label}:{n}: {kind}: {match.group(0)}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--history", action="store_true", help="scan every reachable blob and commit message")
+    parser.add_argument("--patterns", type=Path, help="private patterns file")
+    parser.add_argument("--require-private", action="store_true", help="fail when the private patterns file is missing")
+    args = parser.parse_args()
+
+    private_file = args.patterns or Path(
+        os.environ.get("MASTACK_PRIVATE_PATTERNS", Path.home() / ".config/mastack/private-patterns"))
+    patterns = list(GENERIC)
+    if private_file.is_file():
+        patterns += load_private(private_file)
+    elif args.require_private:
+        sys.exit(f"check: no private patterns at {private_file}")
+    else:
+        print(f"check: no private patterns at {private_file}; generic patterns only", file=sys.stderr)
+
+    findings = []
+    if args.history:
+        seen = set()
+        for line in git("rev-list", "--all", "--objects").decode().splitlines():
+            sha, _, path = line.partition(" ")
+            if not path or sha in seen or git("cat-file", "-t", sha).strip() != b"blob":
+                continue
+            seen.add(sha)
+            scan(f"{path}@{sha[:8]}", git("cat-file", "blob", sha), patterns, findings)
+        for sha in git("rev-list", "--all").decode().split():
+            scan(f"commit {sha[:8]}", git("log", "-1", "--format=%B", sha), patterns, findings)
+    else:
+        for path in git("ls-files", "-z", "-co", "--exclude-standard").decode().split("\0"):
+            if path and (ROOT / path).is_file():
+                scan(path, (ROOT / path).read_bytes(), patterns, findings)
+
+    for finding in findings:
+        print(finding)
+    if findings:
+        print(f"check: {len(findings)} finding(s); fix them or mark a deliberate line with check:allow", file=sys.stderr)
+        return 1
+    print("check: clean", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

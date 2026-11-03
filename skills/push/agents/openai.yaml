@@ -1,0 +1,3 @@
+interface:
+  display_name: "Push"
+  short_description: "Publish the outgoing chain by SHA and follow CI"

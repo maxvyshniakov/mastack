@@ -1,0 +1,3 @@
+interface:
+  display_name: "Architecture"
+  short_description: "Find shallow modules and design deeper ones"
