@@ -33,7 +33,9 @@ Firefox and Safari at the widths and themes the project names.
   [references/safari.md](references/safari.md).
 
 Never take the owner's screen: headless where the engine allows it; otherwise
-the window works behind their apps with focus handed back.
+the window works behind their apps with focus handed back. Close every browser,
+driver and dev server you started as soon as the check no longer needs it,
+without asking: they are yours.
 
 ## 4. Wait for the page, not for time
 

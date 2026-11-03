@@ -29,6 +29,11 @@ driver, settings and engine build close to the shipping Safari.
 3. The window now works behind the owner's apps: it keeps drawing frames
    (60 fps measured) and screenshots work.
 
+4. After `DELETE /session`, quit the browser if this run started it. In
+   automation mode it ignores real input, window close and a polite quit, so
+   it stays open: force-terminate it
+   (`NSRunningApplication.forceTerminate`). It holds no user data.
+
 Keep it on screen. A hidden or minimised window makes the page
 `visibilityState: "hidden"`: `requestAnimationFrame` stops and screenshots
 fail. macOS clamps a window rect to the screen, so it cannot be parked off it.
