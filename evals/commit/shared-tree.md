@@ -42,6 +42,7 @@ save notes "$(git ls-files -s docs/notes.txt | cut -d' ' -f2)"
 
 ```sh grade
 cd "$EVAL/repo"
+expect "the commit skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"commit\""'
 expect "commits touch exactly the task's files" test "$(git diff --name-only "$(state base)" HEAD | sort | tr '\n' ' ')" = "CHANGELOG.md src/parser.txt test/parser.test.txt "
 expect "task files fully committed" git diff --quiet HEAD -- src/parser.txt test/parser.test.txt CHANGELOG.md
 expect "render.txt working copy unchanged" test "$(git hash-object src/render.txt)" = "$(state render)"

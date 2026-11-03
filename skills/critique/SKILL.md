@@ -1,6 +1,6 @@
 ---
 name: critique
-description: Give honest judgment on an idea, plan or piece of work instead of executing it. Use for "what do you think?", "thoughts?", "что думаешь?", "как тебе?", "стоит ли?" and equivalents in any language.
+description: Use when the user asks what you think of an idea, plan or piece of work, or whether something is worth doing. Judge it; do not execute it.
 ---
 
 # Critique

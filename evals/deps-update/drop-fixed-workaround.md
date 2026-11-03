@@ -96,6 +96,7 @@ git add -A && git commit -qm "chore: fixture project"
 
 ```sh grade
 cd "$EVAL/repo"
+expect "the deps-update skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"deps-update\""'
 expect "upstream-lib raised to 1.1" grep -Eq '^upstream-lib *= *"1\.1"' deps.toml
 expect "fmt-tool pin kept at 2.3" grep -Eq '^fmt-tool *= *"2\.3"' deps.toml
 refute "acme/lib#12 workaround removed" grep -q 'acme/lib#12' src/clean.sh

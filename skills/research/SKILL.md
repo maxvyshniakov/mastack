@@ -1,6 +1,6 @@
 ---
 name: research
-description: Delegate a factual question to a background agent that reads primary sources only and writes one cited Markdown file. Use for "research", "выясни", "почитай доки", "how does library X do Y", or a decision waiting on facts from outside the repository.
+description: Use when a decision needs facts from outside the repository. A background agent reads primary sources and writes one cited file.
 ---
 
 # Research

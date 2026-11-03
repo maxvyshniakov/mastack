@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Bring the work to a clean pause and write a handoff file another agent can continue from, with links instead of retelling and the skills to use next. Use for "handoff", "хендовер", "дойди до паузы", "передай другому агенту", or when context is running out mid-task.
+description: Use when asked to hand work to another agent or pause cleanly, or when context runs low mid-task. Writes a handoff file.
 ---
 
 # Handoff

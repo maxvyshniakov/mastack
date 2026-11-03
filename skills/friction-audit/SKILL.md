@@ -1,6 +1,6 @@
 ---
 name: friction-audit
-description: Find what keeps confusing agents in a package or product - from agent transcripts, workarounds in consumer code and bug history - and assign each class of confusion to the layer that fixes it (lint, API default, docs, skill, contract test). Use for "friction audit", "что путает агентов в X", "почему агенты всё время делают Y", before a package's docs or API revision.
+description: Use when agents keep misusing a package or product, or before revising its API or docs. Routes each kind of confusion to lint, API, docs, skill or test.
 ---
 
 # Friction audit

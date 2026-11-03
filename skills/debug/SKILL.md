@@ -1,6 +1,6 @@
 ---
 name: debug
-description: Diagnose a bug or regression from a command that reliably reproduces the exact symptom, through falsifiable hypotheses, to a fix with a regression test and a guard for the whole class of defect. Use for "debug", "почини баг", "почему падает", "тормозит", failing or flaky tests, and audit findings to verify.
+description: Use for bugs, regressions, failing or flaky tests, slowness, and audit findings to verify. Reproduce first; fix with a regression test.
 ---
 
 # Debug

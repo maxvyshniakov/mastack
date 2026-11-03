@@ -1,6 +1,6 @@
 ---
 name: status
-description: Read-only snapshot of what is in flight across the tracker, branches, worktrees, lanes, machine slots and CI - what runs, what waits for the user, what is blocked. Use for "status", "что в работе?", "что висит?", "где мы?".
+description: Use when asked what is in flight, blocked or waiting on the user. Read-only snapshot of tracker, branches, worktrees, CI and machine slots.
 ---
 
 # Status

@@ -1,6 +1,6 @@
 ---
 name: push
-description: Publish the current branch's whole outgoing commit chain by SHA, the way docs/agents/publishing.md says, and follow CI to a final result. Use for explicit push requests such as "push", "пуш", "запушь". Commit-only and skill-authoring requests do not authorize publishing.
+description: Use only for an explicit request to push. Publishes the way docs/agents/publishing.md says and follows CI to a result. Commit-only and skill-authoring requests are not push requests.
 ---
 
 # Push

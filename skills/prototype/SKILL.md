@@ -1,6 +1,6 @@
 ---
 name: prototype
-description: Answer one design question with throwaway code - a clickable HTML demo around a pure reducer for logic and state, or three to five radically different variants switchable by ?variant= for UI. Use for "prototype", "прототип", "накидай варианты", "does this state model hold up", "what should this screen look like".
+description: Use when asked for a prototype or design variants, or when a state model or screen needs trying before it is built. Throwaway code only.
 ---
 
 # Prototype

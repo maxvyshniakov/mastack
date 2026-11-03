@@ -1,6 +1,6 @@
 ---
 name: video-feedback
-description: Turn recorded screen or voice feedback into timestamped requirements and carry them through to verified changes; also plain transcription or finding a spoken issue by timestamp. Use when a video is attached or referenced, even with no written request, and for "посмотри видео", "транскрибируй".
+description: "Use when a video or screen recording is attached or referenced, even with no written request: transcribe it and turn spoken feedback into requirements."
 ---
 
 # Video feedback

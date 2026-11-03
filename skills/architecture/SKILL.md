@@ -1,6 +1,6 @@
 ---
 name: architecture
-description: Find where code is badly shaped and design deeper modules - shallow and tangled modules found from git hot spots, a precise vocabulary (module, interface, seam, adapter, depth), and two or three radically different interface designs. Use for "where is the code badly structured", "спроектируй модуль", "улучши архитектуру", or when a bug has no good seam for a test.
+description: Use when looking for badly structured code, designing a module's interface, or when a bug has no clean seam to test at.
 ---
 
 # Architecture

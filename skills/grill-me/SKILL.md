@@ -1,6 +1,6 @@
 ---
 name: grill-me
-description: Interview the user one question at a time, each with a recommended answer, until a plan or idea is fully understood; record agreed terms and hard-to-reverse decisions as you go. Use for "grill me", "погриль", "допроси меня", "добьём план", or when a plan has unresolved decisions.
+description: Use when asked to grill the user on a plan, or when a plan has unresolved decisions. One question at a time, each with a recommended answer.
 ---
 
 # Grill me

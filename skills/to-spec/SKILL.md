@@ -1,6 +1,6 @@
 ---
 name: to-spec
-description: Write down what was agreed as a spec and slice it into vertical tickets with blocking edges, each brief a contract an agent can build from. Use after grill-me or a design discussion, for "write the spec", "оформи спек", "нарежь на тикеты", "to-spec".
+description: Use after a plan is agreed, to write it up as a spec and slice it into tickets agents can build from.
 ---
 
 # To spec

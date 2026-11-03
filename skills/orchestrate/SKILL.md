@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Build a spec's tickets in parallel lanes - one implementer agent per ticket chain, each with file claims in its own worktree - with a blind review by another model, one round of fixes, one gate per batch and a single writer for the main branches. Use for "orchestrate", "оркестрируй", "run these tickets in parallel".
+description: Use when asked to build several tickets in parallel with implementer agents. One worktree lane per ticket chain, blind cross-model review, one writer for the main branches.
 ---
 
 # Orchestrate
@@ -9,7 +9,8 @@ A **lane** is one implementer agent in its own worktree, working one ticket or a
 chain of related tickets, with **claims**: the files it expects to touch. If a
 lane tool is installed (for example `lanefather`), drive every step below
 through it. Otherwise use worktrees, branches and `gh`, and do the bookkeeping
-in a notes file.
+in a notes file. Name lane worktrees `<repo>-<lane>`, next to the repository,
+so `cleanup` finds them.
 
 ## Plan
 

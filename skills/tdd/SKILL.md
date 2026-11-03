@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: Build or change verifiable behavior test-first, one red-green slice at a time, with tests at public seams that survive refactors. Use when implementing features or fixes with checkable behavior, including UI state and scripts, and for "tdd", "test-first", "red-green".
+description: Use when implementing a feature or fix with checkable behavior, or when asked for TDD. Test-first, one red-green slice at a time.
 ---
 
 # TDD

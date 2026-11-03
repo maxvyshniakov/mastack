@@ -1,6 +1,6 @@
 ---
 name: agent-docs
-description: Write or audit what agents read - AGENTS.md, skills, docs/agents files - so each line changes behavior, each fact lives in one place, and checkable rules become checks. Use when creating or editing a skill or AGENTS.md, for "audit the agent docs", "проверь доки для агентов", or after agents ignored an instruction.
+description: Use when writing, editing or auditing agent instructions (AGENTS.md, CLAUDE.md, skills, docs/agents), or after an agent ignored an instruction.
 ---
 
 # Agent docs

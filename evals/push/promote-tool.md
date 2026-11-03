@@ -54,6 +54,7 @@ install_pre_push
 
 ```sh grade
 cd "$EVAL/repo"
+expect "the push skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"push\""'
 expect "local HEAD is the original tip (no rewrite, no extra commits)" test "$(git rev-parse HEAD)" = "$(state head)"
 expect "origin/dev is the tip" test "$(origin_rev dev)" = "$(state head)"
 expect "origin/main untouched" test "$(origin_rev main)" = "$(state main0)"

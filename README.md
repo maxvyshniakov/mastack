@@ -83,8 +83,8 @@ flowchart LR
 | [reprompt](skills/reprompt/SKILL.md) | Deepening a task, then rewriting the prompt (user-invoked) |
 
 Every skill except `reprompt` can be invoked by the model, so a request in your
-own words ("пуш", "что в работе?") reaches it. Descriptions carry trigger
-phrases in the languages the author works in; add yours.
+own words, in any language, reaches it. A description says when to use the
+skill, in English: the model matches requests against it, so keep it short.
 
 ## Conventions
 

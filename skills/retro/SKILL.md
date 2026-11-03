@@ -1,6 +1,6 @@
 ---
 name: retro
-description: After a session where something went wrong, fix the environment rather than the code - mechanical mistakes become hooks or checks proven to fire, judgment calls become reviewer rules. Use for "retro", "ретро", "разбор полётов", "почему так вышло и как не повторить".
+description: Use after something went wrong in a session, or when asked for a retro. Turns mistakes into hooks, checks or reviewer rules.
 ---
 
 # Retro

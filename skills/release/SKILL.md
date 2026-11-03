@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a version, ship it, and publish it to a registry the way docs/agents/publishing.md says, without colliding with parallel releases. Use for "release", "релизь", "выпусти версию", "опубликуй пакет".
+description: Use when asked to release, cut a version or publish a package to a registry. Follows docs/agents/publishing.md.
 ---
 
 # Release

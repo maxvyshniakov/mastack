@@ -26,6 +26,7 @@ install_pre_push
 
 ```sh grade
 cd "$EVAL/repo"
+expect "the push skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"push\""'
 expect "origin/feature/tags is the tip" test "$(origin_rev feature/tags)" = "$(state head)"
 expect "origin/main untouched" test "$(origin_rev main)" = "$(state main0)"
 expect "no new remote branches" test "$(git --git-dir="$EVAL/origin.git" for-each-ref refs/heads | wc -l)" -eq 2

@@ -1,6 +1,6 @@
 ---
 name: rate
-description: Rate anything out of 10 against a rubric fixed before any change - code, tests, docs, an API, CI, a skill - and, when asked, improve it until 10/10 with a blind re-score by a fresh agent. Use for every request for a score or rating, "rate X", "how good is", "на сколько из 10?", "оцени из 10", "поставь оценку", "чини, пока не 10/10".
+description: "Use whenever asked for a score or rating (\"rate X\", \"X out of 10\"), including \"fix it until 10/10\". Fixed rubric first, blind re-score by a fresh agent."
 ---
 
 # Rate

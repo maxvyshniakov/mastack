@@ -1,6 +1,6 @@
 ---
 name: cross-review
-description: Independent review of finished work by a model of another family, in two isolated passes (repository standards, match to the spec), followed by one round of fixes with every finding marked fixed or rejected. Use for "review", "ревью", "cross-review", "отдай на ревью", or before shipping a large change.
+description: Use when asked for a review, or before shipping a large change. A model of another family reviews in two blind passes, then one round of fixes.
 ---
 
 # Cross-review

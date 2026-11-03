@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Create local Git commits for the work of the current task, safely in a working tree that other agents share. Use for commit requests such as "commit", "коммить", "закоммить", or when an authorized push needs commits first. Editing a skill named commit is not a commit request.
+description: Use when asked to commit, or when an authorized push needs commits first. Commits only this task's changes in a tree other agents share. Editing a skill named commit is not a commit request.
 ---
 
 # Commit

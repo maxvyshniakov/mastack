@@ -1,6 +1,6 @@
 ---
 name: roadmap
-description: Chart work too big for one session as a map of decision tickets on the tracker - destination, open questions with blocking edges, what is still in fog - and resolve one ticket per session until the way is clear. Plans only, never builds. Use for "roadmap", "спланируй большую работу", "карта решений", or an effort with no clear path yet.
+description: Use for work too big for one session or with no clear path yet. Maps the decisions as tracker tickets; plans only, never builds.
 ---
 
 # Roadmap

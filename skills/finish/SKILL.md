@@ -1,6 +1,6 @@
 ---
 name: finish
-description: Take finished work all the way out in one go - commit, land, push, follow CI, clean up, install or deploy - and report before/after, risk and what is unverified. Use for "finish", "доведи до конца", "коммить, пуш, мерж, чисть, установи" and similar chains.
+description: "Use when asked to take work all the way out in one go: commit, push, merge, clean up, install or deploy."
 ---
 
 # Finish

@@ -56,6 +56,7 @@ install_pre_push
 
 ```sh grade
 cd "$EVAL/repo"
+expect "the push skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"push\""'
 expect "peer commit kept in origin/dev (no force push)" git --git-dir="$EVAL/origin.git" merge-base --is-ancestor "$(state peer)" dev
 expect "origin/dev carries the CSV header fix" sh -c 'git --git-dir="$EVAL/origin.git" show dev:src/export.txt | grep -q "header row"'
 expect "origin/dev carries the peer file" git --git-dir="$EVAL/origin.git" cat-file -e dev:PEER.md

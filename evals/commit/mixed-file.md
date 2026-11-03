@@ -38,6 +38,7 @@ save working "$(git hash-object src/app.txt)"
 
 ```sh grade
 cd "$EVAL/repo"
+expect "the commit skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"commit\""'
 expect "a commit was made" test "$(git rev-list --count "$(state base)..HEAD")" -ge 1
 expect "committed app.txt has only the task's hunk" sh -c 'git show HEAD:src/app.txt | cmp -s - "$EVAL/state/app.expected"'
 expect "working app.txt unchanged" test "$(git hash-object src/app.txt)" = "$(state working)"

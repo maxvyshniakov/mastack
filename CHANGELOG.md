@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Descriptions rewritten as invocation instructions: when to use the skill
+  first, in English, without trigger phrases in other languages.
+- `cleanup` also inventories folders next to the repository (`<repo>-*`):
+  worktrees, orphans, clones and plain folders, and asks about the last two.
+  Work saved before a removal goes to the state directory, not next to the
+  repository.
+- `orchestrate` names lane worktrees `<repo>-<lane>` next to the repository.
+- Evals for push, commit and deps-update also check that the skill was loaded.
+
 ## 0.2.0
 
 - Skills: `to-spec`, `roadmap`, `prototype`, `research`, `orchestrate` (with an

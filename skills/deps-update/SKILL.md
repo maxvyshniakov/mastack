@@ -1,6 +1,6 @@
 ---
 name: deps-update
-description: Update everything the project pins - packages, runtimes, CI actions, toolchains - reading each changelog, then walk back through our own workarounds and drop the ones upstream has fixed. Use for "update dependencies", "обнови зависимости", a new runtime or framework release, or a stale lockfile.
+description: Use when asked to update dependencies, or when a new runtime, framework or toolchain version is out. Also drops workarounds upstream has fixed.
 ---
 
 # Dependency update
