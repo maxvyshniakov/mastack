@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.1
+
 - `bin/install` skips repositories listed in `~/.config/mastack/ignore`, and
   their worktrees, when it looks for shadowed skills.
 
