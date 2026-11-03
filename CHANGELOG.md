@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.1
+
 - Descriptions rewritten as invocation instructions: when to use the skill
   first, in English, without trigger phrases in other languages.
 - `cleanup` also inventories folders next to the repository (`<repo>-*`):
