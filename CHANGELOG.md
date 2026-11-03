@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- New `browser-verify` skill: real Chromium, Firefox, WebKit and Safari
+  (Technology Preview) without taking the owner's screen, the waits a
+  screenshot needs, and what no driver can check. `checks.md` names each
+  engine's launcher in "Browser and visual".
+
 ## 0.3.1
 
 - `bin/install` skips repositories listed in `~/.config/mastack/ignore`, and

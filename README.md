@@ -43,6 +43,7 @@ flowchart LR
   single session, builds with `tdd` and `debug`. A bug without a good seam for
   its test is an `architecture` finding.
 - **Check**: `cross-review` by a model of another family, one round of fixes.
+  `browser-verify` proves a screen in Chromium, Firefox, WebKit and Safari.
   `rate` scores anything against a fixed rubric and improves it to 10.
 - **Ship**: `finish` runs `commit`, `push`, `release` and `cleanup` in order,
   each under its own rules, and reports risk and what is unverified.
@@ -67,6 +68,7 @@ flowchart LR
 | [tdd](skills/tdd/SKILL.md) | Red-green slices at public seams |
 | [debug](skills/debug/SKILL.md) | Reproduce first, falsifiable hypotheses, fix the class |
 | [cross-review](skills/cross-review/SKILL.md) | Blind two-axis review by another model family |
+| [browser-verify](skills/browser-verify/SKILL.md) | A UI change proven in every engine, off the owner's screen |
 | [rate](skills/rate/SKILL.md) | A fixed rubric, fixes, a blind re-score until 10/10 |
 | [commit](skills/commit/SKILL.md) | Committing a task's work in a shared tree |
 | [push](skills/push/SKILL.md) | Publishing the chain by SHA, CI to a final result |

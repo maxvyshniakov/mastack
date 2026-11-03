@@ -9,7 +9,7 @@ longer docs it summarises instead of copying them.
 | File | Read by |
 |---|---|
 | `docs/agents/publishing.md` | `push`, `release`, `finish`, `cleanup`, `orchestrate` |
-| `docs/agents/checks.md` | `commit`, `tdd`, `debug`, `push`, `cross-review` |
+| `docs/agents/checks.md` | `commit`, `tdd`, `debug`, `push`, `cross-review`, `browser-verify` |
 | `docs/agents/domain.md` | `grill-me`, `architecture`, `tdd`, `debug`, `research` |
 | `docs/agents/issue-tracker.md` | `status`, `cross-review`, `commit`, `orchestrate` |
 | `docs/agents/orchestration.md` | `orchestrate` |
@@ -77,6 +77,9 @@ them.
 
 ## Browser and visual
 - How to run them, how to check a changed screen, where pictures go.
+- The launcher for each engine (Chromium, Firefox, WebKit, Safari) and the
+  screenshot command with its widths and themes; which engines still need the
+  owner's one-time setup.
 
 ## Pins
 - Every pinned dependency or tool version kept for a reason, with the reason

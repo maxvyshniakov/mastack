@@ -1,0 +1,3 @@
+interface:
+  display_name: "Browser verify"
+  short_description: "Check a UI change in Chromium, Firefox, WebKit and Safari"
