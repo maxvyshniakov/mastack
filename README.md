@@ -128,7 +128,8 @@ shadow push: ~/app-wt-2/.claude/skills/push (copy: worktree of ~/app)
 ```
 
 Remove the project's copy first, then install the pack skill; `--force`
-installs it anyway.
+installs it anyway. Repositories listed in `~/.config/mastack/ignore` (same
+format; frozen or archived ones) are not checked, nor are their worktrees.
 
 Before installing:
 

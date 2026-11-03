@@ -106,6 +106,15 @@ check "a worktree is marked as a copy" said "shadow push: $h/app-wt-1/.agents/sk
 check "a folder that is not a repository is not scanned" sh -c "! grep -q 'shadow tdd' '$scratch/out'"
 install --only tdd --project "$h/notes" || true
 check "--project adds a folder outside the scan" said "shadow tdd: $h/notes/.claude/skills/tdd"
+printf '# frozen\n%s\n' "$h/app" > "$MASTACK_CONFIG/ignore"
+check "an ignored repository does not hold a skill back" install --only push
+check "an ignored repository is not reported" sh -c "! grep -q 'app/.claude' '$scratch/out'"
+check "a worktree of an ignored repository is skipped too" sh -c "! grep -q 'app-wt-1' '$scratch/out'"
+git init -q "$h/other"
+mkdir -p "$h/other/.claude/skills/push"
+install --only push || true
+check "a repository not in the ignore list is still checked" said "shadow push: $h/other/.claude/skills/push"
+rm "$MASTACK_CONFIG/ignore"
 
 if ((failures)); then
   echo "install_test: $failures failure(s)" >&2

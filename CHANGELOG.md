@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `bin/install` skips repositories listed in `~/.config/mastack/ignore`, and
+  their worktrees, when it looks for shadowed skills.
+
 ## 0.3.0
 
 - CONTRACT.md: new `docs/agents/orchestration.md` (lane tool, report labels,
