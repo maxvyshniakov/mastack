@@ -116,12 +116,14 @@ and reported.
 
 A user-level skill beats a project skill of the same name in Claude Code, and
 Codex shows both (see [CONTRACT.md](CONTRACT.md#skills-with-a-pack-skills-name)).
-So the installer checks your projects, from `--project DIR` or from
-`~/.config/mastack/projects` (one directory per line), and holds back any pack
-skill a project also has in `.claude/skills` or `.agents/skills`:
+So the installer checks every Git repository directly under `~`, plus any
+`--project DIR` and the directories listed in `~/.config/mastack/projects`, and
+holds back any pack skill a project also has in `.claude/skills` or
+`.agents/skills`. Worktrees are marked as copies of their repository:
 
 ```
 shadow push: ~/app/.claude/skills/push (project has docs/agents/publishing.md)
+shadow push: ~/app-wt-2/.claude/skills/push (copy: worktree of ~/app)
 ```
 
 Remove the project's copy first, then install the pack skill; `--force`

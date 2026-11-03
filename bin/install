@@ -9,8 +9,9 @@
 # --only and --skip pick skills; --uninstall removes only the picked ones.
 # A user-level skill wins over a project skill of the same name, so a picked
 # skill that a project also has (.claude/skills or .agents/skills) is reported
-# as a shadow and held back. Projects come from --project, else from
-# ~/.config/mastack/projects (one directory per line, # comments).
+# as a shadow and held back. Projects are every Git repository directly under
+# ~ ($MASTACK_SCAN_ROOT), plus --project and ~/.config/mastack/projects (one
+# directory per line, # comments) for the rest. Worktrees are marked as copies.
 # An existing entry that is not our link is left alone and reported. --force
 # installs shadowing skills and replaces foreign symlinks, never a real
 # directory or file.
@@ -30,7 +31,7 @@ while (($#)); do
     --skip) skip=${2:?--skip needs a list}; shift ;;
     --target) targets+=("${2:?--target needs a directory}"); shift ;;
     --project) projects+=("${2:?--project needs a directory}"); shift ;;
-    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install: unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -55,7 +56,10 @@ for name in ${all//,/ }; do
   picked+=,$name
 done
 
-if ((!${#projects[@]})) && [[ -f $config/projects ]]; then
+for dir in "${MASTACK_SCAN_ROOT:-$HOME}"/*/; do
+  [[ -e $dir.git ]] && projects+=("${dir%/}")
+done
+if [[ -f $config/projects ]]; then
   while IFS= read -r line || [[ -n $line ]]; do
     line=${line%%#*}
     line=$(echo "$line" | xargs)
@@ -66,11 +70,19 @@ fi
 # Project skills whose directory name or frontmatter name matches a picked skill.
 shadowed=''
 if ((!uninstall)); then
-  ((${#projects[@]})) || echo "note: no projects to check for shadowing; pass --project or list them in $(tilde "$config/projects")"
+  seen=''
   for project in ${projects[@]+"${projects[@]}"}; do
     [[ -d $project ]] || { echo "note: project $(tilde "$project") does not exist"; continue; }
+    project=${project%/}
+    real=$(cd "$project" && pwd -P)
+    [[ $real == "$root" ]] || has "$seen" "$real" && continue
+    seen+=,$real
     note=''
-    [[ -f $project/docs/agents/publishing.md ]] && note=' (project has docs/agents/publishing.md)'
+    if [[ -f $project/.git ]]; then
+      main=$(git -C "$project" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || main=''
+      note+=" (copy: worktree of $(tilde "${main%/.git}"))"
+    fi
+    [[ -f $project/docs/agents/publishing.md ]] && note+=' (project has docs/agents/publishing.md)'
     for skill in "$project"/.claude/skills/*/ "$project"/.agents/skills/*/; do
       [[ -d $skill ]] || continue
       skill=${skill%/}

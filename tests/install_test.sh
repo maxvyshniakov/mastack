@@ -4,10 +4,10 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd -P)
-scratch=$(mktemp -d)
+scratch=$(cd "$(mktemp -d)" && pwd -P)
 trap 'rm -rf "$scratch"' EXIT
-export MASTACK_CONFIG=$scratch/config
-mkdir -p "$MASTACK_CONFIG"
+export MASTACK_CONFIG=$scratch/config MASTACK_SCAN_ROOT=$scratch/home
+mkdir -p "$MASTACK_CONFIG" "$MASTACK_SCAN_ROOT"
 
 failures=0
 check() {
@@ -92,6 +92,20 @@ check "config shadows are held back" absent push
 rm "$MASTACK_CONFIG/projects"
 HOME=$scratch install --project "$p" --only push || true
 check "paths under HOME are shown with ~" said "shadow push: ~/p/.claude/skills/push"
+
+fresh
+h=$MASTACK_SCAN_ROOT
+git init -q "$h/app"
+mkdir -p "$h/app/.claude/skills/push" "$h/notes/.claude/skills/tdd"
+git -C "$h/app" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m init
+git -C "$h/app" worktree add -q "$h/app-wt-1" 2>/dev/null
+mkdir -p "$h/app-wt-1/.agents/skills/push"
+install --only push,tdd || true
+check "a repository under the scan root is checked" said "shadow push: $h/app/.claude/skills/push"
+check "a worktree is marked as a copy" said "shadow push: $h/app-wt-1/.agents/skills/push (copy: worktree of $h/app)"
+check "a folder that is not a repository is not scanned" sh -c "! grep -q 'shadow tdd' '$scratch/out'"
+install --only tdd --project "$h/notes" || true
+check "--project adds a folder outside the scan" said "shadow tdd: $h/notes/.claude/skills/tdd"
 
 if ((failures)); then
   echo "install_test: $failures failure(s)" >&2
