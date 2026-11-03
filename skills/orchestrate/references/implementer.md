@@ -54,5 +54,7 @@ Questions: none | <numbered, each with the default you implemented>
 Screenshots: <paths, light and dark> | n/a: <reason>
 ```
 
+Then the project's own labels, if the orchestrator gave any, one per line.
+
 Questions anywhere else in the report get lost. Link logs instead of pasting
 them.

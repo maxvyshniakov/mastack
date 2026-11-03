@@ -2,15 +2,17 @@
 
 mastack skills hold the process; each project holds its facts. A skill reads the
 files below at fixed paths. When a file is missing, the skill says so and does
-not guess. Keep each file short: it states facts and commands, and links to the
+not guess; a section the project leaves out means the skill's own default.
+Keep each file short: it states facts and commands, and links to the
 longer docs it summarises instead of copying them.
 
 | File | Read by |
 |---|---|
-| `docs/agents/publishing.md` | `push`, `release`, `finish`, `cleanup` |
-| `docs/agents/checks.md` | `commit`, `tdd`, `debug`, `push` |
-| `docs/agents/domain.md` | `grill-me`, `architecture`, `tdd`, `debug` |
-| `docs/agents/issue-tracker.md` | `status`, `cross-review`, `commit` |
+| `docs/agents/publishing.md` | `push`, `release`, `finish`, `cleanup`, `orchestrate` |
+| `docs/agents/checks.md` | `commit`, `tdd`, `debug`, `push`, `cross-review` |
+| `docs/agents/domain.md` | `grill-me`, `architecture`, `tdd`, `debug`, `research` |
+| `docs/agents/issue-tracker.md` | `status`, `cross-review`, `commit`, `orchestrate` |
+| `docs/agents/orchestration.md` | `orchestrate` |
 
 `AGENTS.md` stays the entry point and points at these files; it does not repeat
 them.
@@ -24,6 +26,11 @@ them.
 - Everyday destination: `dev`. Release destination: `main`.
 - `main` only receives a SHA that `dev` receives in the same push.
 - Base branch for cleanup: `dev`.
+- Words that authorize the release branch, e.g. "ship". Without one of them in
+  the request, a push goes to the everyday branch only.
+- Worktrees: where they live and who owns them, e.g. `.claude/worktrees/`,
+  created and removed by `<lane tool>`; or `<repo>-<slug>` next to the
+  repository, removed with `git worktree remove`.
 
 ## Gate
 - What runs before a push and who runs it, e.g. "the pre-push hook runs
@@ -44,8 +51,9 @@ them.
 - Downstream steps a release triggers and who must approve them; any standing
   approval, with its scope.
 
-## After publish
-- Install or deploy steps, each with how to verify it.
+## Install, deploy, restart
+- Steps after a publish, and steps that run without one (a local install, a
+  deploy, a service restart), each with its command and how to verify it.
 
 ## Report
 - What the push report must include beyond the defaults.
@@ -73,6 +81,13 @@ them.
 ## Pins
 - Every pinned dependency or tool version kept for a reason, with the reason
   and the condition for removing it.
+
+## Review
+- Project rules the reviewer checks on top of the documented standards, and
+  what it ignores.
+- Reviewer model, only when it differs from the `review` role in
+  `models.toml`, with the reason, e.g. "Opus medium: the other family has no
+  access to this repository".
 ```
 
 ## `docs/agents/domain.md`
@@ -82,6 +97,7 @@ them.
 - Glossary: `<path>` (one per context, or a map of contexts).
 - ADRs: `<dir>`, numbered `0001-slug.md`.
 - Compatibility policy, if the project has one.
+- Research notes: `<dir>`, one cited file per question.
 ```
 
 ## `docs/agents/issue-tracker.md`
@@ -95,6 +111,34 @@ them.
 - Reconciliation: what to record when work linked to an issue is committed or
   shipped, and the rule to close only completed scope.
 - Language for issue text.
+```
+
+## `docs/agents/orchestration.md`
+
+```markdown
+# Orchestration
+
+## Lane tool
+- Command and how it launches, lists, lands and removes lanes; or "none":
+  worktrees, branches and `gh`.
+
+## Report labels
+- Lines every lane report ends with, besides the pack's (`Branch:`, `SHA:`,
+  `Checks:`, `Outside claims:` ...), e.g. `Receipt: <path>` and
+  `Ticket comment: <link>`.
+
+## Review
+- When lanes are reviewed (per lane, per batch) and what blocks a land. The
+  reviewer model comes from `checks.md` under Review, else `models.toml`.
+
+## Owner queue
+- Where questions and approvals for the owner go and how they are batched,
+  e.g. one numbered message plus the "waiting on the owner" label from
+  `issue-tracker.md`.
+
+## Implementer brief
+- Project additions to the pack's implementer brief: receipts, paths lanes
+  must not touch, the slot wrapper, anything a lane would otherwise get wrong.
 ```
 
 ## Workaround marks

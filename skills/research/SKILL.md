@@ -14,8 +14,8 @@ The brief names:
 - **Sources to prefer**: official documentation, source code at a pinned
   version or commit, specifications, changelogs, first-party APIs, issue
   threads by maintainers. Secondary write-ups only to find a primary source.
-- **Where to write**: where the repository keeps such notes, else a scratch or
-  notes folder; never the product tree by accident.
+- **Where to write**: the research notes directory in `docs/agents/domain.md`,
+  else a scratch or notes folder; never the product tree by accident.
 
 The agent:
 

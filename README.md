@@ -90,7 +90,8 @@ skill, in English: the model matches requests against it, so keep it short.
 
 - **Facts live in the project.** Skills read `docs/agents/*.md` at fixed paths:
   how to publish, which checks to run, where the glossary is, how the tracker
-  works. See [CONTRACT.md](CONTRACT.md). A missing file is reported, not guessed.
+  works, how lanes run. See [CONTRACT.md](CONTRACT.md). A missing file is
+  reported, not guessed.
 - **Models live in one table.** [models.toml](models.toml) maps roles to models,
   effort and fallbacks; [models.md](models.md) says why.
 - **Tools over prose.** Anything a machine can check belongs in a hook or tool,

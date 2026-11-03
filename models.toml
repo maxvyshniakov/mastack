@@ -1,5 +1,6 @@
 # Which model takes which role. Skills (cross-review) and tools read this file;
 # models.md explains the choices. When models change, edit only this file.
+# A project overrides the reviewer in docs/agents/checks.md, under Review.
 #
 # A role lists choices in order. The first choice whose conditions hold wins:
 #   when.limit      remaining share of a quota, in percent, at least this value

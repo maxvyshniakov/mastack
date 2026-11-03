@@ -11,12 +11,15 @@ description: Use when asked for a review, or before shipping a large change. A m
    Resolve it and check the diff `git diff <base>...HEAD` is not empty.
 2. **Spec.** The issue, spec or brief the work answers. None: the spec pass is
    skipped and the report says so.
-3. **Standards.** Coding standards the repository documents. On top, a smell
-   baseline, always as a judgment call that a documented rule overrides:
-   unclear names, duplication, feature envy, data clumps, primitive obsession,
-   repeated switches, shotgun surgery, speculative generality, middle men.
-4. **Reviewer.** Role `review` in `models.toml`: a model of a different family
-   from the implementer, with the fallback it lists. For risky surfaces
+3. **Standards.** Coding standards the repository documents, and the Review
+   section of `docs/agents/checks.md`: project rules and what to ignore. On
+   top, a smell baseline, always as a judgment call that a documented rule
+   overrides: unclear names, duplication, feature envy, data clumps, primitive
+   obsession, repeated switches, shotgun surgery, speculative generality,
+   middle men.
+4. **Reviewer.** The model the Review section of `docs/agents/checks.md` names,
+   else role `review` in `models.toml`: a model of a different family from the
+   implementer, with the fallback it lists. For risky surfaces
    (migrations, auth, money, deletion) run both families in parallel.
 
 ## Review blind

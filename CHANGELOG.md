@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- CONTRACT.md: new `docs/agents/orchestration.md` (lane tool, report labels,
+  review policy, owner queue, implementer brief additions), read by
+  `orchestrate`.
+- New contract fields: release-branch words and worktree placement in
+  `publishing.md`; "Install, deploy, restart" (replaces "After publish") for
+  steps with or without a publish; a Review section in `checks.md` with project
+  review rules and a reviewer-model override; research notes in `domain.md`.
+- `push`, `finish`, `cleanup`, `cross-review`, `research` and `orchestrate`
+  read those fields; a missing section means the skill's default.
+
 ## 0.2.4
 
 - `bin/install` checks every Git repository directly under `~` for shadowed

@@ -17,7 +17,9 @@ Fetch with `--prune`, then list:
   shows no `+` lines, the squash or rebase case), or unmerged with commit count
   and last date.
 - **Worktrees** (`git worktree list`): branch, merged state, uncommitted changes,
-  and whether a process is running inside it.
+  and whether a process is running inside it. `docs/agents/publishing.md` says
+  where they live and who owns them; remove a tool's worktrees through that
+  tool.
 - **Folders next to the repository**: every directory in its parent whose name
   starts with the repository's name (`<repo>-*`). Classify each one:
   - a worktree of this repository: treat it as above;

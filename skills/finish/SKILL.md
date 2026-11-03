@@ -18,8 +18,9 @@ skill only orders them and stops at the first failure.
    it part of shipping this kind of change.
 5. **Clean up** (`cleanup`): this task's merged branches, worktrees, servers and
    temporary files. Leave anything not yours.
-6. **Install or deploy**: the steps under "after publish" in the contract, each
-   only after the previous one succeeded. Skip it when the contract has none.
+6. **Install, deploy, restart**: the steps under that heading in the contract,
+   each only after the previous one succeeded. Skip it when the contract has
+   none. A request for only an install or a restart runs just this step.
 
 Steps the user left out of the request stay out; a chain that lists only
 "commit and push" ends after step 3.

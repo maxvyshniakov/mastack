@@ -19,6 +19,6 @@
   CHANGELOG.md. Move entries from `Unreleased` into the new section, commit
   `chore: release X.Y.Z`, tag it annotated, push the commit and the tag.
 
-## After publish
+## Install, deploy, restart
 - Nothing to install: `bin/install` links skills to the checkout, so a
   `git pull` in each clone updates them.

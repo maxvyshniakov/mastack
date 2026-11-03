@@ -31,8 +31,10 @@ else (a release branch, a deploy, CI you cannot see). Never guess a destination.
 - Push one SHA with an explicit refspec. If the contract names a promote tool,
   use it and never a bare `git push`: the tool also moves the local branches and
   takes the landing lock; a bare push leaves local branches behind the remote.
-- A release branch only receives a SHA that the everyday branch receives in the
-  same push, so the release branch stays an ancestor of the everyday one.
+- The release branch only when the request uses a word the contract lists for
+  it (for example "ship"); a bare "push" goes to the everyday branch. It only
+  receives a SHA that the everyday branch receives in the same push, so the
+  release branch stays an ancestor of the everyday one.
 - Chain dependent steps with `&&` and address other checkouts with `git -C`.
   A `;` once ran a deploy after the push before it was refused.
 - Rejected: fetch, read what landed, rebase, push again. Never force.
