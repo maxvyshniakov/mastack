@@ -1,0 +1,7 @@
+{
+  "_comment": "Machine settings for the Bash hook; copy to ~/.config/mastack/hooks.json. Every field is optional; see hooks/hook_io.py.",
+  "checkouts": ["~/app", "~/lib"],
+  "state_dir": "~/state/orchestration",
+  "lane_records": "~/state/orchestration/lanes",
+  "mutating_steps": ["tools/lane land", "tools/lane promote", "deploy/deploy.sh"]
+}

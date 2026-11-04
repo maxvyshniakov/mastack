@@ -143,13 +143,69 @@ Before installing:
   directories and the matching rule in your global agent instructions) so two
   instructions do not compete.
 
+## Hooks
+
+`bin/install` also registers one Claude Code `PreToolUse` hook for the Bash
+tool in `~/.claude/settings.json`: `hooks/bash_guard.py`, which runs every
+check below in one process and imports a check only when the command holds
+the text it looks for. Each check is a module of its own and runs alone as a
+hook too; its docstring defines exactly what it denies.
+
+| Check | Denies |
+|---|---|
+| `git_guard` | a mutating git step piped into a filter mid-chain; pushing `main`, `dev` or `HEAD` by name in a shared checkout's repository; force pushes and `--no-verify`; discarding work in a shared checkout; untagged or implicit stash use |
+| `unguarded_sequence` | a mutating step (git merge, push, commit ..., `gh pr merge`, `gh issue close`, and the project's own steps) after `;` or a newline whose earlier step may have failed |
+| `zsh_word_split` | an unquoted scalar `$var` that zsh, the Bash tool's shell, passes as one word where bash splits it |
+| `pgrep_self_match` | a `pgrep -f` that waits (an if, while or until condition, a loop body) or a `pkill -f` anywhere, whose literal pattern matches its own command, so it finds every agent shell running that text (a wait loop never ends) |
+| `lease_guard` | a `kill`, `pkill` or `killall` that reaches a process inside another holder's `slotfather` lease; passes when slotfather is absent |
+| `shell_pitfalls` | GNU-only forms that fail on macOS: GNU `timeout`, GNU cat's show-all flag |
+
+A deny from any check wins and names each check that denied. Every check
+fails open: unreadable input, configuration or project files let the command
+run, and a check that crashes is logged to `guard.log` and skipped. The
+parsers run first; the lease guard runs last and only while nothing is
+denied, and all of them share a time budget below the hook's timeout, so a
+slow `slotfather` cannot let the timeout drop a deny already found.
+
+- **Machine settings**, `~/.config/mastack/hooks.json`, outside the
+  repository: `checkouts` (shared main checkouts, where `push-by-name` and
+  `shared-checkout` apply), `state_dir` (for `guard.log`), `lane_records` (the
+  lane tool's records, for the lease guard) and `mutating_steps` (extra steps
+  for every project, added to the project's own). Start from
+  `hooks/hooks.example.json`; `bin/install` refuses to register the hook
+  while the file is missing.
+- **Project steps**, `docs/agents/hooks.json` in the session's repository
+  (see [CONTRACT.md](CONTRACT.md#docsagentshooksjson)).
+- **Overrides** are the owner's: a command starting `GIT_GUARD_OK="<reason>"`
+  passes git_guard; `LEASE_GUARD_OK="<reason>"` turns a lease deny into a
+  permission prompt. Both are logged.
+- **Install** from the main checkout (a worktree's path disappears with it,
+  so it is refused): `bin/install --only hooks` registers just the hook,
+  `--skip hooks` leaves the settings alone, `--dry-run` prints the diff, and
+  `--uninstall --only hooks` removes only mastack's entries. The registered
+  command runs `bash_guard.py` through `sh` and lets commands through if the
+  file is gone. In Bash groups, install replaces the per-check entries of an
+  earlier `agent-hooks` directory, `~/.claude/hooks/macos-shell-pitfalls.sh`
+  and the commands earlier installs recorded in
+  `~/.config/mastack/hooks-installed.json`; it keeps every other entry,
+  writes `settings.json.mastack-backup-<time>` first, follows a symlinked
+  settings file, and starts over if Claude Code wrote the file meanwhile.
+- **Codex** (0.165) has `PreToolUse` hooks with the same JSON contract
+  (`hooks` feature, `hooks.json` or `[hooks]` in `config.toml`), but each
+  hook must be trusted in `/hooks` before it runs, and its shell tool's
+  matcher name could not be confirmed, so `bin/install` does not register
+  there yet. To try it by hand, add the same group to `~/.codex/hooks.json`
+  with the matcher Codex reports for its shell tool, then trust it in `/hooks`.
+
 ## Develop
 
 - `bin/check` scans the tree for private details: IP addresses, home paths,
   e-mail addresses, issue references, tokens, plus your own patterns from
   `~/.config/mastack/private-patterns` (one regular expression per line, kept
   out of the repository). `bin/check --history` scans every commit. Without
-  `--history` it then runs the tests (`*_test.sh`, `*_test.py`).
+  `--history` it then runs the tests (`*_test.sh`, `*_test.py`), among them
+  `tests/hooks_test.py`, which replays `hooks/fixtures/` against each check
+  and through the dispatcher.
   `.githooks/pre-push` runs it; enable with `git config core.hooksPath .githooks`.
 - `bin/eval <skill> [scenario]` runs a scenario from `evals/` against a scratch
   repository and grades what the agent did. See [evals/README.md](evals/README.md).

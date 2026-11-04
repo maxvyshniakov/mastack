@@ -13,6 +13,7 @@ longer docs it summarises instead of copying them.
 | `docs/agents/domain.md` | `grill-me`, `architecture`, `tdd`, `debug`, `research` |
 | `docs/agents/issue-tracker.md` | `status`, `cross-review`, `commit`, `orchestrate` |
 | `docs/agents/orchestration.md` | `orchestrate` |
+| `docs/agents/hooks.json` | the Bash hook's `unguarded_sequence` check |
 
 `AGENTS.md` stays the entry point and points at these files; it does not repeat
 them.
@@ -143,6 +144,26 @@ them.
 - Project additions to the pack's implementer brief: receipts, paths lanes
   must not touch, the slot wrapper, anything a lane would otherwise get wrong.
 ```
+
+## `docs/agents/hooks.json`
+
+Machine-read, so JSON. The project's own mutating steps: the unguarded-sequence
+check denies them after `;` or a newline whose earlier step may have failed,
+like `git push`. The hook reads the file of the session's worktree, else of its
+main checkout.
+
+```json
+{
+  "mutating_steps": ["tools/lane land", "tools/lane review --mark", "deploy/deploy.sh"]
+}
+```
+
+A step is `PROGRAM [VERB] [--OPTION]...`. PROGRAM matches the command's path
+or its end after a `/` (`tools/lane` matches `$ROOT/tools/lane`, also run
+through `bash` or `python3`); VERB must be the first argument; with OPTIONs,
+one of them must follow the verb (`--mark` matches `--mark=clean`). Keep the
+list to steps that change shared state: landing, promoting, deploying,
+installing.
 
 ## Workaround marks
 

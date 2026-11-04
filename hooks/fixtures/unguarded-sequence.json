@@ -1,0 +1,508 @@
+{
+  "comment": "Unguarded sequence: a mutating step after `;` or a newline whose earlier step may have failed (must deny, naming each step) and look-alikes that are guarded or do not mutate (must allow). Replays are verbatim Bash tool commands from the transcripts.",
+  "deny": [
+    {
+      "name": "2026-10-27 replay: deploy.sh after a refused tools/lane promote",
+      "command": "set -o pipefail; P=/private/tmp/claude-501/-home-app/32d15c03-0292-4696-8d98-62c1fd05d847/scratchpad; $P/land.sh 548-touch-surface-per-remote {home}/app/.claude/worktrees/agent-ab517696d28306c91; cd {home}/app/.claude/worktrees/integrate-queue-347 && S=$(git rev-parse HEAD) && echo \"promote $S\" && APP_LANE_CAP=16 tools/lane promote $S > $P/promote5.log 2>&1 && tail -1 $P/promote5.log && cd ../batch-gate && test \"$(git rev-parse HEAD)\" = \"$S\" && ./install-control-app.sh > $P/install5.log 2>&1 && python3 tools/check-installed.py --expect $S 2>&1 | grep -v '^ok' | head -6; O=$P/link-pkg5; rm -rf $O && tools/app-link/build-package.sh $O linux/amd64 > $O.build.log 2>&1 && APP_LINK_PACKAGE=$O tools/app-link/deploy.sh max@192.0.2.10 2>&1 | tail -2; tail -4 $P/promote5.log",
+      "steps": [
+        "tools/lane promote",
+        "./install-control-app.sh",
+        "tools/app-link/build-package.sh",
+        "tools/app-link/deploy.sh"
+      ]
+    },
+    {
+      "name": "2026-10-28 replay: git merge in the integration worktree after a failed tools/lane adopt",
+      "command": "set -o pipefail; cd {home}/app/.claude/worktrees/integrate-queue-347; P=/private/tmp/claude-501/-home-app/32d15c03-0292-4696-8d98-62c1fd05d847/scratchpad; git fetch -q origin fix/vacuumtube-application-control fix/reopen-running-applications && tools/lane start 595-596-mac-app-control --ticket 595 --claims build-control-agent.sh desktop-service.swift docs/development.md 'native-application-*.swift' native-keyboard.swift native/app-core/tests/test_opamp.py 'test-native-application-*.swift' test-native-keyboard.swift 'tools/keyboard-delivery-check/**' tools/swift-tests.txt GLOSSARY.md action-adapters.swift > $P/h-595.txt 2>&1; tail -1 $P/h-595.txt | cut -c1-200; W={home}/app/.claude/worktrees/lane-595-596; git worktree add -b lane/595-596-mac-app-control $W integrate/queue-347 2>&1 | tail -1 && tools/lane adopt 595-596-mac-app-control $W lane/595-596-mac-app-control 2>&1 | tail -1 && cd $W && git merge --no-ff -m \"Merge PR no. 595: Mac recipient identity and keyboard window diagnostics (no. 591, no. 592)\" origin/fix/vacuumtube-application-control 2>&1 | tail -2; git merge --no-ff -m \"Merge PR no. 596: reopen running Mac applications (no. 593)\" origin/fix/reopen-running-applications 2>&1 | tail -3; git status --short | head",
+      "steps": [
+        "tools/lane start",
+        "tools/lane adopt",
+        "git merge --no-ff -m \"Merge PR no. 595",
+        "git merge --no-ff -m \"Merge PR no. 596"
+      ]
+    },
+    {
+      "name": "leading cd before a merge",
+      "command": "cd $W; git merge --no-ff origin/fix/x",
+      "steps": [
+        "git merge"
+      ]
+    },
+    {
+      "name": "the 2026-10-28 shape, reduced",
+      "command": "tools/lane adopt a $W lane/a 2>&1 | tail -1 && cd $W && git merge origin/x 2>&1 | tail -2; git merge origin/y 2>&1 | tail -3",
+      "steps": [
+        "git merge origin/y"
+      ]
+    },
+    {
+      "name": "steps on separate lines",
+      "command": "cd {home}/app/.claude/worktrees/x\ngit commit -qm wip",
+      "steps": [
+        "git commit"
+      ]
+    },
+    {
+      "name": "git -C after an unguarded fetch",
+      "command": "git -C $I fetch -q origin; git -C $I reset --keep origin/dev",
+      "steps": [
+        "git -C $I reset"
+      ]
+    },
+    {
+      "name": "|| echo reports the failure but goes on",
+      "command": "tools/lane check 5 || echo failed; gh pr merge 5 --squash",
+      "steps": [
+        "gh pr merge"
+      ]
+    },
+    {
+      "name": "gh issue close after an unguarded gh pr merge",
+      "command": "gh pr merge 5 --squash; gh issue close 7",
+      "steps": [
+        "gh issue close"
+      ]
+    },
+    {
+      "name": "worktree remove after tools/lane done",
+      "command": "tools/lane done 5-x; git worktree remove $W",
+      "steps": [
+        "git worktree remove"
+      ]
+    },
+    {
+      "name": "review --mark after cd",
+      "command": "cd ..; tools/lane review --mark 5-x clean",
+      "steps": [
+        "tools/lane review --mark"
+      ]
+    },
+    {
+      "name": "lane run through python3",
+      "command": "cd $I; python3 tools/lane land 597-x",
+      "steps": [
+        "python3 tools/lane land"
+      ]
+    },
+    {
+      "name": "absolute path to tools/lane",
+      "command": "cd $I\n{home}/app/tools/lane promote $S",
+      "steps": [
+        "{home}/app/tools/lane promote"
+      ]
+    },
+    {
+      "name": "assignment prefix and env wrapper",
+      "command": "git pull --ff-only; env APP_LANE_CAP=6 tools/lane start 9-x --ticket 9",
+      "steps": [
+        "tools/lane start"
+      ]
+    },
+    {
+      "name": "captured value may be empty",
+      "command": "S=$(git -C $I rev-parse HEAD); git push origin $S:refs/heads/dev",
+      "steps": [
+        "git push"
+      ]
+    },
+    {
+      "name": "inside a subshell",
+      "command": "(cd $W; git switch -c lane/x)",
+      "steps": [
+        "git switch"
+      ]
+    },
+    {
+      "name": "inside an if body",
+      "command": "if [ -d $W ]; then cd $W; git rebase origin/dev; fi",
+      "steps": [
+        "git rebase"
+      ]
+    },
+    {
+      "name": "inside a loop body",
+      "command": "for d in a b; do cd $d; git cherry-pick $S; done",
+      "steps": [
+        "git cherry-pick"
+      ]
+    },
+    {
+      "name": "after a group that may fail",
+      "command": "{ cd $W; ls; } > /dev/null; git revert --no-edit $S",
+      "steps": [
+        "git revert"
+      ]
+    },
+    {
+      "name": "set -e does not stop on a failure before &&",
+      "command": "set -e; tools/lane promote $S && echo promoted; tools/app-link/deploy.sh max@192.0.2.10",
+      "steps": [
+        "tools/app-link/deploy.sh"
+      ],
+      "errexit": true
+    },
+    {
+      "name": "set +e turns errexit off again",
+      "command": "set -e; set +e; cd $W; git checkout -b x",
+      "steps": [
+        "git checkout"
+      ]
+    },
+    {
+      "name": "unsetopt err_exit turns errexit off again",
+      "command": "setopt err_exit; unsetopt err_exit; cd $W; git merge x",
+      "steps": [
+        "git merge"
+      ]
+    },
+    {
+      "name": "set -e inside a subshell does not reach the parent",
+      "command": "(set -e; cd a); cd $W; ./install-control-app.sh",
+      "steps": [
+        "./install-control-app.sh"
+      ]
+    },
+    {
+      "name": "sweep: commit after an unguarded git add",
+      "command": "git add -A; git commit -qm wip",
+      "steps": [
+        "git commit"
+      ]
+    },
+    {
+      "name": "sweep: lane start with claims a failed command left empty",
+      "command": "claims=$(python3 tools/queue-claims.py 9-x); tools/lane start 9-x --ticket 9 --claims $claims",
+      "steps": [
+        "tools/lane start"
+      ]
+    },
+    {
+      "name": "sweep: push after an unguarded fetch",
+      "command": "git fetch -q origin; git push origin HEAD:refs/heads/main",
+      "steps": [
+        "git push"
+      ]
+    },
+    {
+      "name": "sweep: a sed -i edit may fail",
+      "command": "sed -i '' 's/a/b/' x.swift; git commit -qam fix",
+      "steps": [
+        "git commit"
+      ]
+    },
+    {
+      "name": "review 1: deploy after a failed test",
+      "command": "test \"$(git rev-parse HEAD)\" = \"$S\"; tools/app-link/deploy.sh max@192.0.2.10",
+      "steps": [
+        "tools/app-link/deploy.sh"
+      ]
+    },
+    {
+      "name": "review 1: install after a failed [ ]",
+      "command": "[ \"$(git rev-parse HEAD)\" = \"$S\" ]; ./install-control-app.sh",
+      "steps": [
+        "./install-control-app.sh"
+      ]
+    },
+    {
+      "name": "review 1: push after a failed [[ ]] on the line before",
+      "command": "[[ $S != \"\" ]]\ngit push origin $S:refs/heads/dev",
+      "steps": [
+        "git push"
+      ]
+    },
+    {
+      "name": "review 1: land after a failed grep -q",
+      "command": "grep -q 'Receipt green' $P/chk.log; tools/lane land 5-x",
+      "steps": [
+        "tools/lane land"
+      ]
+    },
+    {
+      "name": "review 1: grep as the condition of &&",
+      "command": "grep -F ok $P/chk.log && echo found; gh pr merge 5 --squash",
+      "steps": [
+        "gh pr merge"
+      ]
+    },
+    {
+      "name": "review 1: git merge-base --is-ancestor as a check",
+      "command": "git merge-base --is-ancestor origin/dev HEAD; git push origin $S:refs/heads/dev",
+      "steps": [
+        "git push"
+      ]
+    },
+    {
+      "name": "review 1: git diff --quiet as a check",
+      "command": "git diff --quiet origin/dev; git merge origin/dev",
+      "steps": [
+        "git merge"
+      ]
+    },
+    {
+      "name": "review 1: diff -q and cmp as checks",
+      "command": "diff -q a b; cmp -s c d; git commit -qam x",
+      "steps": [
+        "git commit"
+      ]
+    },
+    {
+      "name": "review 2: || true does not guard",
+      "command": "cd /missing || true; git merge origin/x",
+      "steps": [
+        "git merge"
+      ]
+    },
+    {
+      "name": "review 2: || : does not guard",
+      "command": "cd /missing || :; git merge origin/x",
+      "steps": [
+        "git merge"
+      ]
+    },
+    {
+      "name": "review 2: || true after a branch delete",
+      "command": "git branch -D old 2>/dev/null || true; git checkout -b old",
+      "steps": [
+        "git checkout"
+      ]
+    },
+    {
+      "name": "review 3: set -e without pipefail, tail masks the failure",
+      "command": "set -e; tools/lane promote abc | tail -1; tools/app-link/deploy.sh host",
+      "steps": [
+        "tools/app-link/deploy.sh"
+      ],
+      "errexit": true
+    },
+    {
+      "name": "review 3: set +o pipefail turns the mask back on",
+      "command": "set -eo pipefail; set +o pipefail; tools/lane promote abc | tail -1; tools/app-link/deploy.sh host",
+      "steps": [
+        "tools/app-link/deploy.sh"
+      ],
+      "errexit": true
+    },
+    {
+      "name": "review 3: a handler after || swallows the failure under set -e",
+      "command": "set -e; cd /missing || echo failed; git merge origin/x",
+      "steps": [
+        "git merge"
+      ],
+      "errexit": true
+    },
+    {
+      "name": "review 4: set +e inside an if branch",
+      "command": "set -e; if true; then set +e; fi; cd /missing; git merge origin/x",
+      "steps": [
+        "git merge"
+      ]
+    },
+    {
+      "name": "review 4: set +e inside a loop",
+      "command": "set -e; for d in a; do set +e; done; cd $W; git merge x",
+      "steps": [
+        "git merge"
+      ]
+    },
+    {
+      "name": "review 4: unsetopt err_exit inside a case branch",
+      "command": "setopt err_exit; case $x in a) unsetopt err_exit;; esac; cd $W; git merge x",
+      "steps": [
+        "git merge"
+      ]
+    },
+    {
+      "name": "review 4: set +e in a function body",
+      "command": "set -e; f() { set +e; }; f; cd $W; git merge x",
+      "steps": [
+        "git merge"
+      ]
+    },
+    {
+      "name": "build-package.sh after a failed step on the previous line",
+      "command": "rm -rf $O\ntools/app-link/build-package.sh $O linux/amd64",
+      "steps": [
+        "tools/app-link/build-package.sh"
+      ]
+    }
+  ],
+  "allow": [
+    {
+      "name": "&& chain",
+      "command": "cd $W && git merge --no-ff origin/x && git push origin $S:refs/heads/dev"
+    },
+    {
+      "name": "&& chain over several lines",
+      "command": "cd $W &&\n  git merge origin/x &&\n  tools/lane land x"
+    },
+    {
+      "name": "set -e prefix",
+      "command": "set -e; cd $W; git merge origin/x; git push origin $S:refs/heads/dev"
+    },
+    {
+      "name": "set -euo pipefail on its own line",
+      "command": "set -euo pipefail\ncd $W\ngit commit -qm wip"
+    },
+    {
+      "name": "set -o errexit",
+      "command": "set -o errexit; cd $W; tools/lane promote $S"
+    },
+    {
+      "name": "setopt err_exit",
+      "command": "setopt err_exit; cd $W; git rebase origin/dev"
+    },
+    {
+      "name": "set -e with a chain ending in || exit",
+      "command": "set -e; cd $W && git fetch -q || exit 1; git merge FETCH_HEAD"
+    },
+    {
+      "name": "|| exit",
+      "command": "cd $W || exit 1; git merge origin/x"
+    },
+    {
+      "name": "|| return in a function",
+      "command": "land() { cd $1 || return; tools/lane land $2; }; land $W x"
+    },
+    {
+      "name": "|| { ...; exit 1; }",
+      "command": "cd $W || { echo \"no worktree $W\"; exit 1; }; git merge origin/x"
+    },
+    {
+      "name": "read-only ; sequence",
+      "command": "grep -n foo tools/lane; echo ---; git status --short; git log --oneline -3; cd /tmp; ls"
+    },
+    {
+      "name": "mutating step first, read-only after",
+      "command": "git merge origin/x 2>&1 | tail -2; git status --short; git log -1"
+    },
+    {
+      "name": "only steps that cannot fail before it",
+      "command": "set -o pipefail; P=/tmp/x; S=abc; echo \"promote $S\"; sleep 5; tools/lane promote $S"
+    },
+    {
+      "name": "mutating text in quotes",
+      "command": "echo \"cd x; git merge y\"; printf '%s\\n' 'tools/lane promote; deploy.sh'; grep -c 'git push' log.txt"
+    },
+    {
+      "name": "mutating text in a commit message",
+      "command": "git add a.py && git commit -m \"fix: a; git merge b\" && git log -1"
+    },
+    {
+      "name": "mutating text in a heredoc body",
+      "command": "cat > notes.md <<'EOF'\ncd x; git merge y\ntools/lane promote $S\nEOF\nwc -l notes.md"
+    },
+    {
+      "name": "heredoc into gh as the first step",
+      "command": "gh issue comment 5 --body-file - <<'EOF'\ncd x\ngit push origin main\nEOF"
+    },
+    {
+      "name": "mutating text in a comment",
+      "command": "ls # cd x; git merge y\npwd"
+    },
+    {
+      "name": "quoted bash -c script",
+      "command": "ssh max@host 'cd /opt/x; git pull'; bash -c 'cd x; git merge y'"
+    },
+    {
+      "name": "git merge-base is read-only",
+      "command": "cd $W; git merge-base HEAD origin/dev; git log --oneline -3"
+    },
+    {
+      "name": "mutation as an if condition",
+      "command": "if git merge --ff-only origin/x; then git push origin $S:refs/heads/dev; fi"
+    },
+    {
+      "name": "[[ ]] with && inside",
+      "command": "[[ -n $S && -d $W ]] && cd $W && git merge origin/x"
+    },
+    {
+      "name": "function body checked on its own",
+      "command": "f() { cd $1 && git merge x; }; ls /tmp; f /tmp/a"
+    },
+    {
+      "name": "background step does not gate the next",
+      "command": "tools/lane check a > a.log 2>&1 & tools/lane land b"
+    },
+    {
+      "name": "gh read-only after a failing step",
+      "command": "cd $W; gh pr view 5; gh issue list --label x"
+    },
+    {
+      "name": "lane check is read-only",
+      "command": "cd $W; tools/lane check 597-x; tools/lane review 597-x"
+    },
+    {
+      "name": "cd inside a subshell, mutation after it",
+      "command": "(cd /tmp && ls) && git -C $W merge origin/x"
+    },
+    {
+      "name": "coordinator form: pipefail, cd || exit 1, land && review --mark",
+      "command": "set -o pipefail; cd {home}/app/.claude/worktrees/integrate-queue-347 || exit 1; tools/lane land 597-x 2>&1 | tail -3 && tools/lane review 597-x --mark clean"
+    },
+    {
+      "name": "coordinator form: land piped into tail alone",
+      "command": "tools/lane land 597-x 2>&1 | tail -3"
+    },
+    {
+      "name": "review 3: set -eo pipefail stops on a masked failure",
+      "command": "set -eo pipefail; tools/lane promote abc | tail -1; tools/app-link/deploy.sh host"
+    },
+    {
+      "name": "review 3: setopt err_exit pipe_fail",
+      "command": "setopt err_exit pipe_fail; cd $W | cat; git merge x"
+    },
+    {
+      "name": "review 3: || exit 1 still guards under set -e",
+      "command": "set -e; cd /missing || exit 1; git merge origin/x"
+    },
+    {
+      "name": "review 4: set -e again inside a branch keeps errexit on",
+      "command": "set -e; if true; then set -e; fi; cd $W; git merge x"
+    },
+    {
+      "name": "review 1: a test as an if condition",
+      "command": "if [ \"$(git rev-parse HEAD)\" = \"$S\" ]; then tools/app-link/deploy.sh host; fi"
+    },
+    {
+      "name": "review 1: a test that ends in || exit",
+      "command": "[ -d $W ] || exit 1; cd $W || exit 1; git merge x"
+    },
+    {
+      "name": "review sweep: a display grep whose status || true ignores",
+      "command": "grep -n RED-PROBE -r native || true; git commit -qm x"
+    },
+    {
+      "name": "review sweep: a display pipeline before &&, only its last command picks",
+      "command": "git diff --stat HEAD...x | tail -3 && git log -1; git diff --cached --name-only | sort || echo none; git merge x"
+    },
+    {
+      "name": "review 1: grep that only displays",
+      "command": "grep -n foo log.txt | tail -3; tail -5 log.txt; git log -1; git commit -qm x"
+    },
+    {
+      "name": "sweep: display steps before a push",
+      "command": "git status --short | head -3; git log --oneline -1; git branch --show-current; git push origin $S:refs/heads/dev"
+    },
+    {
+      "name": "sweep: gh reads and git config --get before a merge",
+      "command": "gh pr view 5 --json state; gh api repos/x/y/pulls/5 -q .mergeable; git config --get user.name; gh pr merge 5 --squash"
+    },
+    {
+      "name": "sweep: bash -n only checks syntax",
+      "command": "cd $W; bash -n install-control-app.sh; bash -n tools/app-link/deploy.sh"
+    },
+    {
+      "name": "sweep: --abort undoes a probe merge",
+      "command": "git merge --no-commit --no-ff origin/x; git diff --stat HEAD; git merge --abort"
+    },
+    {
+      "name": "sweep: worktree unlock may fail harmlessly",
+      "command": "git worktree unlock $w; git worktree remove --force $w"
+    },
+    {
+      "name": "sweep: || break leaves the loop",
+      "command": "for i in $(seq 1 200); do pgrep -f '^python3 tools/lane land' >/dev/null || break; sleep 15; done; tools/lane land 430-docs-paths 2>&1 | tail -3"
+    }
+  ]
+}

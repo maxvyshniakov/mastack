@@ -1,0 +1,20 @@
+{
+  "comment": "macOS shell pitfalls: GNU-only forms that fail on macOS (must deny, naming the form that works) and look-alikes (must allow). Matched on the raw text, line by line, as the earlier shell script did.",
+  "deny": [
+    {"name": "GNU timeout before a command", "command": "timeout 30 npm test", "says": "run_in_background"},
+    {"name": "GNU timeout after &&", "command": "cd app && timeout 5s curl -s localhost:3000", "says": "timeout parameter"},
+    {"name": "GNU timeout on a later line", "command": "echo start\ntimeout 10 make", "says": "timeout parameter"},
+    {"name": "GNU timeout in a subshell", "command": "(timeout 3 sleep 9)", "says": "timeout parameter"},
+    {"name": "cat -A", "command": "cat -A notes.txt", "says": "cat -vet"},
+    {"name": "cat -vA after a pipe", "command": "printf 'a\\tb' | cat -vA", "says": "cat -vet"}
+  ],
+  "allow": [
+    {"name": "the Bash tool's timeout parameter is no command", "command": "npm test"},
+    {"name": "a word ending in timeout", "command": "grep -n read_timeout 30 config.py"},
+    {"name": "timeout without a number", "command": "echo timeout is set in config"},
+    {"name": "timeout and its number on separate lines", "command": "echo timeout\n5"},
+    {"name": "cat -vet", "command": "cat -vet notes.txt"},
+    {"name": "cat with another option", "command": "cat -n notes.txt"},
+    {"name": "a word ending in cat", "command": "bobcat -A x"}
+  ]
+}

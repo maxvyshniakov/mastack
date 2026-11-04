@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # Symlink the skill directories of this checkout into the user-level skill
-# directories that Claude Code and Codex read.
+# directories that Claude Code and Codex read, and register the Bash hook.
 #
 #   bin/install [--dry-run] [--force] [--uninstall] [--only a,b] [--skip a,b]
-#               [--target DIR]... [--project DIR]...
+#               [--target DIR]... [--project DIR]... [--settings FILE]
 #
 # Without --target it installs into ~/.claude/skills and ~/.agents/skills.
 # --only and --skip pick skills; --uninstall removes only the picked ones.
+# The name `hooks` picks the Bash hook (hooks/bash_guard.py) in the Claude Code
+# settings, ~/.claude/settings.json or --settings FILE ($MASTACK_CLAUDE_SETTINGS):
+# install replaces the hooks it supersedes and backs the file up first,
+# --dry-run prints the diff, --uninstall removes only mastack's entries. It
+# needs ~/.config/mastack/hooks.json (hooks/hooks.example.json) and the main
+# checkout, not a worktree (MASTACK_HOOKS_FROM_WORKTREE=1 for tests).
 # A user-level skill wins over a project skill of the same name, so a picked
 # skill that a project also has (.claude/skills or .agents/skills) is reported
 # as a shadow and held back. Projects are every Git repository directly under
@@ -22,6 +28,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 config=${MASTACK_CONFIG:-$HOME/.config/mastack}
 dry=0 force=0 uninstall=0 only='' skip=''
+settings=${MASTACK_CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
 targets=() projects=()
 
 while (($#)); do
@@ -33,7 +40,8 @@ while (($#)); do
     --skip) skip=${2:?--skip needs a list}; shift ;;
     --target) targets+=("${2:?--target needs a directory}"); shift ;;
     --project) projects+=("${2:?--project needs a directory}"); shift ;;
-    -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --settings) settings=${2:?--settings needs a file}; shift ;;
+    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install: unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -49,8 +57,10 @@ for dir in "$root"/skills/*/; do
   [[ -f $dir/SKILL.md ]] && all+=,$(basename "$dir")
 done
 for name in ${only//,/ } ${skip//,/ }; do
-  has "$all" "$name" || { echo "install: no skill named $name" >&2; exit 2; }
+  has "$all,hooks" "$name" || { echo "install: no skill named $name" >&2; exit 2; }
 done
+hooks=0
+{ [[ -z $only ]] || has "$only" hooks; } && ! has "$skip" hooks && hooks=1
 picked=''
 for name in ${all//,/ }; do
   [[ -n $only ]] && ! has "$only" "$name" && continue
@@ -159,6 +169,13 @@ if ((!uninstall)); then
 fi
 
 status=0
+if ((hooks)); then
+  flags=()
+  ((dry)) && flags+=(--dry-run)
+  ((uninstall)) && flags+=(--uninstall)
+  [[ -n ${MASTACK_HOOKS_FROM_WORKTREE:-} ]] && flags+=(--from-worktree)
+  python3 "$root/hooks/register.py" --settings "$settings" --config "$config" ${flags[@]+"${flags[@]}"} || status=1
+fi
 if [[ -n $held ]]; then
   echo "held back: ${held#,} (remove the project's copy first, or --force)" >&2
   status=1
