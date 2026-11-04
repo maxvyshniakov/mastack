@@ -20,7 +20,11 @@ Firefox and Safari at the widths and themes the project names.
 
 ## 3. Launch real engines, out of the owner's way
 
-- **Chromium**: Playwright's build, headless.
+- **Chromium**: Playwright's build, headless. For 2× pixels at full frame rate (video, frame
+  timing), use a real window on a Retina display instead. Headless 2× reaches only about
+  16 fps, and the page still reports DPR 1. The window keeps 60 fps behind the owner's apps
+  with `--disable-backgrounding-occluded-windows --disable-renderer-backgrounding`, focus
+  handed back as for Safari.
 - **Firefox**: the installed Firefox through Playwright's BiDi channel,
   `firefox.launch({ channel: "moz-firefox" })`, headless. Playwright's own
   patched Firefox can fail on a new macOS with "Could not find profile folder",
