@@ -38,4 +38,8 @@ Four groups, most urgent first inside each:
   stale leases. Suggest `cleanup` or `push` where they apply.
 
 One line per item, links to issues, runs and branches instead of retelling them.
+Never write a bare ticket number or lane id: each ticket is a link followed by its
+gist in a few words in parentheses, in the user's language, for example
+`[#N](https://github.com/<owner>/<repo>/issues/N) (move the lane tool into its own package)`.
+A lane is named by its ticket the same way.
 End with the single most useful next action.
