@@ -6,6 +6,11 @@ command holds the text it looks for, so `ls` pays for none of the parsers. A den
 every check that denied; otherwise an ask (the lease guard's owner override) is passed on. A check that fails is
 logged to guard.log and skipped, so one broken check never blocks a command or silences the others.
 
+The checks that only parse run first. The lease guard, which asks slotfather and ps about each pid, runs last and
+only when nothing is denied yet (a deny already wins). All of it shares a BUDGET shorter than the hook's timeout:
+each subprocess gets what is left of it, and once it is spent the hook answers with what it has, so a slow
+slotfather never lets Claude Code's timeout drop a deny that was already found.
+
 Each check is a module of its own with `check(data) -> (decision, reason) | None`, and runs alone as a hook too:
 `python3 hooks/git_guard.py < input.json`.
 """
@@ -16,29 +21,37 @@ import sys
 
 import hook_io
 
+HOOK_TIMEOUT = 10  # seconds, as bin/install registers the hook
+BUDGET = 7.0       # seconds the checks may spend; the rest is the interpreter's start and a margin
+
 # (module, log name, texts of which the command must contain one for the check to look at it; () for every command)
 CHECKS = (
     ("shell_pitfalls", "shell-pitfalls", ()),
     ("git_guard", "git-guard", ("git",)),
     ("zsh_word_split", "zsh-word-split", ("$",)),
     ("unguarded_sequence", "unguarded-sequence", (";", "\n")),
-    ("lease_guard", "lease-guard", ("kill",)),
     ("pgrep_self_match", "pgrep-self-match", ("pgrep", "pkill")),
+    ("lease_guard", "lease-guard", ("kill",)),
 )
+ONLY_WITHOUT_DENY = {"lease_guard"}
 
 
 def triggered(command: str, needles: tuple[str, ...]) -> bool:
     return not needles or any(needle in command for needle in needles)
 
 
-def decide(data: dict):
+def decide(data: dict, budget: float = BUDGET):
     command = hook_io.command_of(data)
     if command is None:
         return None
+    hook_io.set_budget(budget)
     denies, asks = [], []
     for module, name, needles in CHECKS:
-        if not triggered(command, needles):
+        if not triggered(command, needles) or (denies and module in ONLY_WITHOUT_DENY):
             continue
+        if (hook_io.remaining() or 0) <= 0:
+            hook_io.log("guard.log", f"bash-guard budget spent before {name}")
+            break
         try:
             decision = importlib.import_module(module).check(data)
         except Exception as error:  # noqa: BLE001 - fail open, check by check

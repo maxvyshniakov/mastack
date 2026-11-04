@@ -57,7 +57,7 @@ class Unresolved(Exception):
 
 def run(argv: list[str], timeout: float = 3) -> str:
     try:
-        result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=hook_io.timeout(timeout))
     except (OSError, subprocess.SubprocessError):
         raise Unresolved(" ".join(argv)) from None
     return result.stdout
@@ -284,7 +284,8 @@ def slotfather() -> str | None:
 
 def status(program: str, *args: str) -> dict | None:
     try:
-        result = subprocess.run([program, "status", "--json", *args], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([program, "status", "--json", *args], capture_output=True, text=True,
+                                timeout=hook_io.timeout(5))
         data = json.loads(result.stdout) if result.returncode == 0 else None
     except (OSError, subprocess.SubprocessError, ValueError):
         return None
@@ -297,7 +298,7 @@ def started(pids) -> dict[int, str]:
         return {}
     try:
         output = subprocess.run(["ps", "-o", "pid=,lstart=", "-p", ",".join(map(str, sorted(pids)))],
-                                capture_output=True, text=True, timeout=5, env={**os.environ, "LC_ALL": "C"}).stdout
+                                capture_output=True, text=True, timeout=hook_io.timeout(5), env={**os.environ, "LC_ALL": "C"}).stdout
     except (OSError, subprocess.SubprocessError):
         return {}
     result = {}
@@ -314,7 +315,7 @@ def carrying(pids) -> set[int]:
         return set()
     try:
         output = subprocess.run(["ps", "-wwE", "-o", "pid=,command=", "-p", ",".join(map(str, sorted(pids)))],
-                                capture_output=True, text=True, timeout=5, env={**os.environ, "LC_ALL": "C"}).stdout
+                                capture_output=True, text=True, timeout=hook_io.timeout(5), env={**os.environ, "LC_ALL": "C"}).stdout
     except (OSError, subprocess.SubprocessError):
         return set(pids)  # unknown: ask each
     found = set()
@@ -335,7 +336,7 @@ def table() -> dict[int, tuple[int, str]]:
         _table = {}
         try:
             output = subprocess.run(["ps", "-axo", "pid=,ppid=,comm="], capture_output=True, text=True,
-                                    timeout=5).stdout
+                                    timeout=hook_io.timeout(5)).stdout
         except (OSError, subprocess.SubprocessError):
             return _table
         for line in output.splitlines():

@@ -10,7 +10,9 @@
 # The name `hooks` picks the Bash hook (hooks/bash_guard.py) in the Claude Code
 # settings, ~/.claude/settings.json or --settings FILE ($MASTACK_CLAUDE_SETTINGS):
 # install replaces the hooks it supersedes and backs the file up first,
-# --dry-run prints the diff, --uninstall removes only mastack's entry.
+# --dry-run prints the diff, --uninstall removes only mastack's entries. It
+# needs ~/.config/mastack/hooks.json (hooks/hooks.example.json) and the main
+# checkout, not a worktree (MASTACK_HOOKS_FROM_WORKTREE=1 for tests).
 # A user-level skill wins over a project skill of the same name, so a picked
 # skill that a project also has (.claude/skills or .agents/skills) is reported
 # as a shadow and held back. Projects are every Git repository directly under
@@ -39,7 +41,7 @@ while (($#)); do
     --target) targets+=("${2:?--target needs a directory}"); shift ;;
     --project) projects+=("${2:?--project needs a directory}"); shift ;;
     --settings) settings=${2:?--settings needs a file}; shift ;;
-    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install: unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
@@ -171,7 +173,8 @@ if ((hooks)); then
   flags=()
   ((dry)) && flags+=(--dry-run)
   ((uninstall)) && flags+=(--uninstall)
-  python3 "$root/hooks/register.py" --settings "$settings" ${flags[@]+"${flags[@]}"} || status=1
+  [[ -n ${MASTACK_HOOKS_FROM_WORKTREE:-} ]] && flags+=(--from-worktree)
+  python3 "$root/hooks/register.py" --settings "$settings" --config "$config" ${flags[@]+"${flags[@]}"} || status=1
 fi
 if [[ -n $held ]]; then
   echo "held back: ${held#,} (remove the project's copy first, or --force)" >&2

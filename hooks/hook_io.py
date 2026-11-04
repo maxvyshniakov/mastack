@@ -176,6 +176,35 @@ def project_config(cwd: str | None) -> dict:
     return data
 
 
+# ---- time budget --------------------------------------------------------------------------------------------------
+
+class OutOfTime(TimeoutError):
+    """The hook's time budget is spent: the caller treats it like a failed subprocess and fails open."""
+
+
+_deadline: float | None = None
+
+
+def set_budget(seconds: float) -> None:
+    """Give every later subprocess a share of `seconds` from now, so the hook answers before its own timeout."""
+    global _deadline
+    _deadline = time.monotonic() + seconds
+
+
+def remaining() -> float | None:
+    return None if _deadline is None else _deadline - time.monotonic()
+
+
+def timeout(wanted: float) -> float:
+    """A subprocess timeout that fits the budget: `wanted`, or less; OutOfTime once nothing is left."""
+    left = remaining()
+    if left is None:
+        return wanted
+    if left <= 0.05:
+        raise OutOfTime
+    return min(wanted, left)
+
+
 # ---- input and output ---------------------------------------------------------------------------------------------
 
 def log(name: str, message: str) -> None:

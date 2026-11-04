@@ -9,8 +9,9 @@
   `~/.claude/settings.json` (name `hooks` in `--only`/`--skip`, `--settings
   FILE`), replaces the per-check entries it supersedes and backs the file up;
   `--dry-run` prints the diff. Machine settings live in
-  `~/.config/mastack/hooks.json`; a project names its own mutating steps in
-  `docs/agents/hooks.json` (CONTRACT.md).
+  `~/.config/mastack/hooks.json` (`hooks/hooks.example.json`), which install
+  requires; a project names its own mutating steps in `docs/agents/hooks.json`
+  (CONTRACT.md).
 
 - New `browser-verify` skill: real Chromium, Firefox, WebKit and Safari
   (Technology Preview) without taking the owner's screen, the waits a

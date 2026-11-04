@@ -9,7 +9,10 @@ new loop then keeps the ones before it alive (2026-11-04: 25 loops of one sessio
 `pkill -f PATTERN` signals those shells.
 
 Denies a pgrep or pkill with -f (also in a short-option cluster such as -fl) whose literal PATTERN, read as a
-regular expression, matches the command's own text as the shell holds it (`/bin/zsh -c <command>`). Bracketing
+regular expression, matches the command's own text as the shell holds it (`/bin/zsh -c <command>`): a pkill
+anywhere, since it can signal other agents' shells; a pgrep only where it decides whether to go on, so where it can
+wait: in the condition of an if, while or until (`until ! pgrep -f X`), or anywhere in a loop's body
+(`pgrep -f X || break`). A one-shot pgrep that only looks passes: at worst it lists a few shells too many. Bracketing
 one character (`[l]ane check X`) is the fix: the pattern no longer matches its own text. A pattern in a variable
 or a substitution is not seen, nor is one with -x (exact match) or -v (inverted); pgrep without -f matches
 process names only. Read like the unguarded-sequence guard reads the shell, and a command it cannot parse passes.
@@ -27,34 +30,35 @@ SIGNAL = re.compile(r"-(\d+|[A-Z][A-Z0-9+-]*|SIG[A-Za-z0-9+-]+)")
 SHELL = "/bin/zsh -c "
 
 
-def walk(shell, lst):
-    """Every simple command of a parsed list, in compound commands and substitutions too."""
+def walk(shell, lst, waits=False):
+    """(words, waits) for every simple command of a parsed list, in compound commands and substitutions too;
+    waits: it runs in an if, while or until condition or in a loop's body."""
     for and_or, _ in lst:
         for pipeline, _ in and_or:
             for command in pipeline:
-                yield from inner(shell, command)
+                yield from inner(shell, command, waits)
 
 
-def inner(shell, command):
+def inner(shell, command, waits):
     kind = command[0]
     if kind == "simple":
-        yield command[1]
+        yield command[1], waits
         for word in command[1]:
             for sub in word.subs:
-                yield from walk(shell, shell.parse(hook_io.strip_heredocs(sub)))
+                yield from walk(shell, shell.parse(hook_io.strip_heredocs(sub)), waits)
     elif kind in ("group", "subshell", "function"):
-        yield from walk(shell, command[1])
+        yield from walk(shell, command[1], waits)
     elif kind == "if":
         for condition, body in command[1]:
-            yield from walk(shell, condition)
-            yield from walk(shell, body)
-        yield from walk(shell, command[2] or [])
+            yield from walk(shell, condition, True)
+            yield from walk(shell, body, waits)
+        yield from walk(shell, command[2] or [], waits)
     elif kind == "loop":
-        yield from walk(shell, command[1])
-        yield from walk(shell, command[2])
+        yield from walk(shell, command[1], True)
+        yield from walk(shell, command[2], True)
     elif kind == "case":
         for body in command[1]:
-            yield from walk(shell, body)
+            yield from walk(shell, body, waits)
 
 
 def patterns(words) -> list[str]:
@@ -93,9 +97,10 @@ def check(data: dict):
     try:
         parsed = shell.parse(hook_io.strip_heredocs(command))
         found = []
-        for words in walk(shell, parsed):
+        for words, waits in walk(shell, parsed):
             own = shell.unwrap(words)
-            if not own or (own[0].literal or "").rsplit("/", 1)[-1] not in PROGRAMS:
+            program = (own[0].literal or "").rsplit("/", 1)[-1] if own else ""
+            if program not in PROGRAMS or (program == "pgrep" and not waits):
                 continue
             for pattern in patterns(own):
                 if matches(pattern, SHELL + command):
@@ -109,7 +114,7 @@ def check(data: dict):
     return hook_io.deny(
         "pgrep-self-match denied this command: `pgrep -f` and `pkill -f` match every process's full command line, "
         "and every agent shell that runs a command holding this pattern carries it in its own (an earlier wait loop, "
-        "a monitor, on Linux this very shell), so a wait loop keeps finding them and never ends, and pkill signals "
+        "a monitor, on Linux this very shell), so a wait on it keeps finding them and never ends, and pkill signals "
         "them.\n" + "\n".join(lines) + "\n"
         "Fix: bracket one character so the pattern stops matching its own text (`pgrep -f \"[l]ane check X\"`), "
         "or wait on a pid (`while kill -0 $pid; do sleep 15; done`), on a file, or on the tool's own completion "

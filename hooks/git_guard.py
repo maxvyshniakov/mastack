@@ -128,7 +128,7 @@ def protected_repo(directory: str | None) -> bool:
         return False
     try:
         common = subprocess.run(["git", "-C", directory, "rev-parse", "--path-format=absolute", "--git-common-dir"],
-                                capture_output=True, text=True, timeout=2).stdout.strip()
+                                capture_output=True, text=True, timeout=hook_io.timeout(2)).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return False
     return bool(common) and os.path.realpath(os.path.dirname(common)) in roots

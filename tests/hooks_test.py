@@ -30,6 +30,13 @@ PROJECT_STEPS = ["tools/lane land", "tools/lane promote", "tools/lane start", "t
                  "app-link/build-package.sh", "install-control-app.sh"]
 
 
+def hook_io_reset():
+    """Forget what an in-process call cached: the machine settings and the time budget."""
+    import hook_io
+    hook_io._config = None
+    hook_io._deadline = None
+
+
 def fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text())
 
@@ -231,6 +238,12 @@ class UnguardedSequenceTests(HookCase):
         self.settings({"mutating_steps": ["bin/release"]})
         self.assertIn("`bin/release", self.denied(self.decide("make; bin/release 1.0", str(self.tmp))))
 
+    def test_machine_and_project_steps_add_up(self):
+        self.settings({"mutating_steps": ["bin/release"]})
+        reason = self.denied(self.decide("make; bin/release 1.0; tools/lane land 5-x"))
+        self.assertIn("`bin/release", reason)
+        self.assertIn("`tools/lane land", reason)
+
     def test_unreadable_or_empty_input_passes(self):
         self.assertFailsOpen("unguarded_sequence.py")
         self.assertIsNone(self.decide("cd $W; git merge \"unterminated"))
@@ -359,15 +372,86 @@ class BashGuardTests(HookCase):
         import hook_io
         with mock.patch.dict(os.environ, {"MASTACK_HOOK_STATE": str(self.tmp / "state")}), \
                 mock.patch.object(git_guard, "check", side_effect=RuntimeError("boom")):
-            hook_io._config = None
+            hook_io_reset()
             decision = bash_guard.decide({"tool_input": {"command": "cd x; git commit -qm wip"}, "cwd": str(self.tmp)})
-        hook_io._config = None
+        hook_io_reset()
         self.assertEqual(decision[0], "deny")
         self.assertIn("unguarded-sequence denied", decision[1])
         self.assertIn("git-guard error RuntimeError('boom')", (self.tmp / "state" / "guard.log").read_text())
 
+    def test_the_lease_guard_is_skipped_once_a_check_denied(self):
+        import bash_guard
+        import lease_guard
+        with mock.patch.object(lease_guard, "check") as lease:
+            decision = bash_guard.decide({"tool_input": {"command": "git stash; kill 12345"}, "cwd": str(self.tmp)})
+        hook_io_reset()
+        self.assertIn("[stash]", decision[1])
+        lease.assert_not_called()
+
+    def test_a_spent_budget_answers_with_what_was_found(self):
+        import bash_guard
+        import lease_guard
+        import unguarded_sequence
+        import zsh_word_split
+        slow = lambda data: time.sleep(0.3)
+        with mock.patch.dict(os.environ, {"MASTACK_HOOK_STATE": str(self.tmp / "state")}), \
+                mock.patch.object(zsh_word_split, "check", side_effect=slow), \
+                mock.patch.object(unguarded_sequence, "check") as later, mock.patch.object(lease_guard, "check"):
+            hook_io_reset()
+            decision = bash_guard.decide({"tool_input": {"command": "git stash; echo $x"}}, budget=0.2)
+        hook_io_reset()
+        self.assertEqual(decision[0], "deny")
+        self.assertIn("[stash]", decision[1])
+        later.assert_not_called()
+        self.assertIn("budget spent before unguarded-sequence", (self.tmp / "state" / "guard.log").read_text())
+
+    def test_subprocesses_get_only_what_is_left_of_the_budget(self):
+        import hook_io
+        import lease_guard
+        hook_io.set_budget(1.0)
+        self.assertLessEqual(hook_io.timeout(5), 1.0)
+        hook_io.set_budget(0)
+        with self.assertRaises(hook_io.OutOfTime):
+            hook_io.timeout(5)
+        with self.assertRaises(lease_guard.Unresolved):
+            lease_guard.run(["pgrep", "-f", "x"])
+        self.assertIsNone(lease_guard.status("slotfather"))
+        hook_io_reset()
+
+    def test_the_budget_fits_the_registered_timeout(self):
+        import bash_guard
+        import register
+        self.assertEqual(register.TIMEOUT, bash_guard.HOOK_TIMEOUT)
+        self.assertLess(bash_guard.BUDGET + 1.5, bash_guard.HOOK_TIMEOUT)
+
     def test_unreadable_or_empty_input_passes(self):
         self.assertFailsOpen("bash_guard.py")
+
+
+class RegisterTests(HookCase):
+    """What tests/install_test.sh cannot stage: Claude Code writing the settings while the installer runs."""
+
+    def test_a_concurrent_write_is_kept_and_the_install_retried(self):
+        import register
+        settings = self.tmp / "settings.json"
+        settings.write_text(json.dumps({"model": "a"}, indent=2) + "\n")
+        real_render, calls = register.render, []
+
+        def render(data, ascii_only):
+            calls.append(1)
+            if len(calls) == 1:  # Claude Code saves a change between our read and our write
+                settings.write_text(json.dumps({"model": "a", "theme": "dark"}, indent=2) + "\n")
+            return real_render(data, ascii_only)
+
+        argv = ["register.py", "--settings", str(settings), "--config", str(self.config), "--from-worktree"]
+        with mock.patch.object(register, "render", side_effect=render), mock.patch.object(sys, "argv", argv), \
+                mock.patch("sys.stdout") as out:
+            self.assertEqual(register.main(), 0)
+        result = json.loads(settings.read_text())
+        self.assertEqual(result["theme"], "dark", "the concurrent change survives")
+        self.assertEqual([h["command"] for g in result["hooks"]["PreToolUse"] for h in g["hooks"]], [register.command()])
+        self.assertEqual(len(calls), 2)
+        self.assertIn("retry", "".join(str(call) for call in out.write.call_args_list))
 
 
 # ---- the lease guard, with real processes -------------------------------------------------------------------------
