@@ -74,7 +74,8 @@ them.
 
 ## Heavy checks
 - Which commands are heavy and the wrapper that takes a machine slot for them,
-  e.g. `slotfather run -n 2 -- <command>`.
+  e.g. `slotfather run -n 2 --priority normal --ticket <id> -- <command>`
+  (`normal` is the default; ticket is optional).
 
 ## Browser and visual
 - How to run them, how to check a changed screen, where pictures go.

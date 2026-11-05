@@ -5,8 +5,10 @@ description: Use when asked to build several tickets in parallel with implemente
 
 # Orchestrate
 
-A **lane** is one implementer agent in its own worktree, working one ticket or a
-chain of related tickets, with **claims**: the files it expects to touch.
+A **lane** is a registered unit of repository work, with **claims** for the paths
+it expects to change. An implementer normally works on it in a worktree; the lane
+has its own lifecycle through checks, integration, review and cleanup. It can make
+several Slotfather requests, which lease machine capacity only for executions.
 
 Read `docs/agents/orchestration.md`: the lane tool, the report labels, the
 review policy, the owner queue and the additions to the implementer brief. A
