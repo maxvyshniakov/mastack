@@ -119,6 +119,31 @@ install --only push || true
 check "a repository not in the ignore list is still checked" said "shadow push: $h/other/.claude/skills/push"
 rm "$MASTACK_CONFIG/ignore"
 
+# A project retires its orchestration fork after wiring project facts.
+fresh
+orchestration_target=$scratch/second-agent-target
+mkdir -p "$p/.agents/skills/orchestrate" "$p/.claude/skills" "$orchestration_target"
+printf -- '---\nname: orchestrate\n---\n' > "$p/.agents/skills/orchestrate/SKILL.md"
+ln -s "$p/.agents/skills/orchestrate" "$p/.claude/skills/orchestrate"
+ln -s "$root/skills/rate" "$orchestration_target/rate"
+check "a project orchestration fork holds both agent targets" sh -c "
+  '$root/bin/install' --target '$t' --target '$orchestration_target' --project '$p' --only orchestrate >'$scratch/out' 2>&1
+  [ \$? -eq 1 ] && [ ! -e '$t/orchestrate' ] && [ ! -e '$orchestration_target/orchestrate' ]"
+check "both project skill locations are reported" sh -c "
+  grep -qF '$p/.agents/skills/orchestrate' '$scratch/out' &&
+  grep -qF '$p/.claude/skills/orchestrate' '$scratch/out'"
+mkdir -p "$p/docs/agents"
+printf '# Orchestration\n\n## Implementer brief\n\nProject report additions live here.\n' > "$p/docs/agents/orchestration.md"
+rm "$p/.claude/skills/orchestrate"
+rm -r "$p/.agents/skills/orchestrate"
+install --target "$orchestration_target" --project "$p" --only orchestrate
+check "facts-only project installs canonical orchestration" linked orchestrate
+check "the other agent receives the same canonical skill" test "$(readlink "$orchestration_target/orchestrate")" = "$root/skills/orchestrate"
+check "the installed implementer reference resolves" cmp -s "$t/orchestrate/references/implementer.md" "$root/skills/orchestrate/references/implementer.md"
+install --target "$orchestration_target" --project "$p" --only orchestrate
+check "the orchestration cutover is idempotent" said "ok     orchestrate"
+check "the cutover preserves unrelated skills" test "$(readlink "$orchestration_target/rate")" = "$root/skills/rate"
+
 # The Bash hook in the Claude Code settings.
 sf=$MASTACK_CLAUDE_SETTINGS
 cat > "$sf" <<'EOF'

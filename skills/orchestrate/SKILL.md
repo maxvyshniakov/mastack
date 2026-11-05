@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Use when asked to build several tickets in parallel with implementer agents. One worktree lane per ticket chain, blind cross-model review, one writer for the main branches.
+description: Use when asked to orchestrate, run implement-spec, or build several tickets in parallel with implementer agents. One worktree lane per ticket chain, blind cross-model review, one writer for the main branches.
 ---
 
 # Orchestrate
@@ -11,9 +11,11 @@ has its own lifecycle through checks, integration, review and cleanup. It can ma
 several Slotfather requests, which lease machine capacity only for executions.
 
 Read `docs/agents/orchestration.md`: the lane tool, the report labels, the
-review policy, the owner queue and the additions to the implementer brief. A
-missing file or section means the defaults below; say which were used. With a
-lane tool, drive every step through it. Without one, use worktrees, branches
+review policy, the owner queue and the additions to the implementer brief.
+Report missing required project files and recover the facts from the task's
+available instructions; do not guess a project's tool or publishing policy.
+Defaults apply to omitted sections. With a lane tool, drive every step through
+it. When the project has none, use worktrees, branches
 and `gh`, and keep the bookkeeping in a notes file. Put lane worktrees where
 `docs/agents/publishing.md` says, else as `<repo>-<lane>` next to the
 repository, so `cleanup` finds them.
@@ -21,7 +23,9 @@ repository, so `cleanup` finds them.
 ## Plan
 
 1. Read the spec and every ticket with its blockers. The **frontier** is the
-   open tickets whose blockers are closed.
+   open tickets whose blockers are closed. Keep an
+   [accepted-requirement record](references/batch-verification.md#accepted-scope)
+   for the batch and add follow-ups as they are accepted.
 2. Create an integration branch in its own worktree. Only you write to it, and
    only you move the main branches, through the promote tool if there is one.
 3. Budget lanes. A usage limit stops every agent at once, so give one agent a
@@ -51,6 +55,9 @@ repository, so `cleanup` finds them.
 8. **Gate once per batch**: the full gate on the batch tip, not per lane. Red:
    find the lane by running the failed suites on each merge. The batch moves to
    the everyday branch only when it is green and every review is resolved.
+   Cross-cutting migrations and legacy removals use the
+   [collect-all verification record](references/batch-verification.md#cross-cutting-verification)
+   before fixes are distributed.
 9. **Questions** from lane reports go to the owner queue the project names,
    else to the owner in one message: numbered, each with the default the lane
    already implemented. Record answers on the
@@ -60,6 +67,7 @@ repository, so `cleanup` finds them.
 
 ## Finish
 
-Reconcile every ticket and accepted requirement with commits and checks, update
-the tracker, publish only on an explicit push (`push`), and clean up lanes and
+Reconcile every ticket and accepted requirement with commits and checks,
+[read back tracker changes](references/batch-verification.md#tracker-readback),
+publish only on an explicit push (`push`), and clean up lanes and
 worktrees (`cleanup`).
