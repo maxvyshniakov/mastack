@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Use when asked to hand work to another agent or pause cleanly, or when context runs low mid-task. Writes a handoff file.
+description: Use when asked to hand work to another agent or pause cleanly. Writes a handoff file.
 ---
 
 # Handoff
@@ -33,13 +33,3 @@ Contents, in this order:
    or `push`.
 
 Redact secrets and personal data. The file may become another agent's prompt.
-
-## Continue, compact, delegate or hand off
-
-At a phase boundary, pick the cheapest option that keeps what matters:
-
-- **Continue** when the next phase needs what is in context and it still fits.
-- **Subagent** for a narrow side task whose result is a short report.
-- **Compact** when the next phase needs the gist but not the detail.
-- **Handoff** when the work moves to a new session, harness, directory or person,
-  or when a side task forks off mid-phase.
