@@ -82,11 +82,15 @@ def scan(label, data, patterns, findings):
 
 def run_tests():
     failed = []
+    # Git exports repository bindings into hooks. Fixture Git commands must
+    # initialize their own repositories, not mutate the pushed checkout.
+    local_names = set(git("rev-parse", "--local-env-vars").decode().splitlines())
+    test_env = {key: value for key, value in os.environ.items() if key not in local_names}
     for path in git("ls-files", "-z", "*_test.sh", "*_test.py").decode().split("\0"):
         if not path:
             continue
         command = ["bash", path] if path.endswith(".sh") else [sys.executable, path]
-        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+        result = subprocess.run(command, cwd=ROOT, env=test_env, capture_output=True, text=True)
         if result.returncode:
             sys.stdout.write(result.stdout + result.stderr)
             failed.append(path)
