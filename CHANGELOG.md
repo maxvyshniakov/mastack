@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The sequence guard recognizes Lanefather commands and known global `--config`
+  options, plus project wrappers declared by `lanefather_commands`. Absolute/env/
+  interpreter forms share the same narrow mutation checks; display/help and
+  verification neighbours keep passing. Wrapper failures still gate later mutations.
+
 - Bash hooks for Claude Code: `hooks/bash_guard.py` runs git-guard,
   unguarded-sequence, zsh word-split, a new pgrep self-match check, the
   slotfather lease guard and the macOS shell pitfalls in one process (about

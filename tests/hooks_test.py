@@ -209,6 +209,28 @@ class UnguardedSequenceTests(HookCase):
             with self.subTest(case["name"]):
                 self.assertIsNone(self.decide(case["command"]))
 
+    def test_canonical_dispatcher_guards_lanefather_global_config_promotion(self):
+        command = "cd /missing; lanefather --config /tmp/project.toml promote abc --install"
+        self.assertIn("lanefather --config", self.denied(self.decide(command, script="bash_guard.py")))
+
+    def test_project_lane_wrappers_share_lanefather_semantics_only_where_declared(self):
+        facts = self.project / "docs/agents/hooks.json"
+        facts.write_text(json.dumps({"mutating_steps": PROJECT_STEPS, "lanefather_commands": ["tools/lane"]}))
+        forms = ["tools/lane", "/work/tools/lane", "env MODE=x tools/lane",
+                 "/usr/bin/env -u MODE /work/tools/lane", "python3 -B /work/tools/lane"]
+        for script in ("unguarded_sequence.py", "bash_guard.py"):
+            for form in forms:
+                for config in ("--config /tmp/project.toml", "--config=/tmp/project.toml"):
+                    with self.subTest(script=script, form=form, config=config):
+                        command = f"cd /missing; {form} {config} promote abc --install"
+                        self.assertIn("promote", self.denied(self.decide(command, script=script)))
+                for suffix in ("--config x show lane --json", "--config=x list", "review lane", "gc --dry-run"):
+                    with self.subTest(script=script, form=form, suffix=suffix):
+                        self.assertIsNone(self.decide(f"cd /missing; {form} {suffix}", script=script))
+        elsewhere = self.tmp / "unconfigured"
+        (elsewhere / ".git").mkdir(parents=True)
+        self.assertIsNone(self.decide("cd /missing; tools/lane --config x promote abc", str(elsewhere)))
+
     def test_project_steps_come_from_the_sessions_repository(self):
         elsewhere = self.tmp / "elsewhere"
         (elsewhere / ".git").mkdir(parents=True)

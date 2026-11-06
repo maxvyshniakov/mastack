@@ -17,7 +17,8 @@ final pipeline may fail without pipefail: zsh and bash do not exit on those fail
 anywhere (a branch, a loop, a function body) counts as off from there on.
 
 Mutating steps (keep the list narrow): MUTATING_GIT (including `git -C <dir>`, not with --abort or --quit),
-`git worktree remove`, MUTATING_GH, and the project's own steps: `mutating_steps` in the repository's
+`git worktree remove`, MUTATING_GH, Lanefather state/ref operations (including global --config options and
+wrappers declared in lanefather_commands), and the project's own steps: `mutating_steps` in the repository's
 docs/agents/hooks.json (the session's worktree, else its main checkout) and in the machine's hooks.json. A step
 is `PROGRAM [VERB] [--OPTION]...`: PROGRAM matches the command's path or its end after a `/` (`tools/lane`
 matches `$I/tools/lane`), VERB its first argument, and any one OPTION one of the arguments after the verb
@@ -523,10 +524,29 @@ def unwrap(words: list[Word]) -> list[Word]:
     index = 0
     while index < len(words) and ASSIGNMENT.match(words[index].raw):
         index += 1
-    while index < len(words) and words[index].literal in WRAPPERS:
+    while index < len(words) and (words[index].literal or "").rsplit("/", 1)[-1] in WRAPPERS:
+        wrapper_at = index
+        wrapper = (words[index].literal or "").rsplit("/", 1)[-1]
         index += 1
-        while index < len(words) and (ASSIGNMENT.match(words[index].raw) or (words[index].literal or "").startswith("-")):
-            index += 1
+        while index < len(words):
+            option = words[index].literal or ""
+            if ASSIGNMENT.match(words[index].raw):
+                index += 1
+            elif option == "--":
+                index += 1
+                break
+            elif wrapper == "env" and option in ("--help", "--version"):
+                return []  # display, not execution
+            elif (wrapper == "env" and option in ("-S", "--split-string")) or (
+                    wrapper in ("command", "builtin") and option in ("-v", "-V")):
+                # Don't execute the named words; the wrapper's own failure can still gate a later mutation.
+                return words[wrapper_at:]
+            elif wrapper == "env" and option in ("-u", "--unset", "-C", "--chdir"):
+                index += 2
+            elif option.startswith("-"):
+                index += 1
+            else:
+                break
     return words[index:]
 
 
@@ -567,7 +587,48 @@ def project_step(name: str, args: list[str], steps) -> bool:
     return False
 
 
-def mutating(words: list[Word], steps=()) -> bool:
+def lanefather_commands(cwd: str | None) -> list[str]:
+    """Project/machine wrapper paths that have Lanefather's command semantics."""
+    return (hook_io.strings(hook_io.config().get("lanefather_commands"))
+            + hook_io.strings(hook_io.project_config(cwd).get("lanefather_commands")))
+
+
+def lanefather_args(args: list[str]) -> list[str]:
+    """Strip the known global option and its value; help/version never execute a subcommand."""
+    position = 0
+    while position < len(args) and args[position].startswith("-"):
+        option = args[position]
+        if option == "--config":
+            position += 2
+        elif option.startswith("--config="):
+            position += 1
+        else:
+            return []  # help/version or an unreadable global option
+    remaining = args[position:]
+    return [] if any(a in ("-h", "--help") for a in remaining) else remaining
+
+
+def lanefather_mutating(name: str, args: list[str], steps) -> bool:
+    args = lanefather_args(args)
+    if not args:
+        return False
+    verb, rest = args[0], args[1:]
+    options = {a.split("=", 1)[0] for a in rest}
+    if verb in {"start", "adopt", "land", "promote", "sync", "done"}:
+        return True
+    if verb == "review":
+        # Explicit review edits/registration and --overall (a background review plus its ticket) mutate state.
+        return bool(options & {"--mark", "--fix-lane", "--overall", "--force-reason"})
+    if verb == "next":
+        return "--start" in options
+    if verb == "gc":
+        return "--dry-run" not in options
+    if verb in {"show", "list", "capabilities"}:
+        return False
+    return project_step(name, args, steps)  # e.g. a project's explicitly declared mutating project-hook
+
+
+def mutating(words: list[Word], steps=(), lane_commands=()) -> bool:
     words = unwrap(words)
     if not words:
         return False
@@ -577,8 +638,11 @@ def mutating(words: list[Word], steps=()) -> bool:
         while rest and (rest[0].literal or "").startswith("-"):
             if rest[0].literal in ("-c", "-n"):  # a quoted script, or only a syntax check
                 return False
-            rest = rest[1:]
-        return bool(rest) and mutating(rest, steps)
+            rest = rest[2:] if rest[0].literal in ("-W", "-X") else rest[1:]
+        return bool(rest) and mutating(rest, steps, lane_commands)
+    if name.rsplit("/", 1)[-1] == "lanefather" or any(
+            name == alias or name.endswith("/" + alias) for alias in lane_commands):
+        return lanefather_mutating(name, [w.text.replace("\0", "$") for w in words[1:]], steps)
     args = [w.literal or "" for w in words[1:]]
     if name == "git" or name.endswith("/git"):
         position = 0
@@ -798,9 +862,10 @@ class State:
 
 
 class Guard:
-    def __init__(self, steps=()):
+    def __init__(self, steps=(), lane_commands=()):
         self.findings: list[tuple[str, str, bool]] = []
         self.steps = steps
+        self.lane_commands = lane_commands
 
     def check_list(self, lst: list, state: State):
         for and_or, separator in lst:
@@ -821,7 +886,7 @@ class Guard:
             for word in words:
                 for sub in word.subs:
                     self.check_list(parse(hook_io.strip_heredocs(sub)), state.copy())
-            if state.after and mutating(words, self.steps):
+            if state.after and mutating(words, self.steps, self.lane_commands):
                 finding = (show(unwrap(words)), state.after, state.errexit)
                 if finding not in self.findings:
                     self.findings.append(finding)
@@ -875,7 +940,7 @@ def check(data: dict):
     if command is None or not any(c in command for c in ";\n"):
         return None
     cwd = data.get("cwd") if isinstance(data.get("cwd"), str) and data.get("cwd") else os.getcwd()
-    guard = Guard(project_steps(cwd))
+    guard = Guard(project_steps(cwd), lanefather_commands(cwd))
     try:
         guard.check_list(parse(hook_io.strip_heredocs(command)), State())
     except (Unreadable, ValueError, IndexError, StopIteration, RecursionError):

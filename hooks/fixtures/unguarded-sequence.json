@@ -325,6 +325,104 @@
       "steps": [
         "tools/app-link/build-package.sh"
       ]
+    },
+    {
+      "name": "Lanefather bare promote",
+      "command": "cd /missing; lanefather promote abc --install",
+      "steps": [
+        "lanefather promote abc --install"
+      ]
+    },
+    {
+      "name": "Lanefather split global config",
+      "command": "cd /missing; lanefather --config /tmp/project.toml promote abc --install",
+      "steps": [
+        "lanefather --config /tmp/project.toml promote abc --install"
+      ]
+    },
+    {
+      "name": "Lanefather equals global config",
+      "command": "cd /missing; lanefather --config=/tmp/project.toml promote abc --install",
+      "steps": [
+        "lanefather --config=/tmp/project.toml promote abc --install"
+      ]
+    },
+    {
+      "name": "Lanefather variable equals global config",
+      "command": "cd /missing; lanefather --config=\"$CFG\" promote abc --install",
+      "steps": [
+        "lanefather --config=\"$CFG\" promote abc --install"
+      ]
+    },
+    {
+      "name": "Lanefather absolute env wrapper",
+      "command": "cd /missing; /usr/bin/env -u CFG /opt/bin/lanefather --config /tmp/project.toml promote abc --install",
+      "steps": [
+        "/opt/bin/lanefather --config /tmp/project.toml promote abc --install"
+      ]
+    },
+    {
+      "name": "Lanefather interpreter flags",
+      "command": "cd /missing; /usr/bin/python3 -X dev /opt/bin/lanefather --config=/tmp/project.toml promote abc --install",
+      "steps": [
+        "/usr/bin/python3 -X dev /opt/bin/lanefather --config=/tmp/project.toml promote abc --install"
+      ]
+    },
+    {
+      "name": "Lanefather mark",
+      "command": "cd /missing; lanefather --config x review lane --mark 1 fixed:abc",
+      "steps": [
+        "lanefather --config x review lane --mark 1 fixed:abc"
+      ]
+    },
+    {
+      "name": "Lanefather fix lane",
+      "command": "cd /missing; lanefather review lane --fix-lane",
+      "steps": [
+        "lanefather review lane --fix-lane"
+      ]
+    },
+    {
+      "name": "Lanefather overall creates ticket",
+      "command": "cd /missing; lanefather review --overall abc --since def",
+      "steps": [
+        "lanefather review --overall abc --since def"
+      ]
+    },
+    {
+      "name": "Lanefather sync",
+      "command": "cd /missing; lanefather sync",
+      "steps": [
+        "lanefather sync"
+      ]
+    },
+    {
+      "name": "Lanefather live GC",
+      "command": "cd /missing; lanefather gc --json",
+      "steps": [
+        "lanefather gc --json"
+      ]
+    },
+    {
+      "name": "Lanefather next start",
+      "command": "cd /missing; lanefather next --start",
+      "steps": [
+        "lanefather next --start"
+      ]
+    },
+    {
+      "name": "env string failure still gates later mutation",
+      "command": "env -S 'false'; git merge topic",
+      "steps": [
+        "git merge topic"
+      ]
+    },
+    {
+      "name": "command lookup failure still gates later mutation",
+      "command": "command -v missing && echo ready; git merge topic",
+      "steps": [
+        "git merge topic"
+      ]
     }
   ],
   "allow": [
@@ -503,6 +601,62 @@
     {
       "name": "sweep: || break leaves the loop",
       "command": "for i in $(seq 1 200); do pgrep -f '^python3 tools/lane land' >/dev/null || break; sleep 15; done; tools/lane land 430-docs-paths 2>&1 | tail -3"
+    },
+    {
+      "name": "Lanefather guarded chain",
+      "command": "cd /missing && lanefather --config x promote abc --install"
+    },
+    {
+      "name": "Lanefather errexit chain",
+      "command": "set -eo pipefail; cd /missing; lanefather promote abc --install"
+    },
+    {
+      "name": "Lanefather show with config data",
+      "command": "cd /missing; lanefather --config /tmp/promote.toml show lane --json"
+    },
+    {
+      "name": "Lanefather list",
+      "command": "cd /missing; lanefather --config=x list --all"
+    },
+    {
+      "name": "Lanefather review display",
+      "command": "cd /missing; lanefather review lane"
+    },
+    {
+      "name": "Lanefather dry GC",
+      "command": "cd /missing; lanefather gc --dry-run --json"
+    },
+    {
+      "name": "Lanefather next display",
+      "command": "cd /missing; lanefather next"
+    },
+    {
+      "name": "Lanefather version",
+      "command": "cd /missing; lanefather --version"
+    },
+    {
+      "name": "Lanefather global help",
+      "command": "cd /missing; lanefather --help promote"
+    },
+    {
+      "name": "Lanefather subcommand help",
+      "command": "cd /missing; lanefather promote --help"
+    },
+    {
+      "name": "env help does not execute Lanefather",
+      "command": "cd /missing; env --help lanefather promote abc"
+    },
+    {
+      "name": "command lookup does not execute Lanefather",
+      "command": "cd /missing; command -v lanefather promote"
+    },
+    {
+      "name": "unrelated program with config",
+      "command": "cd /missing; other --config x promote abc"
+    },
+    {
+      "name": "Lanefather verification retains narrow legacy policy",
+      "command": "cd $W; lanefather --config x check lane; lanefather review lane"
     }
   ]
 }

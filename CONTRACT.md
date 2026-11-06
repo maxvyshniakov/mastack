@@ -155,9 +155,16 @@ main checkout.
 
 ```json
 {
-  "mutating_steps": ["tools/lane land", "tools/lane review --mark", "deploy/deploy.sh"]
+  "lanefather_commands": ["tools/lane"],
+  "mutating_steps": ["deploy/deploy.sh"]
 }
 ```
+
+`lanefather` has shared mutation semantics, including its global `--config PATH`
+and `--config=PATH` forms. `lanefather_commands` names project wrappers with that
+same CLI; paths match literally or by suffix, including absolute/interpreter forms.
+The machine file can declare wrappers too. Keep project deployment/install scripts
+in `mutating_steps`; existing entries remain supported.
 
 A step is `PROGRAM [VERB] [--OPTION]...`. PROGRAM matches the command's path
 or its end after a `/` (`tools/lane` matches `$ROOT/tools/lane`, also run
