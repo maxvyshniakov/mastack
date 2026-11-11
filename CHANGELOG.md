@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Ready for a public repository: README for outside readers (requirements,
+  adopting part of the pack, the project contract and the model table),
+  SECURITY.md, CONTRIBUTING.md, and THIRD_PARTY_NOTICES.md with the MIT
+  notice for the ideas taken from Matt Pocock's skills (moved out of LICENSE,
+  which now holds the project's MIT license alone). CI runs `bin/check` and
+  `bin/check --history` on pull requests with a read-only token.
+- The lease guard finds slotfather at `$MASTACK_SLOTFATHER` or `slotfather` in
+  `hooks.json` before `PATH` and `~/.local/bin`.
+
 - The sequence guard recognizes Lanefather commands and known global `--config`
   options, plus project wrappers declared by `lanefather_commands`. Absolute/env/
   interpreter forms share the same narrow mutation checks; display/help and

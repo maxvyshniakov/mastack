@@ -1,0 +1,30 @@
+# The same gate as .githooks/pre-push: the private-detail scan, then the tests.
+# Hardened for a public repository: `pull_request` (never `pull_request_target`),
+# read-only token, no secrets, GitHub-hosted runners only, actions pinned by SHA.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Private details and tests
+        run: python3 bin/check
+      - name: Private details in history
+        run: python3 bin/check --history

@@ -36,6 +36,8 @@ scenario, since an agent that hits one usually stops and asks. It prints `PASS` 
   what the agent did and in which order, such as a subagent after the last edit.
 - A prompt that needs task history states it as context, since a headless run
   has no earlier conversation.
+- Some prompts are in Russian on purpose: a skill must trigger from a request
+  in the user's own language, while its description stays in English.
 
 ## When to run
 

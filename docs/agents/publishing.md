@@ -12,7 +12,12 @@
 - `git push origin <sha>:refs/heads/main`.
 
 ## CI
-- None yet.
+- `.github/workflows/check.yml` runs `bin/check` and `bin/check --history` on
+  GitHub-hosted macOS for every push to `main` and every pull request, with a
+  read-only token and no secrets. Find the run for a SHA with
+  `gh run list --commit <sha>`; the push is finished when it is green.
+- Keep it that way: no `pull_request_target`, no self-hosted runners, no
+  secrets, actions pinned by commit SHA.
 
 ## Release
 - Versions are tags `vX.Y.Z` on `main` with the matching `## X.Y.Z` section in

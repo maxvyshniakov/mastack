@@ -5,9 +5,33 @@ to code. Each skill is a process with a trigger: when to use it, what matters,
 what comes out. Nothing a strong model does unprompted; every rule that is here
 earned its place, many of them through an incident.
 
-The thinking skills distil ideas from Matt Pocock's skills. The shipping skills
-encode a solo developer's flow: many agents in one working tree, a promote tool
-that owns the main branches, CI followed to the end.
+The thinking skills distil ideas from [Matt Pocock's skills](https://github.com/mattpocock/skills).
+The shipping skills encode a solo developer's flow: many agents in one working
+tree, a promote tool that owns the main branches, CI followed to the end. A set
+of Bash hooks for Claude Code turns the mechanical rules into checks.
+
+**Status.** This is one developer's daily setup, published as it is. It runs
+on macOS with Claude Code and Codex. Versions are Git tags with a
+[changelog](CHANGELOG.md); there is no support promise, and a rule changes when
+an incident shows it was wrong. Take what fits, adapt the rest.
+
+## Ideas behind it
+
+- **A skill is a process, not knowledge.** The model already knows Git, testing
+  and review. A skill says when to start, what to check, what to report, and
+  what never to do; the no-op test removes any line a strong model would follow
+  without being told.
+- **Facts live in the project.** Skills read a few files at fixed paths
+  (`docs/agents/*.md`, see [CONTRACT.md](CONTRACT.md)), so one skill works in
+  many repositories. A missing file is reported, not guessed.
+- **Tools over prose.** What a machine can check belongs in a hook, a test or a
+  tool, such as a promote tool that owns the main branches or
+  [Slotfather](https://github.com/maxvyshniakov/slotfather), a queue of machine
+  slots for heavy checks. A skill names the tool; it does not retell it.
+- **Another model family reviews.** Implementation and review run on models of
+  different families, chosen from one table ([models.toml](models.toml)).
+- **One layer per fact.** A rule lives in one place: a skill, the model table,
+  global agent rules, a tool, or the project's docs.
 
 ## Flow
 
@@ -88,20 +112,19 @@ Every skill except `reprompt` can be invoked by the model, so a request in your
 own words, in any language, reaches it. A description says when to use the
 skill, in English: the model matches requests against it, so keep it short.
 
-## Conventions
+## Requirements
 
-- **Facts live in the project.** Skills read `docs/agents/*.md` at fixed paths:
-  how to publish, which checks to run, where the glossary is, how the tracker
-  works, how lanes run. See [CONTRACT.md](CONTRACT.md). A missing file is
-  reported, not guessed.
-- **Models live in one table.** [models.toml](models.toml) maps roles to models,
-  effort and fallbacks; [models.md](models.md) says why.
-- **Tools over prose.** Anything a machine can check belongs in a hook or tool,
-  such as a promote tool that owns the main branches or `slotfather`, a queue
-  of machine slots for heavy checks.
-  A skill names the tool; it does not retell it.
-- **One layer per fact.** A rule lives in one place: a skill, the model table,
-  global agent rules, a tool, or the project's docs.
+- Claude Code, Codex CLI, or both. Skills are plain `SKILL.md` folders; the
+  hooks are for Claude Code.
+- macOS or Linux with Git, Bash and Python 3.11 or newer. The hooks and the
+  installer are developed and tested on macOS.
+- `gh`, signed in, for the skills that read or write GitHub issues, pull
+  requests and CI (`push`, `status`, `orchestrate`, `cross-review`).
+- Optional: [Slotfather](https://github.com/maxvyshniakov/slotfather) for the
+  lease guard and machine slots; a lane tool for `orchestrate` (the author uses
+  Lanefather, not public yet; without one the skill uses worktrees, branches
+  and `gh`); `ffmpeg` and a local Whisper for `video-feedback`; Playwright and
+  Safari Technology Preview for `browser-verify`.
 
 ## Install
 
@@ -113,16 +136,21 @@ git clone https://github.com/maxvyshniakov/mastack ~/mastack
 ~/mastack/bin/install --uninstall --only push      # remove one; without --only/--skip, all
 ```
 
+`~/.claude/skills` is where Claude Code reads user skills and
+`~/.agents/skills` where Codex does; `--target DIR` picks other directories.
 Links point at the checkout, so `git pull` updates every agent at once. An
 existing entry with the same name in the user skill directories is left alone
-and reported.
+and reported. Without `--skip hooks`, install also registers the Bash hook,
+which needs its settings file first (see [Hooks](#hooks)); `--skip hooks`
+installs skills only.
 
 A user-level skill beats a project skill of the same name in Claude Code, and
 Codex shows both (see [CONTRACT.md](CONTRACT.md#skills-with-a-pack-skills-name)).
-So the installer checks every Git repository directly under `~`, plus any
-`--project DIR` and the directories listed in `~/.config/mastack/projects`, and
-holds back any pack skill a project also has in `.claude/skills` or
-`.agents/skills`. Worktrees are marked as copies of their repository:
+So the installer reads, without changing them, every Git repository directly
+under `~` (`$MASTACK_SCAN_ROOT` to look elsewhere), plus any `--project DIR`
+and the directories listed in `~/.config/mastack/projects`, and holds back any
+pack skill a project also has in `.claude/skills` or `.agents/skills`.
+Worktrees are marked as copies of their repository:
 
 ```
 shadow push: ~/app/.claude/skills/push (project has docs/agents/publishing.md)
@@ -132,6 +160,7 @@ shadow push: ~/app-wt-2/.claude/skills/push (copy: worktree of ~/app)
 Remove the project's copy first, then install the pack skill; `--force`
 installs it anyway. Repositories listed in `~/.config/mastack/ignore` (same
 format; frozen or archived ones) are not checked, nor are their worktrees.
+`$MASTACK_CONFIG` moves `~/.config/mastack`.
 
 Before installing:
 
@@ -142,6 +171,42 @@ Before installing:
   Remove those yourself (for example `what-do-you-think` in the skill
   directories and the matching rule in your global agent instructions) so two
   instructions do not compete.
+
+### Adopting part of it
+
+- **A few skills.** `--only` picks them. These work in any repository without
+  project files: `critique`, `grill-me`, `prototype`, `research`, `tdd`,
+  `debug`, `rate`, `handoff`, `retro`, `agent-docs`, `video-feedback`,
+  `reprompt`. The shipping skills (`commit`, `push`, `release`, `finish`,
+  `cleanup`, `orchestrate`, `status`) pay off once the project has the
+  [contract files](#project-contract).
+- **Without the installer.** Copy a skill's folder into a project's
+  `.claude/skills/` or `.agents/skills/`. Keep the `agents/openai.yaml` beside
+  `SKILL.md`; Codex reads its display name and invocation policy.
+- **Hooks only.** `bin/install --only hooks`, or run one check alone as a
+  hook: each `hooks/<check>.py` reads Claude Code's hook JSON on stdin.
+
+## Project contract
+
+[CONTRACT.md](CONTRACT.md) lists the files a project keeps under
+`docs/agents/` and which skills read each: `publishing.md` (branches, the push
+command, CI, releases), `checks.md` (focused and full checks, heavy-check
+wrapper, review rules), `domain.md` (glossary and ADRs), `issue-tracker.md`,
+`orchestration.md` (lane tool, report labels, owner queue) and `hooks.json`
+(the project's own mutating steps for the hook). Each file has a template
+there; a section the project leaves out means the skill's default. This
+repository's own [docs/agents/](docs/agents/) is a small example.
+
+## Models
+
+[models.toml](models.toml) maps roles (design, implement, visual, review,
+routine, research, audit) to an ordered list of models with effort and
+conditions, for example "a reviewer of another family than the implementer,
+while at least 15% of the weekly Codex quota is left". Skills that start
+another model (`cross-review`, `orchestrate`) and tools read it; `[cli.*]`
+gives the headless command for each CLI. [models.md](models.md) gives the
+reasons. The model ids are the author's; edit the table, not the skills, to
+use yours.
 
 ## Hooks
 
@@ -167,13 +232,20 @@ parsers run first; the lease guard runs last and only while nothing is
 denied, and all of them share a time budget below the hook's timeout, so a
 slow `slotfather` cannot let the timeout drop a deny already found.
 
-- **Machine settings**, `~/.config/mastack/hooks.json`, outside the
-  repository: `checkouts` (shared main checkouts, where `push-by-name` and
-  `shared-checkout` apply), `state_dir` (for `guard.log`), `lane_records` (the
-  lane tool's records, for the lease guard) and `mutating_steps` (extra steps
-  for every project, added to the project's own). Start from
-  `hooks/hooks.example.json`; `bin/install` refuses to register the hook
-  while the file is missing.
+- **Machine settings**, `~/.config/mastack/hooks.json` (`$MASTACK_CONFIG`
+  moves the directory), outside the repository: `checkouts` (shared main
+  checkouts, where `push-by-name` and `shared-checkout` apply), `state_dir`
+  (for `guard.log`), `lane_records` (the lane tool's records, for the lease
+  guard), `mutating_steps` (extra steps for every project, added to the
+  project's own) and `slotfather` (its path, when it is not on `PATH`). Start
+  from `hooks/hooks.example.json`; `bin/install` refuses to register the hook
+  while the file is missing. `{}` is a valid start; the checkout rules
+  (`push-by-name`, `shared-checkout`) then protect nothing and the lease guard
+  knows no lanes.
+
+  ```json
+  { "checkouts": ["~/code/app"] }
+  ```
 - **Project steps**, `docs/agents/hooks.json` in the session's repository
   (see [CONTRACT.md](CONTRACT.md#docsagentshooksjson)).
 - **Overrides** are the owner's: a command starting `GIT_GUARD_OK="<reason>"`
@@ -184,18 +256,44 @@ slow `slotfather` cannot let the timeout drop a deny already found.
   `--skip hooks` leaves the settings alone, `--dry-run` prints the diff, and
   `--uninstall --only hooks` removes only mastack's entries. The registered
   command runs `bash_guard.py` through `sh` and lets commands through if the
-  file is gone. In Bash groups, install replaces the per-check entries of an
-  earlier `agent-hooks` directory, `~/.claude/hooks/macos-shell-pitfalls.sh`
-  and the commands earlier installs recorded in
+  file is gone. In Bash groups, install replaces the per-check entries of the
+  author's earlier layout (an `agent-hooks` directory and
+  `~/.claude/hooks/macos-shell-pitfalls.sh`; absent elsewhere) and the
+  commands earlier installs recorded in
   `~/.config/mastack/hooks-installed.json`; it keeps every other entry,
   writes `settings.json.mastack-backup-<time>` first, follows a symlinked
   settings file, and starts over if Claude Code wrote the file meanwhile.
+- **What runs.** The checks parse the command text; they never run it. To
+  decide, `git_guard` runs `git rev-parse` in the directories the command
+  names, and `lease_guard` (only for commands with `kill`) runs
+  `slotfather status`, `ps`, and the read-only producer the command itself
+  names (`pgrep`, `lsof -t`, or reading the pid file of `cat FILE`). Nothing
+  goes over the network. They write only `guard.log` in the state directory
+  (default `$XDG_STATE_HOME/mastack`). The
+  hooks catch an agent's mistakes; they are not a sandbox, and an agent can
+  get around them, for example through a script file.
 - **Codex** (0.165) has `PreToolUse` hooks with the same JSON contract
   (`hooks` feature, `hooks.json` or `[hooks]` in `config.toml`), but each
   hook must be trusted in `/hooks` before it runs, and its shell tool's
   matcher name could not be confirmed, so `bin/install` does not register
   there yet. To try it by hand, add the same group to `~/.codex/hooks.json`
   with the matcher Codex reports for its shell tool, then trust it in `/hooks`.
+
+## Evals
+
+`evals/<skill>/*.md` are scenarios: a prompt, a setup that builds a scratch
+repository, and a grade that checks what the agent left behind.
+
+```sh
+bin/eval --list
+bin/eval push --agent none   # no agent: every grade must fail, which checks the scenarios
+bin/eval push                # real Claude sessions (default model: opus in models.toml)
+bin/eval push --agent codex  # the same with Codex
+```
+
+A real run starts agent sessions and spends tokens. Some prompts are
+deliberately in Russian, to check that a skill triggers from a request in
+another language. See [evals/README.md](evals/README.md).
 
 ## Develop
 
@@ -207,14 +305,17 @@ slow `slotfather` cannot let the timeout drop a deny already found.
   `tests/hooks_test.py`, which replays `hooks/fixtures/` against each check
   and through the dispatcher.
   `.githooks/pre-push` runs it; enable with `git config core.hooksPath .githooks`.
-- `bin/eval <skill> [scenario]` runs a scenario from `evals/` against a scratch
-  repository and grades what the agent did. See [evals/README.md](evals/README.md).
+  CI runs the same on every push and pull request.
 - After a new model ships: run the evals, then reread each skill and delete any
   line the model would follow without being told.
+- [CONTRIBUTING.md](CONTRIBUTING.md) says what a change needs;
+  [SECURITY.md](SECURITY.md) how to report a problem and what the hooks run.
 
 ## License
 
 MIT. See [LICENSE](LICENSE). Ideas in `grill-me`, `roadmap`, `prototype`,
 `research`, `to-spec`, `orchestrate`, `architecture`, `tdd`, `debug`,
 `cross-review`, `agent-docs` and `retro` come from [Matt Pocock's skills](https://github.com/mattpocock/skills),
-also MIT; the texts here are rewritten, and his notice is kept in LICENSE.
+also MIT; the texts here are rewritten, and his notice is in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) with the tools the pack runs
+but does not ship.
