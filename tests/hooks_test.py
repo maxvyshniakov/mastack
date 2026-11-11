@@ -678,6 +678,13 @@ class LeaseGuardTests(HookCase):
         self.assertIsNone(self.decide("kill {other}", cwd=elsewhere, agent="a1"))
         self.assertIsNotNone(self.decide("kill {mine}", cwd=elsewhere, agent="a1"))
 
+    def test_a_configured_slotfather_off_path_is_asked(self):
+        fake = os.path.join(self.env["PATH"].split(":")[0], "slotfather")
+        self.env.update(PATH="/usr/bin:/bin", MASTACK_SLOTFATHER=fake)
+        self.assertRefused(self.decide("kill -9 {other}"), {"leases": ["lane-641-desktop-shared-host"]})
+        self.env["MASTACK_SLOTFATHER"] = str(self.tmp / "missing-slotfather")
+        self.assertIsNone(self.decide("kill -9 {other}"))
+
     def test_without_slotfather_or_input_everything_passes(self):
         self.env["PATH"] = "/usr/bin:/bin"
         self.assertIsNone(self.decide("kill -9 {other}"))

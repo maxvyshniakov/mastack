@@ -277,6 +277,12 @@ def kills(command: str) -> list[tuple[str, Targets]]:
 
 
 def slotfather() -> str | None:
+    """$MASTACK_SLOTFATHER or `slotfather` in hooks.json when set (None when it is not executable), else PATH, else
+    ~/.local/bin/slotfather, where slotfather's installer puts it."""
+    configured = os.environ.get("MASTACK_SLOTFATHER") or hook_io.config().get("slotfather")
+    if isinstance(configured, str) and configured:
+        path = os.path.expanduser(configured)
+        return path if os.access(path, os.X_OK) else None
     found = shutil.which("slotfather")
     fallback = os.path.expanduser("~/.local/bin/slotfather")
     return found or (fallback if os.access(fallback, os.X_OK) else None)

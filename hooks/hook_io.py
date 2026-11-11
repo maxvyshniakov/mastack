@@ -9,11 +9,12 @@ Machine settings come from `$MASTACK_CONFIG/hooks.json` (default `~/.config/mast
       "checkouts": ["~/app", "~/lib"],        shared main checkouts: push-by-name and shared-checkout apply
       "state_dir": "~/some/state",            where guard.log goes (default $XDG_STATE_HOME/mastack)
       "lane_records": "~/some/state/lanes",   the lane tool's records, for the lease guard (default: none)
-      "mutating_steps": ["tools/deploy.sh"]   extra steps for the unguarded-sequence guard, on every project
+      "mutating_steps": ["tools/deploy.sh"],  extra steps for the unguarded-sequence guard, on every project
+      "slotfather": "~/bin/slotfather"        the slotfather the lease guard asks (default: PATH, ~/.local/bin)
     }
 
-`MASTACK_HOOK_REPOS` (colon-separated), `MASTACK_HOOK_STATE` and `MASTACK_LANE_RECORDS` replace the matching
-setting. A project adds its own steps in `docs/agents/hooks.json` (see `project_config`).
+`MASTACK_HOOK_REPOS` (colon-separated), `MASTACK_HOOK_STATE`, `MASTACK_LANE_RECORDS` and `MASTACK_SLOTFATHER` replace
+the matching setting. A project adds its own steps in `docs/agents/hooks.json` (see `project_config`).
 """
 from __future__ import annotations
 
