@@ -39,7 +39,11 @@ second review.
 ## Report
 
 Comment on each ticket: what changed, RED and GREEN evidence, check totals,
-deviations and why. Leave the ticket open.
+deviations and why. Leave the ticket open: the orchestrator labels it
+`integrated` when your lane lands, and the merge's `Fixes #N` closes it when
+it reaches the default branch. Put known follow-ups on the ticket as
+checklist items or linked issues. A lane registered without a ticket gets
+none of this; say so under Questions.
 
 Return at most 4000 characters to the orchestrator, ending with:
 

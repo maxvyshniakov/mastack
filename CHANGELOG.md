@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `orchestrate` gives tickets a lifecycle: every lane carries its ticket, the
+  landing merge says `Fixes #N`, a green land labels the ticket `integrated`
+  and comments the merge, branch, push state, checks and preview, and a release
+  or promote to the default branch comments its version or SHA on each ticket
+  it closed. Follow-ups stay on the ticket as checklist items or linked issues.
+
 - Ready for a public repository: README for outside readers (requirements,
   adopting part of the pack, the project contract and the model table),
   SECURITY.md, CONTRIBUTING.md, and THIRD_PARTY_NOTICES.md with the MIT

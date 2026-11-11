@@ -39,10 +39,18 @@ repository, so `cleanup` finds them.
    a short prompt with ticket links, base branch, claims, which lanes work
    nearby, [references/implementer.md](references/implementer.md), and the
    project's brief additions and report labels. Point at the spec and tickets;
-   do not paste them.
+   do not paste them. Register every lane with its ticket (`--ticket`).
 5. **Land** a lane when it reports green: merge it into the integration branch,
    run a quick smoke on the merge, send a red smoke to the lane whose change
    broke it. Resolve trivial conflicts yourself, real ones in the lane.
+   The merge message ends with `Fixes #N`, so the ticket closes only when the
+   merge reaches the default branch. After a green smoke, label the ticket
+   `integrated` (create it if missing: green, "Done and landed in the
+   integration/dev branch; not yet on main or released") and comment the merge
+   SHA, the integration branch, whether it is pushed (a SHA origin lacks is
+   "local only" and not linked), the checks it passed and the preview to try
+   it on. Where the lane tool does this (Lanefather's `[tickets]`), read its
+   output instead.
 6. **Review** each landed lane once (`cross-review`), when and how the project's
    review policy says, else right after the land: the
    reviewer sees the diff, ticket and standards, never the lane's report. It
@@ -71,3 +79,9 @@ Reconcile every ticket and accepted requirement with commits and checks,
 [read back tracker changes](references/batch-verification.md#tracker-readback),
 publish only on an explicit push (`push`), and clean up lanes and
 worktrees (`cleanup`).
+
+After a release, or a promote to the default branch, comment the version or
+the main SHA on each ticket it closed, found from the `Fixes #N` lines in the
+range. A ticket whose landed work leaves known follow-ups keeps them as
+checklist items or linked issues; `integrated` still means the accepted scope
+landed.
