@@ -190,6 +190,8 @@ class ScanTests(FrictionCase):
             claude_line("user", "<command-name>/clear</command-name> don't use CollapsibleTrigger", cwd=app),
             claude_line("user", "Looks good, thanks", cwd=app),
             claude_line("user", "don't touch the README", cwd=app),
+            claude_line("assistant", [{"type": "text", "text": "| `CollapsibleTrigger` | has no tests |\n`Button` and the dialog have no measurable case here."}], cwd=app),
+            claude_line("user", "Push it now, we can't wait. The `Button` looks fine.", cwd=app),
         ]
         (project / "s1.jsonl").write_text("\n".join(lines) + "\n")
         (project / "s1" / "subagents" / "agent-a.jsonl").write_text(

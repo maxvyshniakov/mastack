@@ -192,8 +192,14 @@ class Scanner:
         if not ADMISSION.search(text):
             return
         for sentence in SENTENCE.split(text):
+            if sentence.lstrip().startswith("|"):  # a table row: an inventory, not an admission
+                continue
             said = ADMISSION.search(sentence)
             components, _ = self.vocabulary.mentions(sentence) if said else ([], set())
+            # The component is the subject: it ends at most a few words before the phrase.
+            components = [(c, p) for c, p in components
+                          if 0 <= said.start() - (sentence.find(c) + len(c)) <= 12
+                          and not re.search(r"\band\b|,|\bor\b", sentence[sentence.find(c) + len(c):said.start()])]
             for component, package in components[:1]:
                 project = fj.project_name(cwd)
                 self.emit(fj.event(
@@ -207,10 +213,15 @@ class Scanner:
         agent, ctx["agent"] = ctx["agent"], ""
         if not text:
             return
-        markers = [m.group(0) for m in CORRECTION.finditer(text)]
+        # The marker and the package or component in the same or the next sentence: a long message that says "don't" about
+        # one thing and names a component about another is not a correction of it.
+        parts = SENTENCE.split(text)
+        marked = [i for i, x in enumerate(parts) if CORRECTION.search(x)]
+        sentences = [parts[j] for j in sorted({j for i in marked for j in (i, i + 1) if j < len(parts)})]
+        markers = [m.group(0) for i in marked for m in CORRECTION.finditer(parts[i])]
         if not markers:
             return
-        components, packages = self.vocabulary.mentions(text)
+        components, packages = self.vocabulary.mentions(" \n".join(sentences))
         if not components and not packages:
             return
         agent_components, agent_packages = self.vocabulary.mentions(agent)
