@@ -36,6 +36,22 @@ Use these words exactly; do not drift into component, service, API or boundary.
    bugs hide in the callers, seams that leak.
 4. **Deletion test**: imagine deleting the module. Complexity vanishing means a
    pass-through; complexity reappearing across callers means it earns its keep.
+5. **Implicit state machines.** A lifecycle encoded as booleans or optionals
+   with unstated valid combinations (`loading`, `ready`, `error?`), status
+   strings set from many places, guards like `if state == X and flag` scattered
+   across files, phases driven by timers, retries or file presence, or one
+   lifecycle mirrored in two places (two languages, a store and its view, a
+   file and its reader) with different rules. Write down the states and
+   transitions as the code actually behaves, then look for:
+   - impossible combinations it can reach;
+   - one transition done in two places;
+   - stale events overwriting newer state, e.g. a late completion or a replay
+     after a rise in rights;
+   - transitions with no test.
+
+   The usual fix is one enum carrying data per state, plus one transition
+   function or a table-driven reducer, with the transitions tested as a table.
+   Not every flag is a machine: a single field with one writer is fine.
 
 Present candidates: files, problem, proposed change, benefit in locality,
 leverage and tests, strength (strong, worth exploring, speculative). Do not
