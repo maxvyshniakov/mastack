@@ -69,7 +69,11 @@ repository, so `cleanup` finds them.
 9. **Questions** from lane reports go to the owner queue the project names,
    else to the owner in one message: numbered, each with the default the lane
    already implemented. Record answers on the
-   spec issue, not in session notes.
+   spec issue, not in session notes. Settle a question yourself when the
+   default is clearly right, stays inside approved scope and is cheap to
+   reverse (lane order, skipping an optional item whose gain is marginal), and
+   report it in one line: the owner should only see real trade-offs in look,
+   behaviour, public names, cost or taste.
 10. **After a limit stop**, resume only agents one step from done; commit the
     rest as WIP on their branch and restart them fresh from it.
 
