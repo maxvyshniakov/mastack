@@ -15,8 +15,10 @@ description: Use when writing, editing or auditing agent instructions (AGENTS.md
   the positive rule.
 - **Rules over places.** "Every handler that mutates reports success" beats a
   list of three handlers; the fourth one is where the bug moves.
-- **Reasons in one line.** A rule born from an incident keeps its reason, in
-  words, so the next reader does not "fix" it.
+- **Reasons in one line.** Every rule a reader could not derive alone keeps
+  its reason, in words: an incident, a constraint, a packaging fact. With the
+  reason the next reader can judge an edge case instead of "fixing" the rule.
+  A special case with no visible reason reads as an error.
 - **One source of truth.** Each meaning in one place. A doc that restates the
   code, a config or `--help` is a cache that goes stale; keep only what cannot
   be looked up: conventions, reasons, gotchas.
@@ -26,7 +28,9 @@ description: Use when writing, editing or auditing agent instructions (AGENTS.md
 - **Steps end on a checkable condition.** "Every modified file accounted for",
   not "review the changes".
 - **Disclose by branch.** What every path needs stays in the file; what only
-  some paths need goes to a linked reference file.
+  some paths need goes to a linked reference file. Keep an always-loaded file
+  (a SKILL.md body, AGENTS.md) within about 200 lines, and link references one
+  level deep: a reference does not send the reader on to another reference.
 - **Mechanical rule, mechanical check.** A fixed pattern belongs in a lint
   rule, hook or test, not in prose.
 
@@ -35,6 +39,8 @@ description: Use when writing, editing or auditing agent instructions (AGENTS.md
 Read every agent-facing file in scope and report:
 
 - broken links, paths and commands that no longer exist;
+- rules and special cases without a reason a reader could judge by;
+- always-loaded files over about 200 lines, and references nested deeper than one link;
 - contradictions between copies of the same rule, with the canonical copy;
 - facts duplicated across files, and where each belongs;
 - stale facts against the current code and tools;
