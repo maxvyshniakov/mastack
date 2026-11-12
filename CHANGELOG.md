@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `bin/check` before a push also scans the messages of commits not yet on
+  origin/main, as the CI history scan does, so a finding in a commit message no
+  longer surfaces only after the push. A message line that only closes or names
+  this repository's own issue (`Closes #N`) is allowed in both.
+
 - New Bash check `slot_label`: `bash_guard` refuses a `slotfather run` without
   `--label`, or labelled with the directory's name or only generic words, since
   everyone reads labels on the dashboard to decide whether to wait or
