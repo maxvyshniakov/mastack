@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- New skill `test-audit`: a periodic, read-only audit of a test suite (monthly,
+  or when gate time or flaky failures rise). It ranks suites by run history
+  and reports fakes nobody checks against the real thing, tests at the wrong
+  layer, sleeps and timing asserts, per-test setup cost, tests that outlived
+  their purpose, with counts, `file:line` and a ratchet to propose. `retro`
+  runs it when a test caused the trouble.
+- `tdd` has a "Cost of a test" section: the cheapest layer that observes the
+  behavior, no fixed sleeps, timing asserts only in the perf suite, snapshots
+  only when read, fakes checked against the real implementation. Its report
+  and the `orchestrate` implementer report list each new test with its layer
+  and run time, and `cross-review` gives the reviewer a test baseline.
+
 - New skill `babysit-pr`: takes an open pull request through its failing checks
   and review threads. Each finding is verified first; a real bug gets a failing
   test that is also run against the base branch; every worked thread gets a

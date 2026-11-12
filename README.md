@@ -74,7 +74,8 @@ flowchart LR
   `babysit-pr` takes an open pull request through its checks and review threads.
 - **Keep the environment good**: `retro` after a session that went wrong,
   `agent-docs` for what agents read, `friction-audit` for what keeps confusing
-  agents in a package, `deps-update` to update pins and retire workarounds.
+  agents in a package, `test-audit` for what the tests cost and prove,
+  `deps-update` to update pins and retire workarounds.
 - **Between sessions**: `status` shows what runs and what waits for you;
   `handoff` pauses cleanly for the next agent.
 
@@ -107,6 +108,7 @@ flowchart LR
 | [retro](skills/retro/SKILL.md) | Fixing the environment after a session went wrong |
 | [agent-docs](skills/agent-docs/SKILL.md) | Writing and auditing what agents read |
 | [friction-audit](skills/friction-audit/SKILL.md) | What confuses agents in a package, and the layer that fixes it |
+| [test-audit](skills/test-audit/SKILL.md) | Tests that cost time or confidence, and the change for each |
 | [video-feedback](skills/video-feedback/SKILL.md) | Recorded feedback to timestamped, verified requirements |
 | [reprompt](skills/reprompt/SKILL.md) | Deepening a task, then rewriting the prompt (user-invoked) |
 

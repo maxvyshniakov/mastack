@@ -39,10 +39,10 @@ second review.
 ## Report
 
 Comment on each ticket: what changed, RED and GREEN evidence, check totals,
-deviations and why. Leave the ticket open: the orchestrator labels it
-`integrated` when your lane lands, and the merge's `Fixes #N` closes it when
-it reaches the default branch. Put known follow-ups on the ticket as
-checklist items or linked issues. A lane registered without a ticket gets
+new tests with their layer and run time, deviations and why. Leave the ticket
+open: the orchestrator labels it `integrated` when your lane lands, and the
+merge's `Fixes #N` closes it when it reaches the default branch. Put known
+follow-ups on the ticket as checklist items or linked issues. A lane registered without a ticket gets
 none of this; say so under Questions.
 
 Return at most 4000 characters to the orchestrator, ending with:
@@ -52,11 +52,15 @@ Branch: <lane branch>
 SHA: <final commit>
 Worktree: <absolute path>
 Checks: <command and totals, or link to the receipt>
+New tests: none | <file: count, layer (model, render, browser, process), seconds>
 Outside claims: none | <paths>
 Owner-visible defaults changed: none | <each one>
 Questions: none | <numbered, each with the default you implemented>
 Screenshots: <paths, light and dark> | n/a: <reason>
 ```
+
+The `New tests` line is how gate time growth is traced to the lane that added
+it.
 
 Then the project's own labels, if the orchestrator gave any, one per line.
 

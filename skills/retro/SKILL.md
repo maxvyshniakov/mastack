@@ -31,6 +31,10 @@ believed at that moment.
   a service's state). Give it read access.
 - **Tool economy**: an expensive call that a cheaper command or a better tool
   output would replace.
+- **Test** (a flake, a slow gate, a bug a test should have caught): run
+  `test-audit` on that suite; its findings become tickets, and the ratchet it
+  proposes is the check that must bite. One bad test is usually a pattern
+  repeated across the suite, and fixing only the instance leaves the rest.
 - **Instructions**: an instruction that was ignored or misled. Fix it with
   `agent-docs`.
 

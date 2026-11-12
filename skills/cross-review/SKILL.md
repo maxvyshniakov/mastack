@@ -16,7 +16,12 @@ description: Use when asked for a review, or before shipping a large change. A m
    top, a smell baseline, always as a judgment call that a documented rule
    overrides: unclear names, duplication, feature envy, data clumps, primitive
    obsession, repeated switches, shotgun surgery, speculative generality,
-   middle men.
+   middle men. And a test baseline, since nothing else reads the tests and the
+   implementer wrote them to pass: a tautology (asserts a constant, recomputes
+   the code's answer), a test of a mock or fake instead of the real thing, the
+   wrong layer (a browser for text, a DOM emulator for paint), fixed sleeps or
+   wall-clock asserts outside a perf suite, a duplicate of an existing test of
+   the same rule.
 4. **Reviewer.** The model the Review section of `docs/agents/checks.md` names,
    else role `review` in `models.toml`: a model of a different family from the
    implementer, with the fallback it lists. For risky surfaces

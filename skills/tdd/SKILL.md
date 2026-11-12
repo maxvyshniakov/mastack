@@ -40,6 +40,32 @@ Pure styling and docs need their own checks (visual, link, lint), not TDD. When
 no stable automated test can observe the outcome, say so and use focused runtime
 or device evidence. A test that greps source text is not a behavior test.
 
+## Cost of a test
+
+Every test runs on every gate for as long as it exists, so its cost counts.
+
+- **Cheapest layer that observes the behavior.** A model or reducer test for
+  rules and state; a render without a browser (server render, DOM emulator)
+  for markup, text and roles; a real browser only for layout, focus, pointer
+  and keyboard events, and paint; a subprocess only for exit codes, signals and
+  real I/O, the rest through an in-process call. A browser test pays for a process, a page load
+  and a settle wait; a DOM emulator cannot resolve the cascade, so class names
+  or CSS text asserted there pass while the paint is wrong.
+- **No fixed sleeps.** Fake or inject the clock, or wait for the condition or
+  event. To show that something did not happen, wait for the event that would
+  have carried it (the next tick, the reply) or assert against the code's own
+  delay. A sleep is too slow on an idle machine and too short under load, and a
+  sleep before "nothing happened" passes whenever the system is slow.
+- **Timing asserts only in the perf suite.** Elsewhere assert the order of
+  events or the injected value; a generous deadline that only stops a hang is
+  fine. Wall time depends on machine load, not on the code.
+- **A snapshot or golden only if someone reads its diff.** One that is updated
+  in bulk passes anything. Compare goldens by name, not by count: a count passes
+  when one is swapped for another, and every new one edits the test.
+- **A fake is checked against the real implementation.** A double that encodes
+  rules runs the same contract tests as the real thing; its own tests prove
+  nothing, and every test built on it asserts rules nobody checks.
+
 ## Checks
 
 During the loop run focused tests only (`docs/agents/checks.md`), with heavy
@@ -48,5 +74,5 @@ before the push.
 
 ## Report
 
-The seam, the RED failure as observed, the GREEN result, the commands, and any
-evidence that is missing.
+The seam, the RED failure as observed, the GREEN result, each new test with its
+layer and run time, the commands, and any evidence that is missing.
