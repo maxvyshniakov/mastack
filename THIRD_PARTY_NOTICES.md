@@ -65,7 +65,7 @@ when you install it.
 |---|---|---|
 | [Claude Code](https://code.claude.com/docs), [Codex CLI](https://github.com/openai/codex) | every skill, `bin/eval` | The agents the pack is written for |
 | [GitHub CLI](https://cli.github.com) (`gh`) | `push`, `status`, `orchestrate`, others | Tracker and CI access |
-| [Slotfather](https://github.com/maxvyshniakov/slotfather) | `lease_guard`, `orchestrate` | Optional machine-slot queue |
+| [Slotfather](https://github.com/maxvyshniakov/fathers/tree/main/slotfather) | `lease_guard`, `orchestrate` | Optional machine-slot queue |
 | Lanefather | `unguarded_sequence`, `orchestrate`, `status` | Optional lane tool, by the same author; recognised by name only |
 | [FFmpeg](https://ffmpeg.org/legal.html), [OpenAI Whisper](https://github.com/openai/whisper) or [mlx-whisper](https://github.com/ml-explore/mlx-examples) | `video-feedback` | `mlx_whisper` downloads the `mlx-community/whisper-large-v3-mlx` weights on first use |
 | [Playwright](https://playwright.dev), Safari Technology Preview and `safaridriver` | `browser-verify` | Browser engines for screenshots |

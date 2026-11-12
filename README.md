@@ -26,7 +26,7 @@ an incident shows it was wrong. Take what fits, adapt the rest.
   many repositories. A missing file is reported, not guessed.
 - **Tools over prose.** What a machine can check belongs in a hook, a test or a
   tool, such as a promote tool that owns the main branches or
-  [Slotfather](https://github.com/maxvyshniakov/slotfather), a queue of machine
+  [Slotfather](https://github.com/maxvyshniakov/fathers/tree/main/slotfather), a queue of machine
   slots for heavy checks. A skill names the tool; it does not retell it.
 - **Another model family reviews.** Implementation and review run on models of
   different families, chosen from one table ([models.toml](models.toml)).
@@ -122,7 +122,7 @@ skill, in English: the model matches requests against it, so keep it short.
   installer are developed and tested on macOS.
 - `gh`, signed in, for the skills that read or write GitHub issues, pull
   requests and CI (`push`, `status`, `orchestrate`, `cross-review`).
-- Optional: [Slotfather](https://github.com/maxvyshniakov/slotfather) for the
+- Optional: [Slotfather](https://github.com/maxvyshniakov/fathers/tree/main/slotfather) for the
   lease guard and machine slots; a lane tool for `orchestrate` (the author uses
   Lanefather, not public yet; without one the skill uses worktrees, branches
   and `gh`); `ffmpeg` and a local Whisper for `video-feedback`; Playwright and
