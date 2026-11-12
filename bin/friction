@@ -1,0 +1,603 @@
+#!/usr/bin/env python3
+"""Fill the friction journal from ordinary sessions, vendored copies and the owner's corrections.
+
+    bin/friction log [--package P] [--component C] [--kind K] [--session S] [--project P] TEXT...
+    bin/friction scan [--dry-run] [--quiet] [--all] [--since YYYY-MM-DD]
+    bin/friction vendor [--dry-run] [--quiet]
+    bin/friction plist [--interval SECONDS]
+
+The journal and the settings that say which packages count are hooks/friction_journal.py's
+(`$XDG_STATE_HOME/friction/events.jsonl`, `~/.config/mastack/friction.json`); `repo-kit friction report`
+ranks the journal and `repo-kit friction export` writes the redacted bundle to share. Nothing here uses the
+network.
+
+log     One event, `owner-correction` unless --kind says otherwise, with the project of the current directory
+        and the session from --session, $FRICTION_SESSION, $CLAUDE_CODE_SESSION_ID or $CODEX_SESSION_ID. Without
+        --package it takes the package the text names (an alias or an exported component), else `unknown`.
+        `/friction <text>` (skills/friction) runs this.
+
+scan    Reads the Claude Code transcripts (`sources.claude`, default ~/.claude/projects/*/*.jsonl and their
+        subagents) and Codex sessions (`sources.codex`, default ~/.codex/sessions) from where the last run
+        stopped, and appends:
+        - type-error: a TypeScript error in a tool's output that is about a configured package (the hook's rule);
+          skipped when the hook already logged it for that session;
+        - owner-correction: a message the person typed (not a tool result, reminder, command or subagent prompt)
+          that names a package or one of its components and carries a correction marker ("instead", "there is
+          already", "don't", "вместо", "уже есть", ...), when the agent's turn before it names the same package
+          or component;
+        - misuse: an edit that removes a component from a file right after a type error about that component
+          there (reverted usage), or an agent sentence that says a named component "has no" / "doesn't accept"
+          / "isn't exported" something.
+        Every event says why in `why`. A component counts only when written as one: in backticks, as `<Name`,
+        or a compound PascalCase name, so ordinary words never match. The first run reads everything (--since
+        limits it); --all ignores where the last run stopped; --dry-run prints the events and changes nothing.
+        Once a week it also runs vendor.
+
+vendor  For each copy in `vendored` ({"path", "package", "upstream", "upstream_path", "base"?, "project"?,
+        "dirs"?: ["src"]}), finds the upstream commit at the copy's package.json version whose tree differs
+        least from the copy (or the pinned `base`), and logs each added or modified source file (not dist,
+        tests, stories or node_modules) as `vendored-patch` "kit patched for app need". A file is logged again
+        only when its patch changes.
+
+plist   Prints a launchd agent (com.mastack.friction-scan: at load and every 24 hours, background priority)
+        that runs `bin/friction scan --quiet` from this checkout, for
+        `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.mastack.friction-scan.plist`.
+
+State (where each file was read to, the vendored hashes, the last vendor run) lives in
+`$XDG_STATE_HOME/mastack/friction-scan.json`.
+"""
+from __future__ import annotations
+
+import argparse
+import difflib
+import json
+import os
+import plistlib
+import re
+import shutil
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "hooks"))
+
+import friction_journal as fj  # noqa: E402
+
+WEEK = 7 * 24 * 3600
+AGENT_CONTEXT = 20_000
+MAX_LINE = 4_000_000
+MAX_HUMAN = 1_500
+SKIP_DIRS = {"dist", "node_modules", "__tests__", "coverage", ".turbo", "build"}
+CORRECTION = re.compile(
+    r"\b(?:no,|nope|wrong|instead|not like that|not what i|why did you|why are you|you (?:missed|forgot|broke)"
+    r"|there(?:'s| is) already|already (?:has|have|exists|there)|don't|do not|doesn't|stop|revert|undo|that's not)\b"
+    r"|(?<!\w)(?:не так|неправильно|зачем|почему ты|почему вы|вместо|уже есть|не надо|не нужно|нельзя|опять|снова"
+    r"|не используй|не трогай|откати|верни|не то)(?!\w)", re.I)
+ADMISSION = re.compile(
+    r"\b(?:has no|have no|doesn't (?:have|accept|take|support|export|expose)|does not (?:have|accept|take|support|export|expose)"
+    r"|isn't exported|is not exported|no such (?:prop|export|option)|not a (?:valid|known) prop|lacks)\b"
+    r"|(?<!\w)(?:нет пропа|не принимает|не экспортир)", re.I)
+SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def state_path() -> Path:
+    if os.environ.get("MASTACK_FRICTION_STATE"):
+        return Path(os.environ["MASTACK_FRICTION_STATE"]).expanduser()
+    state = Path(os.environ["XDG_STATE_HOME"]) if os.environ.get("XDG_STATE_HOME") else Path.home() / ".local" / "state"
+    return state / "mastack" / "friction-scan.json"
+
+
+def load_state() -> dict:
+    try:
+        data = json.loads(state_path().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state: dict) -> None:
+    path = state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}")
+    temporary.write_text(json.dumps(state), encoding="utf-8")
+    os.replace(temporary, path)
+
+
+class Vocabulary:
+    """Which words name a configured package or one of its components."""
+
+    def __init__(self, config: dict):
+        self.config = config
+        self.components = fj.component_names(config)
+        self.aliases = fj.aliases(config)
+        names = sorted(self.components, key=len, reverse=True)
+        self.written = re.compile(r"`<?(" + "|".join(map(re.escape, names)) + r")\b[^`]*`|<(" + "|".join(map(re.escape, names))
+                                  + r")\b|\b(" + "|".join(n for n in map(re.escape, names) if sum(c.isupper() for c in n) > 1)
+                                  + r")\b") if names else None
+        self.alias = re.compile(r"(?<![\w-])(" + "|".join(map(re.escape, sorted(self.aliases, key=len, reverse=True)))
+                                + r")(?![\w-])", re.I) if self.aliases else None
+
+    def mentions(self, text: str) -> tuple[list[tuple[str, str]], set[str]]:
+        """([(component, package)] in order, {packages named by alias})."""
+        components: list[tuple[str, str]] = []
+        if self.written:
+            for match in self.written.finditer(text):
+                name = next(g for g in match.groups() if g)
+                if (name, self.components[name]) not in components:
+                    components.append((name, self.components[name]))
+        packages = {self.aliases[m.group(1).lower()] for m in self.alias.finditer(text)} if self.alias else set()
+        return components, packages
+
+
+def human_text(text: str) -> str | None:
+    """A message the person typed, or None for wrappers, reminders, commands and pasted walls."""
+    text = text.strip()
+    if "## My request for Codex:" in text:
+        text = text.split("## My request for Codex:", 1)[1].strip()
+    if not text or text.startswith(("<", "#", "Caveat:", "[Request interrupted", "Base directory for this skill")):
+        return None
+    if "<command-name>" in text or "<system-reminder>" in text or len(text) > MAX_HUMAN:
+        return None
+    return text
+
+
+class Scanner:
+    def __init__(self, config: dict, state: dict, known: set, dry_run: bool, since: str | None):
+        self.config, self.state, self.known, self.dry_run, self.since = config, state, known, dry_run, since
+        self.vocabulary = Vocabulary(config)
+        self.events: list[dict] = []
+
+    def emit(self, item: dict) -> None:
+        key = (item.get("fingerprint"), item.get("session"))
+        if item.get("fingerprint") and key in self.known:
+            return
+        self.known.add(key)
+        self.events.append(item)
+
+    # ---- the detectors, shared by both transcript formats ----------------------------------------------------
+
+    def tool_output(self, ctx: dict, text: str, cwd, ts) -> None:
+        if "error TS" not in text:
+            return
+        for item in fj.type_errors(text, cwd, self.config, session=ctx["session"], source="mastack-scan", ts=ts):
+            ctx["errors"].setdefault(item["file"], {})[item["component"]] = item["rule"]
+            self.emit(item)
+
+    def edit(self, ctx: dict, path: str, removed: str, added: str, cwd, ts) -> None:
+        for file, components in ctx["errors"].items():
+            if not path.endswith(file):
+                continue
+            for component, code in components.items():
+                if component and component in removed and component not in added:
+                    project = fj.project_name(cwd)
+                    self.emit(fj.event(
+                        package=self.vocabulary.components.get(component) or self.package_for(component),
+                        kind="misuse", project=project, source="mastack-scan", ts=ts, component=component, rule=code,
+                        detail=f"reverted usage of {component} in {file} after {code}", session=ctx["session"],
+                        why=f"after {code} on {component} in {file}, an edit removed {component} from that file",
+                        file=file, fp=fj.fingerprint(project, file, "revert", component, ctx["session"])))
+
+    def package_for(self, component: str) -> str:
+        return self.vocabulary.components.get(component) or next(iter(fj.packages(self.config)), "unknown")
+
+    def agent_text(self, ctx: dict, text: str, cwd, ts) -> None:
+        ctx["agent"] = (ctx["agent"] + "\n" + text)[-AGENT_CONTEXT:]
+        if not ADMISSION.search(text):
+            return
+        for sentence in SENTENCE.split(text):
+            said = ADMISSION.search(sentence)
+            components, _ = self.vocabulary.mentions(sentence) if said else ([], set())
+            for component, package in components[:1]:
+                project = fj.project_name(cwd)
+                self.emit(fj.event(
+                    package=package, kind="misuse", project=project, source="mastack-scan", ts=ts, component=component,
+                    rule="agent-admission", detail=sentence.strip()[:fj.DETAIL_LIMIT], session=ctx["session"],
+                    why=f'agent says {component} "{said.group(0)}" something: check whether the package has it',
+                    fp=fj.fingerprint(project, "admission", component, sentence.strip()[:200])))
+
+    def human(self, ctx: dict, raw: str, cwd, ts) -> None:
+        text = human_text(raw)
+        agent, ctx["agent"] = ctx["agent"], ""
+        if not text:
+            return
+        markers = [m.group(0) for m in CORRECTION.finditer(text)]
+        if not markers:
+            return
+        components, packages = self.vocabulary.mentions(text)
+        if not components and not packages:
+            return
+        agent_components, agent_packages = self.vocabulary.mentions(agent)
+        agent_names = {name for name, _ in agent_components}
+        shared = [(n, p) for n, p in components if n in agent_names or p in agent_packages]
+        shared_packages = (packages & (agent_packages | {p for _, p in agent_components}))
+        if not shared and not shared_packages:
+            return
+        component, package = shared[0] if shared else (None, sorted(shared_packages)[0])
+        project = fj.project_name(cwd)
+        named = component or package
+        self.emit(fj.event(
+            package=package, kind="owner-correction", project=project, source="mastack-scan", ts=ts,
+            component=component, detail=text[:fj.DETAIL_LIMIT], session=ctx["session"],
+            why=f"the owner's message carries {', '.join(repr(m) for m in markers[:3])} and names {named}; "
+                f"the agent's turn before it names it too",
+            fp=fj.fingerprint(project, "correction", ctx["session"], text[:300])))
+
+    # ---- formats ------------------------------------------------------------------------------------------
+
+    def lines(self, path: Path):
+        """New complete lines of a file since the last run, and records where this run stopped."""
+        key = str(path)
+        entry = self.state.setdefault("files", {}).get(key, {})
+        offset = entry.get("offset", 0)
+        try:
+            size = path.stat().st_size
+        except OSError:
+            return
+        if size < offset:  # rewritten
+            offset = 0
+        if size == offset:
+            return
+        with open(path, "rb") as handle:
+            handle.seek(offset)
+            data = handle.read()
+        end = data.rfind(b"\n") + 1
+        for line in data[:end].split(b"\n"):
+            if line and len(line) < MAX_LINE:
+                yield line
+        self.state["files"][key] = {**entry, "offset": offset + end}
+
+    def context(self, path: Path, session: str) -> dict:
+        entry = self.state.setdefault("files", {}).setdefault(str(path), {})
+        ctx = entry.setdefault("context", {"agent": "", "errors": {}})
+        ctx["session"] = session
+        return ctx
+
+    def claude(self, path: Path, session: str, subagent: bool) -> None:
+        ctx = self.context(path, session)
+        for line in self.lines(path):
+            if b'"type":"user"' not in line and b'"type":"assistant"' not in line \
+                    and b'"type": "user"' not in line and b'"type": "assistant"' not in line:
+                continue
+            try:
+                item = json.loads(line)
+            except ValueError:
+                continue
+            ts, cwd = item.get("timestamp"), item.get("cwd")
+            if self.since and ts and ts < self.since:
+                continue
+            message = item.get("message") or {}
+            content = message.get("content")
+            if item.get("type") == "assistant":
+                for block in content if isinstance(content, list) else []:
+                    if block.get("type") == "text":
+                        self.agent_text(ctx, block.get("text") or "", cwd, ts)
+                    elif block.get("type") == "tool_use":
+                        tool = block.get("input") or {}
+                        ctx["agent"] = (ctx["agent"] + "\n" + json.dumps(tool)[:4000])[-AGENT_CONTEXT:]
+                        if block.get("name") in ("Edit", "MultiEdit"):
+                            edits = tool.get("edits") if isinstance(tool.get("edits"), list) else [tool]
+                            for change in edits:
+                                self.edit(ctx, str(tool.get("file_path") or ""), str(change.get("old_string") or ""),
+                                          str(change.get("new_string") or ""), cwd, ts)
+                continue
+            if isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        inner = block.get("content")
+                        text = inner if isinstance(inner, str) else "\n".join(
+                            str(b.get("text") or "") for b in inner if isinstance(b, dict)) if isinstance(inner, list) else ""
+                        self.tool_output(ctx, text, cwd, ts)
+                continue
+            if subagent or item.get("isSidechain") or item.get("isMeta"):
+                continue
+            text = content if isinstance(content, str) else "\n".join(
+                str(b.get("text") or "") for b in content if isinstance(b, dict) and b.get("type") == "text") \
+                if isinstance(content, list) else ""
+            self.human(ctx, text, cwd, ts)
+
+    def codex(self, path: Path) -> None:
+        entry = self.state.setdefault("files", {}).setdefault(str(path), {})
+        ctx = self.context(path, entry.get("session") or path.stem)
+        for line in self.lines(path):
+            head = line[:300]
+            if b'"session_meta"' in head or b'"turn_context"' in head:
+                try:
+                    payload = json.loads(line).get("payload") or {}
+                except ValueError:
+                    continue
+                if payload.get("id"):
+                    ctx["session"] = entry["session"] = payload["id"]
+                    entry["child"] = bool(payload.get("parent_thread_id"))
+                if payload.get("cwd"):
+                    entry["cwd"] = payload["cwd"]
+                continue
+            if b'"response_item"' not in head or b'"reasoning"' in head:
+                continue
+            try:
+                item = json.loads(line)
+            except ValueError:
+                continue
+            ts, payload, cwd = item.get("timestamp"), item.get("payload") or {}, entry.get("cwd")
+            if self.since and ts and ts < self.since:
+                continue
+            kind = payload.get("type")
+            if kind == "message":
+                text = "\n".join(str(c.get("text") or "") for c in payload.get("content") or [] if isinstance(c, dict))
+                if payload.get("role") == "assistant":
+                    self.agent_text(ctx, text, cwd, ts)
+                elif payload.get("role") == "user" and not entry.get("child"):
+                    self.human(ctx, text, cwd, ts)
+            elif kind in ("function_call_output", "custom_tool_call_output"):
+                output = payload.get("output")
+                text = output if isinstance(output, str) else "\n".join(
+                    str(o.get("text") or "") for o in output if isinstance(o, dict)) if isinstance(output, list) else ""
+                self.tool_output(ctx, text, cwd, ts)
+            elif kind in ("function_call", "custom_tool_call"):
+                body = str(payload.get("input") or payload.get("arguments") or "")
+                ctx["agent"] = (ctx["agent"] + "\n" + body[:4000])[-AGENT_CONTEXT:]
+                for file, removed, added in patches(body):
+                    self.edit(ctx, file, removed, added, cwd, ts)
+
+
+def patches(body: str):
+    """(file, removed text, added text) per file of an apply_patch body."""
+    if "*** Begin Patch" not in body:
+        return
+    body = body.replace("\\n", "\n")
+    for section in re.split(r"^\*\*\* (?:Update|Add|Delete) File: ", body, flags=re.M)[1:]:
+        file, _, rest = section.partition("\n")
+        lines = rest.split("\n")
+        yield (file.strip(), "\n".join(l[1:] for l in lines if l.startswith("-")),
+               "\n".join(l[1:] for l in lines if l.startswith("+")))
+
+
+def sources(config: dict) -> tuple[Path, Path]:
+    listed = config.get("sources") if isinstance(config.get("sources"), dict) else {}
+    claude = Path(listed.get("claude") or Path.home() / ".claude" / "projects").expanduser()
+    codex = Path(listed.get("codex") or Path.home() / ".codex" / "sessions").expanduser()
+    return claude, codex
+
+
+def summary(events: list[dict]) -> str:
+    counts: dict[str, int] = {}
+    for item in events:
+        counts[item["kind"]] = counts.get(item["kind"], 0) + 1
+    return ", ".join(f"{kind} {count}" for kind, count in sorted(counts.items())) or "none"
+
+
+def print_events(events: list[dict]) -> None:
+    for item in events:
+        where = item.get("file") or ""
+        print(f"  {item['ts'][:10]} {item['kind']:<16} {item['package']} {item.get('component') or '-'} "
+              f"{item.get('rule') or ''} {where}\n      why: {item.get('why')}")
+
+
+def run_scan(args) -> int:
+    config = fj.load_config()
+    if not fj.packages(config) and not fj.scopes(config):
+        print(f"friction scan: no packages in {fj.config_dir() / 'friction.json'}; nothing to look for", file=sys.stderr)
+        return 1
+    state = load_state()
+    if args.all:
+        state["files"] = {}
+    known = {(e.get("fingerprint"), e.get("session")) for e in fj.read() if e.get("fingerprint")}
+    scanner = Scanner(config, json.loads(json.dumps(state)) if args.dry_run else state, known, args.dry_run, args.since)
+    claude, codex = sources(config)
+    started, files = time.monotonic(), 0
+    for path in sorted(claude.glob("*/*.jsonl")) if claude.is_dir() else []:
+        files += 1
+        scanner.claude(path, path.stem, False)
+        for sub in sorted((path.parent / path.stem / "subagents").glob("*.jsonl")):
+            files += 1
+            scanner.claude(sub, path.stem, True)
+    for path in sorted(codex.rglob("*.jsonl")) if codex.is_dir() else []:
+        files += 1
+        scanner.codex(path)
+    events = scanner.events
+    if args.dry_run or not args.quiet or events:
+        print(f"friction scan: {files} files in {time.monotonic() - started:.0f} s, {len(events)} events ({summary(events)})"
+              + (" [dry run: nothing written]" if args.dry_run else ""))
+    if args.dry_run:
+        print_events(events)
+        return 0
+    fj.append(events)
+    state["last_scan"] = now_iso()
+    # Keep the carried context (the agent's last words, recent type errors) only for files still being written.
+    for key, entry in state.get("files", {}).items():
+        try:
+            fresh = time.time() - os.stat(key).st_mtime < 2 * 24 * 3600
+        except OSError:
+            fresh = False
+        if not fresh:
+            entry.pop("context", None)
+        elif "context" in entry:
+            entry["context"]["agent"] = entry["context"].get("agent", "")[-4000:]
+    save_state(state)
+    if time.time() - state.get("last_vendor_epoch", 0) >= WEEK and config.get("vendored"):
+        run_vendor(argparse.Namespace(dry_run=False, quiet=args.quiet), config)
+    return 0
+
+
+def git(repo: Path, *args, input_text: str | None = None) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True,
+                          input=input_text).stdout
+
+
+def local_files(copy: Path, dirs: list[str]) -> list[str]:
+    found = []
+    for top in dirs:
+        base = copy / top
+        for path in sorted(base.rglob("*")) if base.is_dir() else []:
+            relative = path.relative_to(copy)
+            if path.is_file() and not SKIP_DIRS & set(relative.parts) \
+                    and not re.search(r"\.(?:test|spec|stories)\.[cm]?[jt]sx?$", path.name):
+                found.append(str(relative))
+    return found
+
+
+def component_of(file: str) -> str:
+    stem = Path(file).name.split(".")[0]
+    return "".join(part[:1].upper() + part[1:] for part in re.split(r"[-_]", stem) if part)
+
+
+def run_vendor(args, config: dict | None = None) -> int:
+    config = config if config is not None else fj.load_config()
+    state = load_state()
+    copies = [c for c in config.get("vendored", []) if isinstance(c, dict)]
+    events: list[dict] = []
+    for spec in copies:
+        try:
+            events += vendor_copy(spec, state.setdefault("vendored", {}).setdefault(spec.get("path", ""), {}))
+        except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
+            print(f"friction vendor: {spec.get('path')}: {error}", file=sys.stderr)
+    if args.dry_run or not args.quiet or events:
+        print(f"friction vendor: {len(copies)} copies, {len(events)} patched files logged"
+              + (" [dry run: nothing written]" if args.dry_run else ""))
+    if args.dry_run:
+        print_events(events)
+        return 0
+    fj.append(events)
+    state["last_vendor_epoch"] = time.time()
+    save_state(state)
+    return 0
+
+
+def vendor_copy(spec: dict, seen: dict) -> list[dict]:
+    copy, upstream = Path(spec["path"]).expanduser(), Path(spec["upstream"]).expanduser()
+    upstream_path, package = spec.get("upstream_path", "").strip("/"), spec["package"]
+    version = json.loads((copy / "package.json").read_text(encoding="utf-8")).get("version")
+    files = local_files(copy, spec.get("dirs") or ["src"])
+    hashes = dict(zip(files, git(upstream, "hash-object", "--stdin-paths",
+                                 input_text="\n".join(str(copy / f) for f in files)).split()))
+    prefix = f"{upstream_path}/" if upstream_path else ""
+    if spec.get("base"):
+        candidates = [spec["base"]]
+    else:
+        candidates = []
+        for commit in git(upstream, "log", "--format=%H", "-n", "300", "--", upstream_path or ".").split():
+            try:
+                manifest = json.loads(git(upstream, "show", f"{commit}:{prefix}package.json"))
+            except (subprocess.CalledProcessError, ValueError):
+                continue
+            if manifest.get("version") == version:
+                candidates.append(commit)
+        if not candidates:
+            raise ValueError(f"no upstream commit has version {version}")
+    best = None
+    for commit in candidates:
+        tree = {}
+        for row in git(upstream, "ls-tree", "-r", commit, "--", *(prefix + d for d in spec.get("dirs") or ["src"])).splitlines():
+            meta, _, name = row.partition("\t")
+            tree[name[len(prefix):]] = meta.split()[2]
+        changed = [f for f in files if tree.get(f) != hashes.get(f)]
+        if best is None or len(changed) < len(best[2]):
+            best = (commit, tree, changed)
+    commit, tree, changed = best
+    project = spec.get("project") or fj.project_name(copy)
+    events = []
+    for file in changed:
+        if seen.get(file) == hashes[file]:
+            continue
+        seen[file] = hashes[file]
+        local = (copy / file).read_text(encoding="utf-8", errors="replace").splitlines()
+        base = git(upstream, "cat-file", "-p", tree[file]).splitlines() if file in tree else []
+        diff = list(difflib.unified_diff(base, local, lineterm="", n=0))
+        plus = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
+        minus = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
+        how = "modified" if file in tree else "added"
+        events.append(fj.event(
+            package=package, kind="vendored-patch", project=project, source="mastack-vendor",
+            component=component_of(file), rule=how, detail=f"kit patched for app need: {file} {how} (+{plus} -{minus})",
+            why=f"differs from {package} {version} at upstream {commit[:10]}, the closest of {len(candidates)} "
+                f"upstream commits with that version", file=file, fp=fj.fingerprint(project, package, file, hashes[file])))
+    return events
+
+
+def guess_package(text: str, config: dict) -> tuple[str, str | None]:
+    vocabulary = Vocabulary(config)
+    components, packages = vocabulary.mentions(text)
+    if components:
+        return components[0][1], components[0][0]
+    return (sorted(packages)[0] if packages else "unknown"), None
+
+
+def run_log(args) -> int:
+    text = " ".join(args.text).strip()
+    if not text:
+        print("friction log: say what the correction is", file=sys.stderr)
+        return 2
+    config = fj.load_config()
+    guessed, component = guess_package(text, config)
+    session = args.session or os.environ.get("FRICTION_SESSION") or os.environ.get("CLAUDE_CODE_SESSION_ID") \
+        or os.environ.get("CODEX_SESSION_ID")
+    item = fj.event(package=args.package or guessed, kind=args.kind, project=args.project or fj.project_name(os.getcwd()),
+                    source="friction-command", component=args.component or component, rule=args.rule,
+                    detail=text, session=session, why="the owner logged it with /friction",
+                    fp=fj.fingerprint(session, text))
+    problems = fj.problems(item)
+    if problems:
+        print(f"friction log: {'; '.join(problems)}", file=sys.stderr)
+        return 2
+    written = fj.append([item])
+    target = fj.journal_path()
+    print(f"friction: logged {item['kind']} on {item['package']} {item['component'] or ''} ({item['project']})".rstrip()
+          + ("" if written else f"; nothing written ({'journal off' if not target else target})"))
+    return 0
+
+
+def run_plist(args) -> int:
+    state = state_path().parent
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}
+    for name in ("MASTACK_CONFIG", "FRICTION_JOURNAL", "XDG_STATE_HOME"):
+        if os.environ.get(name):
+            env[name] = os.environ[name]
+    python = shutil.which("python3") or sys.executable
+    sys.stdout.write(plistlib.dumps({
+        "Label": "com.mastack.friction-scan",
+        "ProgramArguments": [python, str(ROOT / "bin" / "friction"), "scan", "--quiet"],
+        "EnvironmentVariables": env,
+        "RunAtLoad": True,
+        "StartInterval": args.interval,
+        "ProcessType": "Background",
+        "LowPriorityIO": True,
+        "Nice": 10,
+        "StandardOutPath": str(state / "friction-scan.out"),
+        "StandardErrorPath": str(state / "friction-scan.out"),
+    }).decode())
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="command", required=True)
+    log = sub.add_parser("log", help="log one correction")
+    log.add_argument("--package")
+    log.add_argument("--component")
+    log.add_argument("--rule")
+    log.add_argument("--kind", default="owner-correction", choices=fj.KINDS)
+    log.add_argument("--session")
+    log.add_argument("--project")
+    log.add_argument("text", nargs="*")
+    scan = sub.add_parser("scan", help="read new transcripts")
+    scan.add_argument("--dry-run", action="store_true")
+    scan.add_argument("--quiet", action="store_true")
+    scan.add_argument("--all", action="store_true")
+    scan.add_argument("--since")
+    vendor = sub.add_parser("vendor", help="list local patches of vendored copies")
+    vendor.add_argument("--dry-run", action="store_true")
+    vendor.add_argument("--quiet", action="store_true")
+    plist = sub.add_parser("plist", help="print the launchd agent")
+    plist.add_argument("--interval", type=int, default=86400)
+    args = parser.parse_args()
+    return {"log": run_log, "scan": run_scan, "vendor": run_vendor, "plist": run_plist}[args.command](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -109,10 +109,11 @@ flowchart LR
 | [agent-docs](skills/agent-docs/SKILL.md) | Writing and auditing what agents read |
 | [friction-audit](skills/friction-audit/SKILL.md) | What confuses agents in a package, and the layer that fixes it |
 | [test-audit](skills/test-audit/SKILL.md) | Tests that cost time or confidence, and the change for each |
+| [friction](skills/friction/SKILL.md) | `/friction <text>`: log the owner's correction of package usage (user-invoked) |
 | [video-feedback](skills/video-feedback/SKILL.md) | Recorded feedback to timestamped, verified requirements |
 | [reprompt](skills/reprompt/SKILL.md) | Deepening a task, then rewriting the prompt (user-invoked) |
 
-Every skill except `reprompt` can be invoked by the model, so a request in your
+Every skill except `reprompt` and `friction` can be invoked by the model, so a request in your
 own words, in any language, reaches it. A description says when to use the
 skill, in English: the model matches requests against it, so keep it short.
 
@@ -298,6 +299,45 @@ slow `slotfather` cannot let the timeout drop a deny already found.
   matcher name could not be confirmed, so `bin/install` does not register
   there yet. To try it by hand, add the same group to `~/.codex/hooks.json`
   with the matcher Codex reports for its shell tool, then trust it in `/hooks`.
+
+## Friction journal
+
+Moments an agent misread or misused one of your packages land in one local
+JSONL file, `$XDG_STATE_HOME/friction/events.jsonl` (repo-kit's friction
+schema; `repo-kit friction report` ranks it, `repo-kit friction export` writes
+a redacted bundle to share), so `friction-audit` starts from counts. Which
+packages count is `~/.config/mastack/friction.json` (`$MASTACK_CONFIG`); see
+`hooks/friction_journal.py`. Without it nothing is logged;
+`FRICTION_JOURNAL=off` turns every writer off. Nothing goes over the network.
+
+```json
+{ "scopes": ["@scope/"],
+  "packages": { "@scope/ui-kit": { "aliases": ["UI Kit"], "types": ["~/ui-kit/dist/index.d.ts"] } },
+  "vendored": [ { "path": "~/shop/packages/ui-kit", "package": "@scope/ui-kit",
+                  "upstream": "~/ui-kit", "upstream_path": "." } ] }
+```
+
+- **Type errors as they happen**: with the file present, `bin/install`
+  registers `hooks/friction_hook.py` as a `PostToolUse` hook for Bash. It
+  logs a TypeScript error from a command's output when the message names a
+  module under a scope, or a type or component the erroring file imports from
+  a configured package; ordinary type errors never count. It never prints or
+  blocks.
+- **`/friction <text>`** (skills/friction) logs the owner's correction with
+  the project and session.
+- **Ordinary sessions**: `bin/friction scan` reads new Claude Code transcripts
+  and Codex sessions since its last run and logs type errors, owner
+  corrections (a typed message naming the package or a component, with a
+  correction marker, after an agent turn naming the same) and misuse (an edit
+  removing a component right after a type error about it; an agent sentence
+  saying a component "has no" something), each with the reason in `why`.
+  `--dry-run` prints them and writes nothing.
+- **Vendored copies**: `bin/friction vendor` (weekly from `scan`) compares
+  each copy with its upstream at the copy's version and logs each patched
+  source file as "kit patched for app need".
+- **Daily**: `bin/friction plist > ~/Library/LaunchAgents/com.mastack.friction-scan.plist`,
+  then `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.mastack.friction-scan.plist`
+  (remove with `launchctl bootout gui/$(id -u)/com.mastack.friction-scan`).
 
 ## Evals
 

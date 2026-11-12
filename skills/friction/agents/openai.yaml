@@ -1,0 +1,5 @@
+interface:
+  display_name: "Friction"
+  short_description: "Log the owner's correction of package usage"
+policy:
+  allow_implicit_invocation: false

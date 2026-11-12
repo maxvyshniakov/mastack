@@ -10,8 +10,20 @@ getting wrong when they use this, and which layer would stop it.
 
 ## Sources
 
-Read each with a subagent (`research` role) and keep raw counts.
+Start with the **friction journal**, then read the rest with a subagent
+(`research` role) and keep raw counts.
 
+- **The journal** (`$XDG_STATE_HOME/friction/events.jsonl`; see
+  `hooks/friction_journal.py`): lint findings beyond the baseline, type errors
+  on the package's types, the owner's `/friction` corrections, corrections and
+  misuse the session scanner found, vendored-copy patches. Rank it with
+  `repo-kit friction report --package <name> --since <period>`, or read the
+  JSONL. Run `bin/friction scan` first so the newest sessions are in. Each
+  event's `why`, file and session point at the evidence; read the transcript
+  only there and for the sources below that the journal does not cover.
+  Coworkers' `repo-kit friction export` bundles count the same way.
+- **Lint baselines**: structured entries (`category`, `component`, `remove`)
+  are a list of missing APIs and unclear docs by count.
 - **Agent transcripts** that touch the package: rule violations and the lint
   messages agents ignored, suppressions they added, questions they asked,
   things they rebuilt by hand that the package already has, corrections from
@@ -23,7 +35,8 @@ Read each with a subagent (`research` role) and keep raw counts.
   kind. A kind that recurs is a missing guard, not bad luck.
 
 Check every finding against the current version before counting it; some are
-already fixed.
+already fixed. A class the transcripts show but the journal missed is a gap in
+a producer (hook, scanner, lint): name it in the report.
 
 ## Classify
 

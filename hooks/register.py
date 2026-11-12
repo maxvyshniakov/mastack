@@ -14,6 +14,9 @@ For each lifecycle event the machine settings list under `lifecycle` (SubagentSt
 SessionStart, SessionEnd; hooks/lifecycle.py), install adds one group that runs hooks/lifecycle.py EVENT, and removes
 that group from the events no longer listed. `lifecycle.PreToolUse` needs no group: bash_guard.py runs it.
 
+When DIR/friction.json exists (hooks/friction_journal.py), install adds one PostToolUse group (matcher Bash) that runs
+hooks/friction_hook.py, which logs TypeScript errors about the configured packages; without the file it removes it.
+
 Install refuses (exit 1) when DIR/hooks.json, the machine settings the checks read, is missing or unreadable:
 without it git-guard protects no checkout and the lease guard knows no lane (hooks/hooks.example.json shows the
 fields). It refuses to register a linked worktree, whose path disappears with it, unless --from-worktree.
@@ -38,6 +41,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 GUARD = ROOT / "hooks" / "bash_guard.py"
 LIFECYCLE = ROOT / "hooks" / "lifecycle.py"
+FRICTION = ROOT / "hooks" / "friction_hook.py"
+FRICTION_TIMEOUT = 10  # friction_hook.HOOK_TIMEOUT
 LIFECYCLE_EVENTS = ("SubagentStart", "SubagentStop", "Stop", "SessionStart", "SessionEnd")  # lifecycle.EVENTS
 LIFECYCLE_TIMEOUT = 30  # lifecycle.HOOK_TIMEOUT
 REPLACED = re.compile(r"agent-hooks/(git-guard|zsh-word-split|unguarded-sequence|lease-guard)\.py[\"']?\s*$"
@@ -63,6 +68,53 @@ def command() -> str:
 
 def handler() -> dict:
     return {"type": "command", "command": command(), "timeout": TIMEOUT}
+
+
+def friction_command() -> str:
+    """Runs the friction hook when its file exists and nothing when it does not."""
+    return f"sh -c '[ -f \"$0\" ] || exit 0; exec python3 \"$0\"' {shlex.quote(str(FRICTION))}"
+
+
+def friction_handler() -> dict:
+    return {"type": "command", "command": friction_command(), "timeout": FRICTION_TIMEOUT}
+
+
+def friction_wanted(config: Path) -> bool:
+    """The friction hook is registered while the machine has friction settings."""
+    try:
+        return isinstance(json.loads((config / "friction.json").read_text(encoding="utf-8")), dict)
+    except (OSError, ValueError):
+        return False
+
+
+def friction_groups(hooks: dict, want: bool, ours: set[str], report: list[str]) -> None:
+    """Keep exactly one PostToolUse Bash group running the friction hook when wanted, none otherwise."""
+    groups = hooks.get("PostToolUse", [])
+    if not isinstance(groups, list):
+        raise Refused("`hooks.PostToolUse` is not a list")
+    mine, kept, present = {"matcher": "Bash", "hooks": [friction_handler()]}, [], False
+    for group in groups:
+        entries = group.get("hooks") if isinstance(group, dict) else None
+        if not isinstance(entries, list):
+            kept.append(group)
+            continue
+        if want and not present and group == mine:
+            present = True
+            kept.append(group)
+            continue
+        remaining = [e for e in entries if not (isinstance(e, dict) and e.get("command") in ours)]
+        for entry in entries:
+            if entry not in remaining:
+                report.append(f"remove PostToolUse Bash: {tilde(entry.get('command'))}")
+        if remaining:
+            kept.append(group if len(remaining) == len(entries) else {**group, "hooks": remaining})
+    if want and not present:
+        kept.append(mine)
+        report.append(f"add    PostToolUse Bash: {tilde(friction_command())}")
+    if kept:
+        hooks["PostToolUse"] = kept
+    else:
+        hooks.pop("PostToolUse", None)
 
 
 def lifecycle_command(event: str) -> str:
@@ -133,7 +185,7 @@ def record(config: Path, commands: list[str]) -> None:
     (config / RECORD).write_text(json.dumps({"commands": commands}, indent=2) + "\n", encoding="utf-8")
 
 
-def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], events=()) -> dict:
+def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], events=(), friction=False) -> dict:
     if not isinstance(settings, dict):
         raise Refused("not a JSON object")
     result = json.loads(json.dumps(settings))
@@ -170,6 +222,8 @@ def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], 
     for event in LIFECYCLE_EVENTS:
         if event in hooks or event in events:
             lifecycle_groups(hooks, event, not uninstall and event in events, ours, report)
+    if "PostToolUse" in hooks or friction:
+        friction_groups(hooks, friction and not uninstall, ours | {friction_command()}, report)
     if kept:
         hooks["PreToolUse"] = kept
         result["hooks"] = hooks
@@ -220,7 +274,9 @@ def main() -> int:
     print(tilde(path))
     target = path.resolve()  # a symlinked settings file stays a symlink
     events = lifecycle_events(args.config)
-    ours = set(recorded(args.config)) | {command()} | {lifecycle_command(event) for event in LIFECYCLE_EVENTS}
+    friction = friction_wanted(args.config)
+    ours = (set(recorded(args.config)) | {command(), friction_command()}
+            | {lifecycle_command(event) for event in LIFECYCLE_EVENTS})
     backup = None
     try:
         preflight(args)
@@ -231,7 +287,7 @@ def main() -> int:
             except ValueError as error:
                 raise Refused(f"not JSON: {error}") from None
             report: list[str] = []
-            after_settings = updated(settings, args.uninstall, ours, report, events)
+            after_settings = updated(settings, args.uninstall, ours, report, events, friction)
             if after_settings == settings:
                 print("  ok     hooks" if not args.uninstall else "  ok     no mastack hook")
                 break
@@ -265,7 +321,8 @@ def main() -> int:
         print(f"  refuse {error}", file=sys.stderr)
         return 1
     if not args.dry_run:
-        record(args.config, [] if args.uninstall else [command()] + [lifecycle_command(e) for e in events])
+        record(args.config, [] if args.uninstall else [command()] + [lifecycle_command(e) for e in events]
+               + ([friction_command()] if friction else []))
     return 0
 
 

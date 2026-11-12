@@ -25,6 +25,16 @@
   only when read, fakes checked against the real implementation. Its report
   and the `orchestrate` implementer report list each new test with its layer
   and run time, and `cross-review` gives the reviewer a test baseline.
+- Friction journal: moments agents misread or misuse your packages, one line
+  each in `$XDG_STATE_HOME/friction/events.jsonl` (repo-kit's friction schema),
+  configured in `~/.config/mastack/friction.json`. A `PostToolUse` Bash hook
+  (`hooks/friction_hook.py`, registered by `bin/install` when the file exists)
+  logs TypeScript errors about the configured packages; `bin/friction scan`
+  reads new Claude Code and Codex sessions for type errors, owner corrections
+  and misuse, each with its reason; `bin/friction vendor` logs vendored copies'
+  local patches against their upstream version; `bin/friction plist` prints a
+  daily launchd agent. New user-invoked skill `friction` (`/friction <text>`)
+  logs a correction. `friction-audit` reads the journal first, then transcripts.
 
 - New skill `babysit-pr`: takes an open pull request through its failing checks
   and review threads. Each finding is verified first; a real bug gets a failing
