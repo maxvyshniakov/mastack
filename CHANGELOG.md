@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- New skill `babysit-pr`: takes an open pull request through its failing checks
+  and review threads. Each finding is verified first; a real bug gets a failing
+  test that is also run against the base branch; every worked thread gets a
+  reply; labels and CI triggers that maintainers own are reported, not set.
+
 - Lifecycle hooks: `lifecycle` in `~/.config/mastack/hooks.json` lists commands
   per Claude Code event (`SubagentStop`, `SessionEnd`, `Stop`, `SubagentStart`,
   `SessionStart`), which `bin/install` registers through one dispatcher,

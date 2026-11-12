@@ -71,6 +71,7 @@ flowchart LR
   `rate` scores anything against a fixed rubric and improves it to 10.
 - **Ship**: `finish` runs `commit`, `push`, `release` and `cleanup` in order,
   each under its own rules, and reports risk and what is unverified.
+  `babysit-pr` takes an open pull request through its checks and review threads.
 - **Keep the environment good**: `retro` after a session that went wrong,
   `agent-docs` for what agents read, `friction-audit` for what keeps confusing
   agents in a package, `deps-update` to update pins and retire workarounds.
@@ -96,6 +97,7 @@ flowchart LR
 | [rate](skills/rate/SKILL.md) | A fixed rubric, fixes, a blind re-score until 10/10 |
 | [commit](skills/commit/SKILL.md) | Committing a task's work in a shared tree |
 | [push](skills/push/SKILL.md) | Publishing the chain by SHA, CI to a final result |
+| [babysit-pr](skills/babysit-pr/SKILL.md) | A PR's checks and review threads: verified, fixed with tests, answered |
 | [release](skills/release/SKILL.md) | Cutting a version late, publishing from a clean checkout |
 | [finish](skills/finish/SKILL.md) | The whole chain in one request, with a risk report |
 | [cleanup](skills/cleanup/SKILL.md) | Merged branches, worktrees, stray processes |
