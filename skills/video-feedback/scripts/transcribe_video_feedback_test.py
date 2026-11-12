@@ -104,6 +104,53 @@ class TranscribeVideoFeedbackTest(unittest.TestCase):
             self.assertEqual((out_dir / "transcript.json").read_text(encoding="utf-8"), '{"segments": []}')
             self.assertFalse((out_dir / "audio.json").exists())
 
+    def test_picks_the_loudest_audio_stream(self) -> None:
+        pick = transcribe_video_feedback.pick_loudest_audio_stream
+        self.assertEqual(pick([-33.3, -91.0]), 0)
+        self.assertEqual(pick([-91.0, -33.3]), 1)
+        self.assertEqual(pick([-20.0]), 0)
+        self.assertIsNone(pick([]))
+
+    def test_audio_extract_command_maps_the_stream_and_normalizes(self) -> None:
+        command = transcribe_video_feedback.audio_extract_command(
+            "ffmpeg", Path("/tmp/v.mp4"), Path("/tmp/a.wav"), stream_index=1
+        )
+        self.assertIn("0:a:1", command)
+        self.assertTrue(any("loudnorm" in part for part in command))
+
+    def test_detects_a_repeated_hallucination(self) -> None:
+        same = [{"start": i * 30, "end": i * 30 + 29, "text": " В этом видео я покажу"} for i in range(4)]
+        varied = [{"start": i, "end": i + 1, "text": f"фраза {i}"} for i in range(6)]
+        self.assertTrue(transcribe_video_feedback.looks_like_repeated_hallucination(same))
+        self.assertFalse(transcribe_video_feedback.looks_like_repeated_hallucination(varied))
+        self.assertFalse(transcribe_video_feedback.looks_like_repeated_hallucination([]))
+
+    def test_whisper_commands_do_not_condition_on_previous_text(self) -> None:
+        for engine, flag in (("mlx", "--condition-on-previous-text"), ("openai-whisper", "--condition_on_previous_text")):
+            command, _ = transcribe_video_feedback.build_whisper_command(
+                engine=engine,
+                executable="/usr/local/bin/x",
+                audio_path=Path("/tmp/audio.wav"),
+                out_dir=Path("/tmp/out"),
+                model="m",
+                language="auto",
+                clip_timestamps=None,
+                verbose="False",
+                initial_prompt=None,
+            )
+            self.assertIn(flag, command)
+            self.assertEqual(command[command.index(flag) + 1], "False")
+
+    def test_flags_long_gaps_as_suspect_coverage(self) -> None:
+        gap = [{"start": 0, "end": 10, "text": "a"}, {"start": 30, "end": 40, "text": "b"}]
+        dense = [{"start": i * 5, "end": i * 5 + 5, "text": str(i)} for i in range(8)]
+        self.assertTrue(transcribe_video_feedback.has_suspect_gap(gap))
+        self.assertFalse(transcribe_video_feedback.has_suspect_gap(dense))
+
+    def test_transcript_text_length_ignores_repeats(self) -> None:
+        segs = [{"text": "x y"}, {"text": "x y"}, {"text": "z"}]
+        self.assertEqual(transcribe_video_feedback.distinct_text_length(segs), len("x y") + len("z"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -48,6 +48,76 @@ def format_timestamp(seconds: float | int | None) -> str:
     return f"{minutes:02d}:{whole_seconds:02d}.{ms:03d}"
 
 
+def pick_loudest_audio_stream(mean_volumes: list[float]) -> int | None:
+    """Index of the audio stream with the highest mean volume (screen recorders often add a silent track)."""
+    if not mean_volumes:
+        return None
+    return max(range(len(mean_volumes)), key=lambda i: mean_volumes[i])
+
+
+def audio_extract_command(ffmpeg: str, video_path: Path, audio_path: Path, stream_index: int | None) -> list[str]:
+    command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(video_path)]
+    if stream_index is not None:
+        command.extend(["-map", f"0:a:{stream_index}"])
+    # Quiet voice-over recordings make Whisper loop on a hallucinated sentence; normalize first.
+    command.extend(["-vn", "-af", "highpass=f=80,loudnorm", "-ac", "1", "-ar", "16000", str(audio_path)])
+    return command
+
+
+def audio_stream_mean_volumes(ffmpeg: str, video_path: Path) -> list[float]:
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return []
+    probe = subprocess.run(
+        [ffprobe, "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(video_path)],
+        capture_output=True, text=True,
+    )
+    count = len([line for line in probe.stdout.splitlines() if line.strip()])
+    if count < 2:
+        return []
+    volumes: list[float] = []
+    for i in range(count):
+        result = subprocess.run(
+            [ffmpeg, "-hide_banner", "-i", str(video_path), "-map", f"0:a:{i}", "-af", "volumedetect", "-f", "null", "-"],
+            capture_output=True, text=True,
+        )
+        match = re.search(r"mean_volume:\s*(-?[0-9.]+|-inf) dB", result.stderr)
+        volumes.append(float(match.group(1)) if match and match.group(1) != "-inf" else float("-inf"))
+    return volumes
+
+
+def looks_like_repeated_hallucination(segments: list[dict[str, object]]) -> bool:
+    """True when one sentence fills most segments, Whisper's typical failure on quiet or silent audio."""
+    texts = [str(segment.get("text", "")).strip().lower() for segment in segments]
+    texts = [text for text in texts if text]
+    if len(texts) < 3:
+        return False
+    most = max(texts.count(text) for text in set(texts))
+    return most >= 3 and most / len(texts) >= 0.5
+
+
+def has_suspect_gap(segments: list[dict[str, object]], max_gap: float = 15.0) -> bool:
+    """A long hole between transcribed segments often means Whisper skipped speech it could not align."""
+    previous_end = 0.0
+    for segment in segments:
+        start = float(segment.get("start") or 0)
+        if start - previous_end > max_gap:
+            return True
+        previous_end = max(previous_end, float(segment.get("end") or start))
+    return False
+
+
+def distinct_text_length(segments: list[dict[str, object]]) -> int:
+    seen: set[str] = set()
+    total = 0
+    for segment in segments:
+        text = str(segment.get("text", "")).strip()
+        if text and text not in seen:
+            seen.add(text)
+            total += len(text)
+    return total
+
+
 def load_segments(json_path: Path) -> list[dict[str, object]]:
     with json_path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
@@ -138,6 +208,8 @@ def build_whisper_command(
             "all",
             "--verbose",
             verbose,
+            "--condition-on-previous-text",
+            "False",
         ]
         if language != "auto":
             command.extend(["--language", language])
@@ -158,6 +230,8 @@ def build_whisper_command(
         "all",
         "--verbose",
         verbose,
+        "--condition_on_previous_text",
+        "False",
     ]
     if language != "auto":
         command.extend(["--language", language])
@@ -260,21 +334,11 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     audio_path = out_dir / "audio.wav"
-    run([
-        ffmpeg,
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-y",
-        "-i",
-        str(video_path),
-        "-vn",
-        "-ac",
-        "1",
-        "-ar",
-        "16000",
-        str(audio_path),
-    ])
+    volumes = audio_stream_mean_volumes(ffmpeg, video_path)
+    stream_index = pick_loudest_audio_stream(volumes)
+    if volumes:
+        print(f"Audio streams mean volume (dB): {volumes}; using stream {stream_index}", flush=True)
+    run(audio_extract_command(ffmpeg, video_path, audio_path, stream_index))
 
     whisper_cmd, output_stem = build_whisper_command(
         engine=engine,
@@ -295,6 +359,38 @@ def main() -> int:
     if not json_path.exists():
         print(f"Expected transcript JSON was not written: {json_path}", file=sys.stderr)
         return 1
+    first = load_segments(json_path)
+    if initial_prompt and (looks_like_repeated_hallucination(first) or has_suspect_gap(first)):
+        # An initial prompt can make Whisper skip or loop on quiet speech; compare with a plain run.
+        print("Transcript has repeats or long gaps; comparing with a run without the initial prompt.", flush=True)
+        kept = {path.name: path.read_bytes() for path in out_dir.glob(f"{OUTPUT_STEM}.*")}
+        whisper_cmd, output_stem = build_whisper_command(
+            engine=engine,
+            executable=transcriber_path,
+            audio_path=audio_path,
+            out_dir=out_dir,
+            model=model,
+            language=args.language,
+            clip_timestamps=args.clip_timestamps,
+            verbose=args.verbose,
+            initial_prompt=None,
+        )
+        run(whisper_cmd)
+        normalize_output_names(out_dir, output_stem)
+        second = load_segments(json_path)
+        if distinct_text_length(second) < distinct_text_length(first):
+            for name, data in kept.items():
+                (out_dir / name).write_bytes(data)
+            print("Kept the prompted transcript (more distinct text).", flush=True)
+        else:
+            print("Kept the transcript without the initial prompt (more distinct text).", flush=True)
+    if looks_like_repeated_hallucination(load_segments(json_path)):
+        print(
+            "WARNING: the transcript repeats one sentence, which is how Whisper hallucinates on silent or "
+            "unusable audio. Do not treat it as speech: check the audio streams and listen before concluding "
+            "there is no narration.",
+            file=sys.stderr,
+        )
     write_timeline(json_path, timeline_path, video_path, model)
 
     print()
