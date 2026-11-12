@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Register mastack's Bash hook in a Claude Code settings file; bin/install runs it.
+"""Register mastack's hooks in a Claude Code settings file; bin/install runs it.
 
     hooks/register.py --settings FILE [--config DIR] [--dry-run] [--uninstall] [--from-worktree]
 
@@ -9,6 +9,10 @@ one replaces: the separate checks of an earlier agent-hooks directory (git-guard
 unguarded-sequence.py, lease-guard.py), ~/.claude/hooks/macos-shell-pitfalls.sh, and the mastack commands an
 earlier install recorded in DIR/hooks-installed.json. A group left without handlers is dropped; every other entry
 stays as it is. Uninstall removes only the recorded mastack commands and this checkout's.
+
+For each lifecycle event the machine settings list under `lifecycle` (SubagentStart, SubagentStop, Stop,
+SessionStart, SessionEnd; hooks/lifecycle.py), install adds one group that runs hooks/lifecycle.py EVENT, and removes
+that group from the events no longer listed. `lifecycle.PreToolUse` needs no group: bash_guard.py runs it.
 
 Install refuses (exit 1) when DIR/hooks.json, the machine settings the checks read, is missing or unreadable:
 without it git-guard protects no checkout and the lease guard knows no lane (hooks/hooks.example.json shows the
@@ -33,6 +37,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 GUARD = ROOT / "hooks" / "bash_guard.py"
+LIFECYCLE = ROOT / "hooks" / "lifecycle.py"
+LIFECYCLE_EVENTS = ("SubagentStart", "SubagentStop", "Stop", "SessionStart", "SessionEnd")  # lifecycle.EVENTS
+LIFECYCLE_TIMEOUT = 30  # lifecycle.HOOK_TIMEOUT
 REPLACED = re.compile(r"agent-hooks/(git-guard|zsh-word-split|unguarded-sequence|lease-guard)\.py[\"']?\s*$"
                       r"|\.claude/hooks/macos-shell-pitfalls\.sh[\"']?\s*$")
 TIMEOUT = 10  # bash_guard.HOOK_TIMEOUT: its checks answer within bash_guard.BUDGET
@@ -58,6 +65,60 @@ def handler() -> dict:
     return {"type": "command", "command": command(), "timeout": TIMEOUT}
 
 
+def lifecycle_command(event: str) -> str:
+    """Runs the lifecycle dispatcher for one event, and nothing when its file is gone."""
+    return (f"sh -c '[ -f \"$0\" ] || exit 0; exec python3 \"$0\" \"$1\"' {shlex.quote(str(LIFECYCLE))} "
+            f"{shlex.quote(event)}")
+
+
+def lifecycle_handler(event: str) -> dict:
+    return {"type": "command", "command": lifecycle_command(event), "timeout": LIFECYCLE_TIMEOUT}
+
+
+def lifecycle_events(config: Path) -> list[str]:
+    """The lifecycle events the machine settings list commands for."""
+    try:
+        data = json.loads((config / "hooks.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    lifecycle = data.get("lifecycle") if isinstance(data, dict) else None
+    if not isinstance(lifecycle, dict):
+        return []
+    return [event for event in LIFECYCLE_EVENTS if isinstance(lifecycle.get(event), list) and lifecycle[event]]
+
+
+def lifecycle_groups(hooks: dict, event: str, want: bool, ours: set[str], report: list[str]) -> None:
+    """Keep exactly one group running the dispatcher for `event` when wanted, none otherwise; others stay."""
+    groups = hooks.get(event, [])
+    if not isinstance(groups, list):
+        raise Refused(f"`hooks.{event}` is not a list")
+    mine, kept, present = lifecycle_handler(event), [], False
+    for group in groups:
+        entries = group.get("hooks") if isinstance(group, dict) else None
+        if not isinstance(entries, list):
+            kept.append(group)
+            continue
+        remaining = []
+        for entry in entries:
+            text = entry.get("command") if isinstance(entry, dict) else None
+            if not (isinstance(text, str) and text in ours):
+                remaining.append(entry)
+            elif want and not present and entry == mine and len(entries) == 1:
+                present = True
+                remaining.append(entry)
+            else:
+                report.append(f"remove {event}: {tilde(text)}")
+        if remaining:
+            kept.append(group if len(remaining) == len(entries) else {**group, "hooks": remaining})
+    if want and not present:
+        kept.append({"hooks": [mine]})
+        report.append(f"add    {event}: {tilde(lifecycle_command(event))}")
+    if kept:
+        hooks[event] = kept
+    else:
+        hooks.pop(event, None)
+
+
 def recorded(config: Path) -> list[str]:
     try:
         data = json.loads((config / RECORD).read_text(encoding="utf-8"))
@@ -72,7 +133,7 @@ def record(config: Path, commands: list[str]) -> None:
     (config / RECORD).write_text(json.dumps({"commands": commands}, indent=2) + "\n", encoding="utf-8")
 
 
-def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str]) -> dict:
+def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], events=()) -> dict:
     if not isinstance(settings, dict):
         raise Refused("not a JSON object")
     result = json.loads(json.dumps(settings))
@@ -106,6 +167,9 @@ def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str]) 
         kept.insert(len(kept) if position is None else position, mine)
         if mine not in groups:
             report.append(f"add    PreToolUse Bash: {tilde(command())}")
+    for event in LIFECYCLE_EVENTS:
+        if event in hooks or event in events:
+            lifecycle_groups(hooks, event, not uninstall and event in events, ours, report)
     if kept:
         hooks["PreToolUse"] = kept
         result["hooks"] = hooks
@@ -155,7 +219,8 @@ def main() -> int:
     path = args.settings.expanduser()
     print(tilde(path))
     target = path.resolve()  # a symlinked settings file stays a symlink
-    ours = set(recorded(args.config)) | {command()}
+    events = lifecycle_events(args.config)
+    ours = set(recorded(args.config)) | {command()} | {lifecycle_command(event) for event in LIFECYCLE_EVENTS}
     backup = None
     try:
         preflight(args)
@@ -166,7 +231,7 @@ def main() -> int:
             except ValueError as error:
                 raise Refused(f"not JSON: {error}") from None
             report: list[str] = []
-            after_settings = updated(settings, args.uninstall, ours, report)
+            after_settings = updated(settings, args.uninstall, ours, report, events)
             if after_settings == settings:
                 print("  ok     hooks" if not args.uninstall else "  ok     no mastack hook")
                 break
@@ -200,7 +265,7 @@ def main() -> int:
         print(f"  refuse {error}", file=sys.stderr)
         return 1
     if not args.dry_run:
-        record(args.config, [] if args.uninstall else [command()])
+        record(args.config, [] if args.uninstall else [command()] + [lifecycle_command(e) for e in events])
     return 0
 
 

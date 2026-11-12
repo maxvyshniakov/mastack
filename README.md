@@ -232,6 +232,21 @@ parsers run first; the lease guard runs last and only while nothing is
 denied, and all of them share a time budget below the hook's timeout, so a
 slow `slotfather` cannot let the timeout drop a deny already found.
 
+- **Lifecycle hooks**: commands that other tools want to run when a subagent
+  or session stops, or before a Bash call that names them, go under
+  `lifecycle` in the machine settings, by Claude Code event (`SubagentStart`,
+  `SubagentStop`, `Stop`, `SessionStart`, `SessionEnd`, and `PreToolUse` for
+  Bash calls). `bin/install` registers `hooks/lifecycle.py EVENT` once for
+  each listed event; `bash_guard.py` runs the `PreToolUse` entries itself
+  after its checks, only for a command that is not denied and holds one of
+  the entry's `contains` texts. Every command gets the event's JSON on stdin;
+  its output is discarded, so a lifecycle hook never blocks a stop or a tool
+  call. Claude Code's `Stop` ends a turn, `SessionEnd` the session.
+
+  ```json
+  { "lifecycle": { "SubagentStop": ["~/.local/bin/junkfather hook"],
+                   "PreToolUse": [{ "command": "~/.local/bin/junkfather hook", "contains": ["junkfather"] }] } }
+  ```
 - **Machine settings**, `~/.config/mastack/hooks.json` (`$MASTACK_CONFIG`
   moves the directory), outside the repository: `checkouts` (shared main
   checkouts, where `push-by-name` and `shared-checkout` apply), `state_dir`

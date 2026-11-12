@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Lifecycle hooks: `lifecycle` in `~/.config/mastack/hooks.json` lists commands
+  per Claude Code event (`SubagentStop`, `SessionEnd`, `Stop`, `SubagentStart`,
+  `SessionStart`), which `bin/install` registers through one dispatcher,
+  `hooks/lifecycle.py`, and Bash-call observers (`PreToolUse` with `contains`)
+  that `bash_guard.py` runs after its checks. They get the event's JSON, never
+  block and fail open.
+
 - `orchestrate` gives tickets a lifecycle: every lane carries its ticket, the
   landing merge says `Fixes #N`, a green land labels the ticket `integrated`
   and comments the merge, branch, push state, checks and preview, and a release

@@ -476,6 +476,61 @@ class RegisterTests(HookCase):
         self.assertIn("retry", "".join(str(call) for call in out.write.call_args_list))
 
 
+class LifecycleTests(HookCase):
+    """hooks/lifecycle.py and the PreToolUse observers bash_guard.py runs: they watch and never decide."""
+
+    def recorder(self, name: str) -> str:
+        """A command that appends its stdin to a file, as a lifecycle entry would get it."""
+        out = self.tmp / f"{name}.jsonl"
+        return f"cat >> {out} && echo >> {out}"
+
+    def seen(self, name: str) -> list:
+        path = self.tmp / f"{name}.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines() if line] if path.exists() else []
+
+    def lifecycle(self, event: str, payload) -> subprocess.CompletedProcess:
+        stdin = payload if isinstance(payload, str) else json.dumps(payload)
+        return subprocess.run([sys.executable, str(HOOKS / "lifecycle.py"), event], input=stdin, capture_output=True,
+                              text=True, env=self.env, timeout=30)
+
+    def test_each_event_runs_its_commands_with_the_event_on_stdin(self):
+        self.settings({"lifecycle": {"SubagentStop": [self.recorder("stop"), self.recorder("stop2")],
+                                     "SessionEnd": [self.recorder("end")]}})
+        done = self.lifecycle("SubagentStop", {"hook_event_name": "SubagentStop", "agent_id": "a1"})
+        self.assertEqual((0, ""), (done.returncode, done.stdout))
+        self.assertEqual([{"hook_event_name": "SubagentStop", "agent_id": "a1"}], self.seen("stop"))
+        self.assertEqual(1, len(self.seen("stop2")))
+        self.assertEqual([], self.seen("end"))
+
+    def test_a_failing_or_missing_command_is_logged_and_never_blocks(self):
+        self.settings({"lifecycle": {"Stop": ["exit 3", "/nonexistent/tool hook", self.recorder("after")]}})
+        done = self.lifecycle("Stop", {"hook_event_name": "Stop"})
+        self.assertEqual((0, ""), (done.returncode, done.stdout))
+        self.assertEqual(1, len(self.seen("after")), "the later command still runs")
+        self.assertIn("exited 3", (self.tmp / "state" / "guard.log").read_text())
+
+    def test_garbage_input_and_no_settings_pass(self):
+        self.assertEqual((0, ""), (self.lifecycle("Stop", "not json").returncode, ""))
+        self.settings({})
+        self.assertEqual("", self.lifecycle("SessionEnd", {}).stdout)
+
+    def test_bash_guard_runs_observers_only_for_their_text_and_not_after_a_deny(self):
+        self.settings({"checkouts": ["~/app"], "lifecycle": {"PreToolUse": [
+            {"command": self.recorder("claims"), "contains": ["junkfather"]}]}})
+        self.assertIsNone(self.bash("bash_guard.py", "ls -la"))
+        self.assertIsNone(self.bash("bash_guard.py", "junkfather own -- vite", tool_use_id="t1", agent_id="a1"))
+        self.denied(self.bash("bash_guard.py", "junkfather own -- vite; git push origin main", "{home}/app"))
+        claims = self.seen("claims")
+        self.assertEqual([("junkfather own -- vite", "a1")],
+                         [(c["tool_input"]["command"], c.get("agent_id")) for c in claims])
+
+    def test_a_slow_observer_is_cut_off_and_the_command_still_passes(self):
+        self.settings({"lifecycle": {"PreToolUse": [{"command": "sleep 30", "contains": ["junkfather"]}]}})
+        started = time.monotonic()
+        self.assertIsNone(self.bash("bash_guard.py", "junkfather list"))
+        self.assertLess(time.monotonic() - started, 10)
+
+
 # ---- the lease guard, with real processes -------------------------------------------------------------------------
 
 FAKE_STATUS = r'''#!/usr/bin/env python3

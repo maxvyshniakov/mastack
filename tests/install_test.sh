@@ -236,6 +236,37 @@ check "its target gets the hook" grep -q bash_guard "$scratch/dotfiles/settings.
 rm -f "$sf"
 check "--settings names another file" sh -c "'$root/bin/install' --target '$t' --only hooks --settings '$scratch/other.json' >/dev/null && grep -q bash_guard '$scratch/other.json'"
 
+# Lifecycle events the machine settings list get one dispatcher group each.
+rm -f "$sf" "$scratch"/settings.json.mastack-backup-*
+cat > "$sf" <<'EOF'
+{"hooks": {"SubagentStop": [{"hooks": [{"type": "command", "command": "python3 /opt/app/tools/agent-hooks/lane-stop.py"}]}]}}
+EOF
+cp "$MASTACK_CONFIG/hooks.json" "$scratch/hooks.json.plain"
+cat > "$MASTACK_CONFIG/hooks.json" <<'EOF'
+{"lifecycle": {"SubagentStop": ["tool hook"], "SessionEnd": ["tool hook"], "Stop": [],
+               "PreToolUse": [{"command": "tool hook", "contains": ["tool"]}]}}
+EOF
+life() { python3 -c "import json, sys; s = json.load(open(sys.argv[1])); e = sys.argv[2]; print(sum(1 for g in s['hooks'].get(e, []) for h in g['hooks'] if h['command'].endswith('hooks/lifecycle.py ' + e)))" "$sf" "$1"; }
+install --only hooks
+check "a listed lifecycle event gets the dispatcher" test "$(life SubagentStop)$(life SessionEnd)" = "11"
+check "an empty or unlisted event gets none" test "$(life Stop)$(life SessionStart)" = "00"
+check "PreToolUse observers need no group of their own" py "len($commands) == 1"
+check "another tool's SubagentStop hook stays first" py "s['hooks']['SubagentStop'][0]['hooks'][0]['command'].endswith('lane-stop.py')"
+check "the lifecycle commands are recorded" grep -q "lifecycle.py SessionEnd" "$MASTACK_CONFIG/hooks-installed.json"
+registered_life=$(python3 -c "import json, sys; s = json.load(open(sys.argv[1])); print(s['hooks']['SessionEnd'][0]['hooks'][0]['command'])" "$sf")
+silent() { local out; out=$(printf '{}' | sh -c "$1") && [ -z "$out" ]; }
+check "the registered dispatcher runs and stays silent" silent "$registered_life"
+cp "$sf" "$scratch/settings.life"
+install --only hooks
+check "a second lifecycle install is a no-op" cmp -s "$sf" "$scratch/settings.life"
+python3 -c "import json, sys; p = sys.argv[1]; d = json.load(open(p)); del d['lifecycle']['SessionEnd']; json.dump(d, open(p, 'w'))" "$MASTACK_CONFIG/hooks.json"
+install --only hooks
+check "an event no longer listed loses its dispatcher" test "$(life SessionEnd)$(life SubagentStop)" = "01"
+install --uninstall --only hooks
+check "uninstall removes the lifecycle dispatchers" test "$(life SubagentStop)" = "0"
+check "uninstall keeps the other SubagentStop hook" py "s['hooks']['SubagentStop'][0]['hooks'][0]['command'].endswith('lane-stop.py')"
+mv "$scratch/hooks.json.plain" "$MASTACK_CONFIG/hooks.json"
+
 if ((failures)); then
   echo "install_test: $failures failure(s)" >&2
   exit 1
