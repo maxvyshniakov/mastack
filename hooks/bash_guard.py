@@ -74,9 +74,12 @@ def guard(data: dict):
     its text (`lifecycle.PreToolUse` in the machine settings; hooks/lifecycle.py). They see the call and cannot
     change the decision."""
     decision = decide(data)
-    lifecycle = hook_io.config().get("lifecycle")
-    if not (decision and decision[0] == "deny") and isinstance(lifecycle, dict) and lifecycle.get("PreToolUse"):
-        importlib.import_module("lifecycle").observe(data)
+    try:
+        lifecycle = hook_io.config().get("lifecycle")
+        if not (decision and decision[0] == "deny") and isinstance(lifecycle, dict) and lifecycle.get("PreToolUse"):
+            importlib.import_module("lifecycle").observe(data, hook_io.remaining())
+    except Exception as error:  # noqa: BLE001 - an observer never costs the decision
+        hook_io.log("guard.log", f"lifecycle observer error {error!r}")
     return decision
 
 

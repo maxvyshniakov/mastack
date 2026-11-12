@@ -524,6 +524,18 @@ class LifecycleTests(HookCase):
         self.assertEqual([("junkfather own -- vite", "a1")],
                          [(c["tool_input"]["command"], c.get("agent_id")) for c in claims])
 
+    def test_observers_get_only_what_the_checks_left_of_the_budget(self):
+        import lifecycle
+        self.settings({"lifecycle": {"PreToolUse": [{"command": self.recorder("late"), "contains": ["junkfather"]}]}})
+        data = {"tool_name": "Bash", "tool_input": {"command": "junkfather list"}}
+        with mock.patch.dict(os.environ, {"MASTACK_CONFIG": str(self.config),
+                                          "MASTACK_HOOK_STATE": str(self.tmp / "state")}):
+            hook_io_reset()
+            lifecycle.observe(data, left=0.05)
+            hook_io_reset()
+        self.assertEqual([], self.seen("late"))
+        self.assertIn("spent the budget", (self.tmp / "state" / "guard.log").read_text())
+
     def test_a_slow_observer_is_cut_off_and_the_command_still_passes(self):
         self.settings({"lifecycle": {"PreToolUse": [{"command": "sleep 30", "contains": ["junkfather"]}]}})
         started = time.monotonic()

@@ -72,11 +72,15 @@ def run(event: str, data: dict, raw: str, budget: float) -> int:
     return ran
 
 
-def observe(data: dict) -> None:
-    """bash_guard's call for a Bash command that is not denied: the PreToolUse observers."""
+def observe(data: dict, left: float | None = None) -> None:
+    """bash_guard's call for a Bash command that is not denied: the PreToolUse observers, within OBSERVER_BUDGET and
+    what is `left` of the checks' budget, so the decision always reaches Claude Code before the hook's timeout."""
     try:
-        if entries("PreToolUse"):
-            run("PreToolUse", data, json.dumps(data), OBSERVER_BUDGET)
+        budget = OBSERVER_BUDGET if left is None else min(OBSERVER_BUDGET, left)
+        if budget <= 0.1:
+            hook_io.log("guard.log", "lifecycle PreToolUse skipped: the checks spent the budget")
+        elif entries("PreToolUse"):
+            run("PreToolUse", data, json.dumps(data), budget)
     except Exception as error:  # noqa: BLE001 - an observer never changes the decision
         hook_io.log("guard.log", f"lifecycle PreToolUse error {error!r}")
 
