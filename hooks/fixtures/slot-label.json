@@ -1,0 +1,121 @@
+{
+  "comment": "slot label: a `slotfather run` the agent types must carry a --label that names the task and what it does, since everyone reads labels on the slotfather dashboard to decide whether to wait or reprioritize. Deny cases name why the label is refused (`says`) and the example label built from the command (`example`); allow cases include the wrappers that lease on their own (Lanefather, repo-kit, project verify scripts) and a pasted Lanefather lease. Commands run in {home}/app unless `cwd` says otherwise.",
+  "deny": [
+    {
+      "name": "no label",
+      "command": "slotfather run -n 1 -- python3 -m unittest discover -s tests",
+      "says": "has no --label",
+      "example": "--label \"<ticket> unittest-discover\""
+    },
+    {
+      "name": "no label, ticket given",
+      "command": "slotfather run -n 2 --priority batch --ticket gf-1b -- cargo test",
+      "says": "has no --label",
+      "example": "--label \"gf-1b cargo-test\""
+    },
+    {
+      "name": "label equal to the directory name",
+      "command": "slotfather run -n 1 --label app -- bun run build",
+      "says": "`app` is the directory's name",
+      "example": "--label \"<ticket> build\""
+    },
+    {
+      "name": "directory name after a cd",
+      "command": "cd {home}/kit && slotfather run -n 1 --label kit -- ./verify.sh --checks lint",
+      "says": "`kit` is the directory's name",
+      "example": "--label \"<ticket> verify\""
+    },
+    {
+      "name": "generic word",
+      "command": "slotfather run -n 1 --label scratchpad -- node bench.mjs",
+      "says": "`scratchpad` is only generic words",
+      "example": "--label \"<ticket> bench\""
+    },
+    {
+      "name": "generic words only, short option",
+      "command": "slotfather run -l 'run tests' -- swift test",
+      "says": "`run tests` is only generic words",
+      "example": "--label \"<ticket> swift-test\""
+    },
+    {
+      "name": "inside a chain, by full path",
+      "command": "set -o pipefail; ~/.local/bin/slotfather run -n 1 --priority batch -- uv run pytest -q | tail -5",
+      "says": "has no --label",
+      "example": "--label \"<ticket> pytest\""
+    },
+    {
+      "name": "inside sh -c",
+      "command": "sh -c 'slotfather run -n 1 --label test -- make check'",
+      "says": "`test` is only generic words",
+      "example": "--label \"<ticket> make-check\""
+    },
+    {
+      "name": "inside a command substitution",
+      "command": "out=$(slotfather run -n 1 -- go test ./...) && echo \"$out\"",
+      "says": "has no --label",
+      "example": "--label \"<ticket> go-test\""
+    },
+    {
+      "name": "lane meta without a label",
+      "command": "slotfather run -n 1 --meta lane=597-x --meta phase=check -- python3 tools/check.py",
+      "says": "has no --label",
+      "example": "--label \"597-x check\""
+    },
+    {
+      "name": "inside bash -lc",
+      "command": "bash -lc 'slotfather run -n 1 -- make lint'",
+      "says": "has no --label",
+      "example": "--label \"<ticket> make-lint\""
+    },
+    {
+      "name": "example pasted with its placeholder",
+      "command": "slotfather run -n 1 --label \"<ticket> build\" -- bun run build",
+      "says": "still holds the placeholder `<ticket>`",
+      "example": "--label \"<ticket> build\""
+    },
+    {
+      "name": "empty label",
+      "command": "slotfather run -n 1 --label '' -- python3 -u tools/bench.py",
+      "says": "has an empty --label",
+      "example": "--label \"<ticket> bench\""
+    }
+  ],
+  "allow": [
+    {
+      "name": "task and what it does",
+      "command": "slotfather run -n 1 --priority batch --label \"gf-1b cpu-measure\" -- python3 tools/measure.py"
+    },
+    {
+      "name": "one hyphenated word that says both",
+      "command": "slotfather run -n 1 --label slotfather-queue-check -- python3 tools/check.py"
+    },
+    {
+      "name": "label in a variable",
+      "command": "slotfather run -n 1 --label \"$LABEL\" -- make"
+    },
+    {
+      "name": "Lanefather lease, pasted",
+      "command": "/usr/local/bin/slotfather run -n 1 --label lane-480-x --meta lane=480-x --meta lanefather.state=checking --priority normal -- ./verify.sh --checks lint"
+    },
+    {
+      "name": "Lanefather check",
+      "command": "tools/lane check 597-x"
+    },
+    {
+      "name": "repo-kit verify",
+      "command": "repo-kit verify"
+    },
+    {
+      "name": "project verify script",
+      "command": "./verify.sh --checks syntax"
+    },
+    {
+      "name": "other slotfather verbs",
+      "command": "slotfather status --json && slotfather history 20"
+    },
+    {
+      "name": "mentioned, not run",
+      "command": "grep -n 'slotfather run' docs/agents/checks.md && echo slotfather run -n 1"
+    }
+  ]
+}

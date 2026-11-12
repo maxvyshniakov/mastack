@@ -226,6 +226,7 @@ hook too; its docstring defines exactly what it denies.
 | `unguarded_sequence` | a mutating step (git merge, push, commit ..., `gh pr merge`, `gh issue close`, Lanefather lane/ref mutations, and the project's own steps) after `;` or a newline whose earlier step may have failed |
 | `zsh_word_split` | an unquoted scalar `$var` that zsh, the Bash tool's shell, passes as one word where bash splits it |
 | `pgrep_self_match` | a `pgrep -f` that waits (an if, while or until condition, a loop body) or a `pkill -f` anywhere, whose literal pattern matches its own command, so it finds every agent shell running that text (a wait loop never ends) |
+| `slot_label` | a `slotfather run` (also in chains, substitutions and `sh -c`) without `--label`, or labelled with its directory's name or only generic words (`scratchpad`, `test`, `run` ...); the message shows `<task or ticket> <what it does>` with an example built from the command. Wrappers that lease on their own (Lanefather, repo-kit, verify scripts) pass |
 | `lease_guard` | a `kill`, `pkill` or `killall` that reaches a process inside another holder's `slotfather` lease; passes when slotfather is absent |
 | `shell_pitfalls` | GNU-only forms that fail on macOS: GNU `timeout`, GNU cat's show-all flag |
 

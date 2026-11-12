@@ -343,6 +343,34 @@ class ShellPitfallsTests(HookCase):
         self.assertFailsOpen("shell_pitfalls.py")
 
 
+class SlotLabelTests(HookCase):
+    cases = fixture("slot-label.json")
+
+    def decide(self, case, script="slot_label.py"):
+        return self.bash(script, case["command"], case.get("cwd", "{home}/app"))
+
+    @staticmethod
+    def expect(test, case, reason):
+        test.assertIn(case["says"], reason)
+        test.assertIn(case["example"], reason)
+        test.assertIn("<task or ticket> <what it does>", reason)
+        test.assertIn("everyone reads labels on the slotfather dashboard", reason)
+
+    def test_missing_directory_and_generic_labels_are_denied_with_an_example(self):
+        for case in self.cases["deny"]:
+            with self.subTest(case["name"]):
+                self.expect(self, case, self.denied(self.decide(case)))
+
+    def test_meaningful_labels_and_wrappers_pass(self):
+        for case in self.cases["allow"]:
+            with self.subTest(case["name"]):
+                self.assertIsNone(self.decide(case))
+
+    def test_unreadable_or_empty_input_passes(self):
+        self.assertFailsOpen("slot_label.py")
+        self.assertIsNone(self.decide({"command": "slotfather run -n 1 -- echo \"unterminated"}))
+
+
 # ---- the dispatcher -----------------------------------------------------------------------------------------------
 
 class BashGuardTests(HookCase):
@@ -360,7 +388,9 @@ class BashGuardTests(HookCase):
                 (PgrepSelfMatchTests, PgrepSelfMatchTests.cases, PgrepSelfMatchTests.expect,
                  ("pgrep-self-match denied",), lambda t, c: t.decide(c["command"], "bash_guard.py")),
                 (ShellPitfallsTests, ShellPitfallsTests.cases, ShellPitfallsTests.expect,
-                 ("macOS has no", "BSD cat"), lambda t, c: t.decide(c["command"], "bash_guard.py"))]
+                 ("macOS has no", "BSD cat"), lambda t, c: t.decide(c["command"], "bash_guard.py")),
+                (SlotLabelTests, SlotLabelTests.cases, SlotLabelTests.expect, ("slot-label denied",),
+                 lambda t, c: t.decide(c, "bash_guard.py"))]
         for kind, cases, expect, mine, decide in sets:
             runner = kind()
             runner.__dict__.update(self.__dict__)

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- New Bash check `slot_label`: `bash_guard` refuses a `slotfather run` without
+  `--label`, or labelled with the directory's name or only generic words, since
+  everyone reads labels on the dashboard to decide whether to wait or
+  reprioritize. The refusal gives the format `<task or ticket> <what it does>`
+  and an example built from the command. Wrappers that lease on their own
+  (Lanefather, repo-kit, project verify scripts) are not affected.
+
 - New skill `test-audit`: a periodic, read-only audit of a test suite (monthly,
   or when gate time or flaky failures rise). It ranks suites by run history
   and reports fakes nobody checks against the real thing, tests at the wrong

@@ -34,6 +34,7 @@ CHECKS = (
     ("zsh_word_split", "zsh-word-split", ("$",)),
     ("unguarded_sequence", "unguarded-sequence", (";", "\n")),
     ("pgrep_self_match", "pgrep-self-match", ("pgrep", "pkill")),
+    ("slot_label", "slot-label", ("slotfather",)),
     ("lease_guard", "lease-guard", ("kill",)),
 )
 ONLY_WITHOUT_DENY = {"lease_guard"}
