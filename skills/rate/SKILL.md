@@ -38,9 +38,10 @@ Fix the largest gaps first. Each fix is ordinary work under its own skill
 ## 4. Re-score blind
 
 The one who made the fixes does not grade them. A fresh agent, of another model
-family if available (`review` role in `models.toml`), gets the artifact, the
-fixed rubric and the evidence commands, but not the list of fixes or the old
-scores. Its score is the result.
+family if available (what `<this skill's directory>/../../bin/role review
+--implementer-family <family>` prints), gets the artifact, the fixed rubric
+and the evidence commands, but not the list of fixes or the old scores. Its
+score is the result.
 
 ## 5. Stop
 

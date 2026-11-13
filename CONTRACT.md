@@ -135,7 +135,7 @@ them.
 
 ## Review
 - When lanes are reviewed (per lane, per batch) and what blocks a land. The
-  reviewer model comes from `checks.md` under Review, else `models.toml`.
+  reviewer model comes from `checks.md` under Review, else `role review`.
 
 ## Owner queue
 - Where questions and approvals for the owner go and how they are batched,

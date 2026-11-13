@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Which model takes a role now, by models.toml and the live quotas its conditions name.
+
+    bin/role <role> [--implementer-family F] [--json]
+
+Takes the role's first choice whose conditions hold (`when.limit`, `when.not_family`, the role's `only_families`)
+and prints its model, id, family and effort, each headless command of its `[cli.*]` with {id} and {effort} filled,
+its note, and why every earlier choice was skipped. A quota that cannot be read counts as not met and says why.
+`--implementer-family` is the family of the model whose work is reviewed; `not_family` is not met without it.
+
+MASTACK_MODELS names another table; MASTACK_CODEX another Codex CLI than `codex` on PATH. The quota read is stored
+in the hook's state directory for the codex_credits check.
+
+Exit 0 with a choice, 1 when no choice qualifies, 2 when the table or the role cannot be read.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
+
+import model_roles  # noqa: E402
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("role")
+    parser.add_argument("--implementer-family", metavar="F", help="family of the implementer, e.g. anthropic")
+    parser.add_argument("--json", action="store_true", help="print the answer as JSON")
+    args = parser.parse_args()
+    try:
+        table = model_roles.load()
+        choice, skipped, quotas = model_roles.resolve(table, args.role, args.implementer_family)
+    except model_roles.TableError as error:
+        print(f"role: {error}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(model_roles.as_json(args.role, choice, skipped, quotas), indent=2))
+    else:
+        print(model_roles.describe(args.role, choice, skipped))
+    return 0 if choice else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

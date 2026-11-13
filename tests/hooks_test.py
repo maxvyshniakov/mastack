@@ -11,11 +11,13 @@ import json
 import os
 import pathlib
 import pwd
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import unittest
 from unittest import mock
 
@@ -23,6 +25,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOKS = ROOT / "hooks"
 FIXTURES = HOOKS / "fixtures"
 sys.path.insert(0, str(HOOKS))
+sys.path.insert(0, str(ROOT / "tests"))
+
+import fake_codex  # noqa: E402
 
 # The project steps the unguarded-sequence fixtures were recorded with, as a project's docs/agents/hooks.json.
 PROJECT_STEPS = ["tools/lane land", "tools/lane promote", "tools/lane start", "tools/lane adopt", "tools/lane done",
@@ -371,6 +376,104 @@ class SlotLabelTests(HookCase):
         self.assertIsNone(self.decide({"command": "slotfather run -n 1 -- echo \"unterminated"}))
 
 
+class CodexCreditsTests(HookCase):
+    """A headless Codex run is refused while the weekly limit is below the review role's threshold. A stand-in
+    codex (tests/fake_codex.py) reports the limit; nothing starts the real CLI."""
+
+    cases = fixture("codex-credits.json")
+    models = tomllib.loads((ROOT / "models.toml").read_text())
+
+    def stand_in(self, used: float | None = 100, **env: str):
+        """codex on PATH reporting `used` percent of the weekly limit; None: no codex at all."""
+        if not getattr(self, "codex_log", None):
+            fake_codex.install(self.tmp / "codex-bin")
+            self.codex_log = self.tmp / "codex.log"
+        self.env = {k: v for k, v in self.env.items() if not k.startswith("FAKE_CODEX_")}
+        self.env.update(PATH=f"{self.tmp / 'codex-bin'}:/usr/bin:/bin" if used is not None else "/usr/bin:/bin",
+                        FAKE_CODEX_LOG=str(self.codex_log), FAKE_CODEX_USED=str(used or 0), **env)
+
+    def decide(self, case, script="codex_credits.py"):
+        if not getattr(self, "codex_log", None):
+            self.stand_in()
+        return self.bash(script, case["command"], case.get("cwd", "{home}/app"))
+
+    def reads(self) -> int:
+        log = getattr(self, "codex_log", None)
+        return sum(json.loads(line)[:1] == ["app-server"] for line in log.read_text().splitlines()) \
+            if log and log.exists() else 0
+
+    @classmethod
+    def expect(cls, test, case, reason):
+        opus = cls.models["models"]["opus"]["id"]
+        test.assertIn("codex-credits denied", reason)
+        test.assertIn("0% left", reason)
+        test.assertIn("needs 15%", reason)
+        test.assertIn(f"`role review` picks opus ({opus}), effort medium", reason)
+        test.assertIn(f"claude -p --model {opus} --effort medium", reason)
+        test.assertIn("MASTACK_ALLOW_CREDITS=1", reason)
+
+    def test_a_headless_run_on_an_exhausted_limit_is_denied_with_the_fallback_and_the_override(self):
+        for case in self.cases["deny"]:
+            with self.subTest(case["name"]):
+                self.expect(self, case, self.denied(self.decide(case)))
+
+    def test_mentions_help_and_the_owners_override_pass(self):
+        for case in self.cases["allow"]:
+            with self.subTest(case["name"]):
+                self.assertIsNone(self.decide(case))
+
+    def test_a_limit_with_room_passes(self):
+        self.stand_in(used=50)
+        self.assertIsNone(self.decide({"command": "codex exec 'review'"}))
+
+    def test_a_reached_limit_is_denied_even_with_room_left(self):
+        self.stand_in(used=40, FAKE_CODEX_REACHED="rate_limit_reached")
+        self.assertIn("Codex reports rate_limit_reached", self.denied(self.decide({"command": "codex exec x"})))
+
+    def test_a_missing_silent_or_failing_codex_passes_without_a_word(self):
+        for name, env in (("missing", {"used": None}), ("silent", {"FAKE_CODEX_MODE": "silent"}),
+                          ("error", {"FAKE_CODEX_MODE": "error"})):
+            with self.subTest(name):
+                self.stand_in(**env)
+                shutil.rmtree(self.tmp / "state", ignore_errors=True)
+                self.assertIsNone(self.decide({"command": "codex exec 'review'"}))
+
+    def test_the_read_is_reused_for_a_few_minutes(self):
+        self.stand_in(used=100)
+        self.denied(self.decide({"command": "codex exec one"}))
+        self.denied(self.decide({"command": "codex exec two"}))
+        self.assertEqual(self.reads(), 1)
+        self.stand_in(used=50)
+        cache = self.tmp / "state" / "codex-limit.json"
+        stored = json.loads(cache.read_text())
+        cache.write_text(json.dumps({**stored, "read_at": stored["read_at"] - 600}))
+        self.assertIsNone(self.decide({"command": "codex exec three"}))
+        self.assertEqual(self.reads(), 2)
+
+    def test_a_command_that_runs_no_model_reads_no_quota(self):
+        self.stand_in(used=100)
+        for case in self.cases["allow"]:
+            self.decide(case)
+        self.assertEqual(self.reads(), 0)
+
+    def test_the_override_is_logged(self):
+        self.stand_in(used=100)
+        self.assertIsNone(self.decide({"command": "MASTACK_ALLOW_CREDITS=1 codex exec 'review'"}))
+        self.assertIn("codex-credits override", (self.tmp / "state" / "guard.log").read_text())
+
+    def test_a_table_without_a_codex_threshold_reads_no_quota(self):
+        table = self.tmp / "models.toml"
+        table.write_text(re.sub(r"(?s)\[roles\.review\].*?\]\n\n", "[roles.review]\nchoices = [{ model = \"opus\" }]\n\n",
+                                (ROOT / "models.toml").read_text()))
+        self.stand_in(used=100, MASTACK_MODELS=str(table))
+        self.assertIsNone(self.decide({"command": "codex exec 'review'"}))
+        self.assertEqual(self.reads(), 0)
+
+    def test_unreadable_or_empty_input_passes(self):
+        self.assertFailsOpen("codex_credits.py")
+        self.assertIsNone(self.decide({"command": "codex exec \"unterminated"}))
+
+
 # ---- the dispatcher -----------------------------------------------------------------------------------------------
 
 class BashGuardTests(HookCase):
@@ -390,6 +493,8 @@ class BashGuardTests(HookCase):
                 (ShellPitfallsTests, ShellPitfallsTests.cases, ShellPitfallsTests.expect,
                  ("macOS has no", "BSD cat"), lambda t, c: t.decide(c["command"], "bash_guard.py")),
                 (SlotLabelTests, SlotLabelTests.cases, SlotLabelTests.expect, ("slot-label denied",),
+                 lambda t, c: t.decide(c, "bash_guard.py")),
+                (CodexCreditsTests, CodexCreditsTests.cases, CodexCreditsTests.expect, ("codex-credits denied",),
                  lambda t, c: t.decide(c, "bash_guard.py"))]
         for kind, cases, expect, mine, decide in sets:
             runner = kind()

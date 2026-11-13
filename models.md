@@ -38,6 +38,31 @@ evals, and update the reasons here if they changed.
 
 ## Running a role
 
-`[cli.*]` in the table gives the headless command for each CLI. Skills that
-start another model (`cross-review`) and tools that run lanes read the role,
-take the first choice whose conditions hold, and fill in `{id}` and `{effort}`.
+`bin/role <role> [--implementer-family F] [--json]` decides, so nobody reads
+the table by eye: it takes the role's first choice whose conditions hold,
+reading each quota a condition names live (`codex_weekly`: `codex app-server`,
+`account/rateLimits/read`), and prints the model, id, family, effort, each
+command of its `[cli.*]` with `{id}` and `{effort}` filled, its note, and why
+every earlier choice was skipped:
+
+```
+$ bin/role review --implementer-family anthropic
+review: opus (claude-opus-5-5, anthropic), effort medium
+  run: claude -p --model claude-opus-5-5 --effort medium
+  review: claude -p --model claude-opus-5-5 --effort medium
+  note: same family as the implementer: fresh context only, say so in the report
+skipped:
+  sol: codex_weekly 0% left, needs 15%
+  opus: same family as the implementer (anthropic)
+```
+
+A quota it cannot read (no `codex`, no answer) counts as not met and is named.
+`not_family` is not met without `--implementer-family`. Exit 1 when no choice
+qualifies, 2 when the table or the role cannot be read. `MASTACK_MODELS` names
+another table. Skills that start another model (`cross-review`, `orchestrate`,
+`research`, `rate`) run it and use its answer.
+
+The Bash hook's `codex_credits` check holds the quota rule where no skill is
+read: it refuses a headless `codex exec` or `codex review` while the weekly
+limit is under the review role's threshold, naming what `role review` picks
+instead. `MASTACK_ALLOW_CREDITS=1` before the command is the owner's override.

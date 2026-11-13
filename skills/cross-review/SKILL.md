@@ -23,8 +23,10 @@ description: Use when asked for a review, or before shipping a large change. A m
    wall-clock asserts outside a perf suite, a duplicate of an existing test of
    the same rule.
 4. **Reviewer.** The model the Review section of `docs/agents/checks.md` names,
-   else role `review` in `models.toml`: a model of a different family from the
-   implementer, with the fallback it lists. For risky surfaces
+   else what `role review --implementer-family <family>` prints
+   (`<this skill's directory>/../../bin/role`): model, effort and command,
+   and its note in the report. Use its answer, not your reading of
+   `models.toml`: only `role` reads the live quotas. For risky surfaces
    (migrations, auth, money, deletion) run both families in parallel.
 
 ## Review blind

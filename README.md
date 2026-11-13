@@ -207,9 +207,10 @@ repository's own [docs/agents/](docs/agents/) is a small example.
 [models.toml](models.toml) maps roles (design, implement, visual, review,
 routine, research, audit) to an ordered list of models with effort and
 conditions, for example "a reviewer of another family than the implementer,
-while at least 15% of the weekly Codex quota is left". Skills that start
-another model (`cross-review`, `orchestrate`) and tools read it; `[cli.*]`
-gives the headless command for each CLI. [models.md](models.md) gives the
+while at least 15% of the weekly Codex quota is left". `bin/role <role>`
+evaluates it with the live quotas and prints the model, effort and headless
+command (from `[cli.*]`); skills that start another model (`cross-review`,
+`orchestrate`, `research`) run it. [models.md](models.md) gives the
 reasons. The model ids are the author's; edit the table, not the skills, to
 use yours.
 
@@ -228,6 +229,7 @@ hook too; its docstring defines exactly what it denies.
 | `zsh_word_split` | an unquoted scalar `$var` that zsh, the Bash tool's shell, passes as one word where bash splits it |
 | `pgrep_self_match` | a `pgrep -f` that waits (an if, while or until condition, a loop body) or a `pkill -f` anywhere, whose literal pattern matches its own command, so it finds every agent shell running that text (a wait loop never ends) |
 | `slot_label` | a `slotfather run` (also in chains, substitutions and `sh -c`) without `--label`, or labelled with its directory's name or only generic words (`scratchpad`, `test`, `run` ...); the message shows `<task or ticket> <what it does>` with an example built from the command. Wrappers that lease on their own (Lanefather, repo-kit, verify scripts) pass |
+| `codex_credits` | a headless `codex exec` or `codex review` while the weekly Codex limit is under the review role's threshold in `models.toml` (billed to credits); the message names what `bin/role review` picks instead and the owner's override `MASTACK_ALLOW_CREDITS=1`. A missing or silent `codex` lets the command pass |
 | `lease_guard` | a `kill`, `pkill` or `killall` that reaches a process inside another holder's `slotfather` lease; passes when slotfather is absent |
 | `shell_pitfalls` | GNU-only forms that fail on macOS: GNU `timeout`, GNU cat's show-all flag |
 

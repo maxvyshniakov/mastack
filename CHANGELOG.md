@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- New `bin/role <role> [--implementer-family F] [--json]`: evaluates
+  `models.toml` with the live quotas its conditions name (the weekly Codex
+  limit through `codex app-server`) and prints the winning model, effort,
+  headless command and note, with the reason each earlier choice was skipped.
+  An unreadable quota counts as not met. `cross-review`, `orchestrate`,
+  `research` and `rate` run it instead of reading the table.
+- New Bash check `codex_credits`: `bash_guard` refuses a headless `codex exec`
+  or `codex review` while the weekly Codex limit is under the review role's
+  threshold, since such runs are billed to credits. The refusal names what
+  `role review` picks instead and the owner's override
+  (`MASTACK_ALLOW_CREDITS=1` before the command). The quota read is reused for
+  five minutes; a missing or silent `codex` lets every command pass.
+- `models.toml`: the implement role is Opus at effort medium.
+
 - `bin/check` before a push also scans the messages of commits not yet on
   origin/main, as the CI history scan does, so a finding in a commit message no
   longer surfaces only after the push. A message line that only closes or names

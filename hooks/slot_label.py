@@ -34,8 +34,9 @@ RUN_VERBS = {"run", "exec", "x"}
 RUN_VALUE_OPTIONS = {"-n", "--slots", "-l", "--label", "--meta", "--priority", "--ticket", "--wait"}
 
 
-def simple_commands(shell, command: str):
-    """The words of every simple command, in order, through compound commands, substitutions and `sh -c`."""
+def simple_commands(shell, command: str, whole: bool = False):
+    """The words of every simple command, in order, through compound commands, substitutions and `sh -c`: the
+    command's own words, or with `whole` also its leading assignments and wrappers (`FOO=1 env nohup ...`)."""
     import pgrep_self_match
     for words, _ in pgrep_self_match.walk(shell, shell.parse(hook_io.strip_heredocs(command))):
         own = shell.unwrap(words)
@@ -47,9 +48,9 @@ def simple_commands(shell, command: str):
             script = next((own[1 + i] for i in range(at + 1, len(literals)) if not literals[i].startswith("-")),
                           None) if at is not None else None
             if script is not None and script.literal is not None:
-                yield from simple_commands(shell, script.literal)
+                yield from simple_commands(shell, script.literal, whole)
                 continue
-        yield own
+        yield words if whole else own
 
 
 def run_options(args):

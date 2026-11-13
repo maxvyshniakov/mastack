@@ -1,5 +1,6 @@
-# Which model takes which role. Skills (cross-review) and tools read this file;
-# models.md explains the choices. When models change, edit only this file.
+# Which model takes which role. `bin/role <role>` evaluates it with the live
+# quotas; skills run that, and the Bash hook's codex_credits check reads the
+# review threshold from it. models.md explains the choices. When models change, edit only this file.
 # A project overrides the reviewer in docs/agents/checks.md, under Review.
 #
 # A role lists choices in order. The first choice whose conditions hold wins:
