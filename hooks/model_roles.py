@@ -20,6 +20,7 @@ import json
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -35,6 +36,7 @@ READ_TIMEOUT = 20.0          # seconds for `bin/role`; the hook passes what its 
 FAILED_READ_SECONDS = 60     # a failed read is reused this long at most, whatever max_age asks
 CACHE_FILE = "codex-limit.json"
 CONDITIONS = {"limit", "not_family"}
+UNKNOWN_FAMILY = "implementer family not given (pass --implementer-family)"
 
 
 class TableError(Exception):
@@ -47,6 +49,7 @@ class Quota:
     reached: str | None = None   # Codex says the limit is reached (rateLimitReachedType, spend control)
     error: str | None = None     # why it could not be read
     read_at: float = 0.0
+    resets_at: float | None = None  # when the window starts over (epoch seconds), as Codex reports it
 
 
 @dataclass
@@ -157,7 +160,7 @@ def resolve(table: dict, role: str, implementer_family: str | None = None, read=
         if isinstance(only, list) and model["family"] not in only:
             reason = f"the {role} role takes only {', '.join(only)}"
         elif when.get("not_family") and implementer_family is None:
-            reason = "the implementer's family is unknown (pass --implementer-family)"
+            reason = UNKNOWN_FAMILY
         elif when.get("not_family") and model["family"] == implementer_family:
             reason = f"same family as the implementer ({implementer_family})"
         else:
@@ -175,6 +178,15 @@ def resolve(table: dict, role: str, implementer_family: str | None = None, read=
     return None, skipped, quotas
 
 
+def caution(skipped: list) -> str | None:
+    """A warning when a choice was skipped only because the implementer's family is unknown: the winner's note
+    (such as "same family as the implementer") may then not hold."""
+    if any(entry["reason"].endswith(UNKNOWN_FAMILY) for entry in skipped):
+        return f"{UNKNOWN_FAMILY}: choices that need another family were skipped, so a note about the family " \
+               "may not apply"
+    return None
+
+
 def describe(role: str, choice: Choice | None, skipped: list) -> str:
     lines = []
     if choice:
@@ -182,6 +194,8 @@ def describe(role: str, choice: Choice | None, skipped: list) -> str:
         lines += [f"  {name}: {shlex.join(argv)}" for name, argv in choice.argv.items()]
         if choice.note:
             lines.append(f"  note: {choice.note}")
+        if caution(skipped):
+            lines.append(f"  caution: {caution(skipped)}")
     else:
         lines.append(f"{role}: no choice qualifies")
     if skipped:
@@ -192,7 +206,7 @@ def describe(role: str, choice: Choice | None, skipped: list) -> str:
 
 def as_json(role: str, choice: Choice | None, skipped: list, quotas: dict) -> dict:
     answer = asdict(choice) if choice else {"error": "no choice qualifies"}
-    return {"role": role, **answer, "skipped": skipped,
+    return {"role": role, **answer, "caution": caution(skipped), "skipped": skipped,
             "quotas": {name: {k: v for k, v in asdict(q).items() if k != "read_at"} for name, q in quotas.items()}}
 
 
@@ -215,9 +229,12 @@ def codex_weekly(timeout: float = READ_TIMEOUT, max_age: float = 0) -> Quota:
     if max_age > 0:
         stored = hook_io.read_json(str(cache))
         try:
-            quota = Quota(**{k: stored[k] for k in ("left", "reached", "error", "read_at")})
-            age = time.time() - float(quota.read_at)
-            if 0 <= age < (min(max_age, FAILED_READ_SECONDS) if quota.error else max_age):
+            quota = Quota(**{k: stored[k] for k in ("left", "reached", "error", "read_at")},
+                          resets_at=stored.get("resets_at"))
+            now = time.time()
+            age = now - float(quota.read_at)
+            reset = quota.resets_at is not None and now >= float(quota.resets_at)
+            if 0 <= age < (min(max_age, FAILED_READ_SECONDS) if quota.error else max_age) and not reset:
                 return quota
         except (KeyError, TypeError, ValueError):
             pass
@@ -238,8 +255,10 @@ def read_codex_weekly(timeout: float) -> Quota:
     if not codex:
         return Quota(error="codex is not on PATH")
     try:
+        # A session of its own, so the whole group can be stopped: the npm package's codex is a Node shim that
+        # passes SIGKILL on to nothing, and a server left behind would hold the pipes open.
         child = subprocess.Popen([codex, "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                 stderr=subprocess.DEVNULL, text=True)
+                                 stderr=subprocess.DEVNULL, text=True, start_new_session=True)
     except OSError as error:
         return Quota(error=f"codex app-server did not start: {error.strerror or error}")
     answer: dict = {}
@@ -266,20 +285,23 @@ def read_codex_weekly(timeout: float) -> Quota:
     except OSError:
         pass
     finally:
-        child.kill()
-        child.wait()
+        stop(child)
         reader.join(1)
-        for stream in (child.stdin, child.stdout):
-            try:
-                stream.close()
-            except OSError:
-                pass
+        try:
+            child.stdin.close()
+        except OSError:
+            pass
+        if not reader.is_alive():  # closing it under a reader that still waits would block on its lock
+            child.stdout.close()
     if not answer:
         return Quota(error=f"codex app-server gave no rate limits within {timeout:g} s")
     if answer.get("error"):
         error = answer["error"]
         return Quota(error=f"codex app-server: {error.get('message', error) if isinstance(error, dict) else error}")
-    limits = (answer.get("result") or {}).get("rateLimits") or {}
+    result = answer.get("result")
+    limits = result.get("rateLimits") if isinstance(result, dict) else None
+    if not isinstance(limits, dict):
+        return Quota(error=f"codex app-server gave an unexpected answer: {str(result)[:80]}")
     windows = [w for w in (limits.get("primary"), limits.get("secondary")) if isinstance(w, dict)]
     weekly = next((w for w in windows if w.get("windowDurationMins") == WEEK_MINUTES), None)
     used = (weekly or {}).get("usedPercent")
@@ -287,4 +309,23 @@ def read_codex_weekly(timeout: float) -> Quota:
         return Quota(error="codex app-server reported no weekly window")
     reached = limits.get("rateLimitReachedType") or ("spend control reached" if limits.get("spendControlReached")
                                                      else None)
-    return Quota(left=max(0, int(100 - used)), reached=reached)
+    resets = weekly.get("resetsAt")
+    return Quota(left=max(0, int(100 - used)), reached=reached if isinstance(reached, str) else None,
+                 resets_at=float(resets) if isinstance(resets, (int, float)) else None)
+
+
+def stop(child: subprocess.Popen) -> None:
+    """End the server's process group: SIGTERM, which the shim passes on, then SIGKILL for what is left."""
+    for sig, grace in ((signal.SIGTERM, 1.0), (signal.SIGKILL, 1.0)):
+        try:
+            os.killpg(child.pid, sig)
+        except OSError:
+            pass
+        try:
+            child.wait(grace)
+        except subprocess.TimeoutExpired:
+            continue
+        try:
+            os.killpg(child.pid, 0)
+        except OSError:
+            return  # the whole group is gone

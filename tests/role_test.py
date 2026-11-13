@@ -13,9 +13,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 import tomllib
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ROLE = ROOT / "bin" / "role"
@@ -24,7 +24,6 @@ sys.path.insert(0, str(ROOT / "hooks"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import fake_codex  # noqa: E402
-import hook_io  # noqa: E402
 import model_roles  # noqa: E402
 
 
@@ -39,10 +38,8 @@ class RoleCase(unittest.TestCase):
         fake_codex.install(self.tmp / "bin")
         (self.tmp / "config").mkdir()
         self.log = self.tmp / "codex.log"
-        self.env = {k: v for k, v in os.environ.items()
-                    if not k.startswith(("MASTACK_", "FAKE_CODEX_")) and k != "XDG_STATE_HOME"}
-        self.env.update(PATH=f"{self.tmp / 'bin'}:/usr/bin:/bin", HOME=str(self.tmp), FAKE_CODEX_LOG=str(self.log),
-                        MASTACK_CONFIG=str(self.config_dir), MASTACK_HOOK_STATE=str(self.tmp / "state"))
+        self.env = fake_codex.environment(os.environ, self.tmp / "bin", self.log, HOME=str(self.tmp),
+                                          MASTACK_CONFIG=str(self.config_dir), MASTACK_HOOK_STATE=str(self.tmp / "state"))
 
     @property
     def config_dir(self) -> pathlib.Path:
@@ -66,7 +63,7 @@ class RoleCase(unittest.TestCase):
         return str(path)
 
     def spawns(self) -> int:
-        return len(self.log.read_text().splitlines()) if self.log.exists() else 0
+        return fake_codex.reads(self.log)
 
 
 class ResolveTests(RoleCase):
@@ -138,6 +135,18 @@ class ResolveTests(RoleCase):
         self.assertIsNotNone(answer["note"])
         self.assertIn("--implementer-family", answer["skipped"][0]["reason"])
 
+    def test_without_the_implementer_family_the_answer_says_so(self):
+        proc = self.role("review", used=50)
+        self.assertIn("implementer family not given", proc.stdout)
+        self.assertIn("implementer family not given", self.answer("review", used=50)["caution"])
+        self.assertIsNone(self.answer("review", "--implementer-family", "openai", used=50)["caution"])
+
+    def test_a_malformed_answer_is_named_without_a_traceback(self):
+        proc = self.role("routine", FAKE_CODEX_MODE="malformed")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+        self.assertIn("codex_weekly unreadable", proc.stdout)
+
     def test_only_families_skips_the_other_family(self):
         path = self.table(TABLE_HEAD + '[roles.visual]\nonly_families = ["anthropic"]\n'
                           'choices = [{ model = "sol", effort = "high" }, { model = "opus", effort = "high" }]\n')
@@ -178,28 +187,33 @@ class QuotaReadTests(RoleCase):
 
     def setUp(self):
         super().setUp()
-        self.saved = {k: os.environ.get(k) for k in self.env}
-        os.environ.update(self.env)
-        os.environ.pop("FAKE_CODEX_MODE", None)
-        hook_io._config = None
-        self.addCleanup(self.restore)
+        patcher = mock.patch.dict(os.environ, self.env, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        model_roles.hook_io._config = None
+        self.addCleanup(setattr, model_roles.hook_io, "_config", None)
 
-    def restore(self):
-        for key, value in self.saved.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
-        for key in ("FAKE_CODEX_MODE", "FAKE_CODEX_USED"):
-            os.environ.pop(key, None)
-        hook_io._config = None
+    def age(self, seconds: float, **fields):
+        """Make the stored read `seconds` older, with `fields` changed."""
+        cache = self.tmp / "state" / "codex-limit.json"
+        stored = json.loads(cache.read_text())
+        cache.write_text(json.dumps({**stored, "read_at": stored["read_at"] - seconds, **fields}))
 
-    def test_a_hanging_codex_is_cut_off_at_the_timeout(self):
-        os.environ["FAKE_CODEX_MODE"] = "hang"
-        started = time.monotonic()
-        quota = model_roles.codex_weekly(timeout=0.5)
-        self.assertLess(time.monotonic() - started, 5)
-        self.assertIsNotNone(quota.error)
+    def test_a_hanging_codex_is_cut_off_and_its_processes_stopped(self):
+        """The npm package's codex is a shim that does not pass SIGKILL on to the server it started."""
+        for shim in (False, True):
+            with self.subTest(shim=shim):
+                fake_codex.install(self.tmp / "bin", shim=shim)
+                probe = ("import sys; sys.path.insert(0, sys.argv[1]); import model_roles; "
+                         "print(model_roles.codex_weekly(timeout=0.5).error)")
+                proc = subprocess.run([sys.executable, "-c", probe, str(ROOT / "hooks")], capture_output=True,
+                                      text=True, env={**self.env, "FAKE_CODEX_MODE": "hang"}, timeout=30)
+                self.assertIn("gave no rate limits", proc.stdout, proc.stderr)
+                self.assertEqual(fake_codex.alive(self.log), [])
+
+    def test_a_result_that_is_not_an_object_is_an_unreadable_quota(self):
+        os.environ["FAKE_CODEX_MODE"] = "malformed"
+        self.assertIn("unexpected", model_roles.codex_weekly(timeout=10).error)
 
     def test_a_fresh_stored_read_is_reused_and_a_stale_one_read_again(self):
         os.environ["FAKE_CODEX_USED"] = "100"
@@ -207,22 +221,50 @@ class QuotaReadTests(RoleCase):
         os.environ["FAKE_CODEX_USED"] = "50"
         self.assertEqual(model_roles.codex_weekly(timeout=10, max_age=300).left, 0)
         self.assertEqual(self.spawns(), 1)
-        cache = self.tmp / "state" / "codex-limit.json"
-        stored = json.loads(cache.read_text())
-        cache.write_text(json.dumps({**stored, "read_at": stored["read_at"] - 301}))
+        self.age(301)
         self.assertEqual(model_roles.codex_weekly(timeout=10, max_age=300).left, 50)
         self.assertEqual(self.spawns(), 2)
+
+    def test_a_stored_read_ends_when_the_window_resets(self):
+        os.environ["FAKE_CODEX_USED"] = "100"
+        self.assertEqual(model_roles.codex_weekly(timeout=10, max_age=300).left, 0)
+        self.age(10, resets_at=time_now() - 1)
+        os.environ["FAKE_CODEX_USED"] = "0"
+        self.assertEqual(model_roles.codex_weekly(timeout=10, max_age=300).left, 100)
+        self.assertEqual(self.spawns(), 2)
+
+    def test_the_reset_time_is_stored(self):
+        os.environ.update(FAKE_CODEX_USED="100", FAKE_CODEX_RESETS_AT="1900000000")
+        self.assertEqual(model_roles.codex_weekly(timeout=10).resets_at, 1900000000)
 
     def test_a_failed_read_is_kept_only_briefly(self):
         os.environ["FAKE_CODEX_MODE"] = "silent"
         self.assertIsNotNone(model_roles.codex_weekly(timeout=10, max_age=300).error)
         self.assertIsNotNone(model_roles.codex_weekly(timeout=10, max_age=300).error)
         self.assertEqual(self.spawns(), 1)
-        cache = self.tmp / "state" / "codex-limit.json"
-        stored = json.loads(cache.read_text())
-        cache.write_text(json.dumps({**stored, "read_at": stored["read_at"] - model_roles.FAILED_READ_SECONDS - 1}))
+        self.age(model_roles.FAILED_READ_SECONDS + 1)
         os.environ.pop("FAKE_CODEX_MODE")
         self.assertIsNone(model_roles.codex_weekly(timeout=10, max_age=300).error)
+
+
+class SkillTests(unittest.TestCase):
+    def test_every_skill_that_picks_a_model_runs_role_through_its_own_link(self):
+        """`<this skill's directory>/scripts/role` works whether the path is resolved physically or by text, as an
+        agent normalising `..` would, since the link sits inside the installed skill directory."""
+        named = [path.parent for path in (ROOT / "skills").glob("*/SKILL.md")
+                 if any(text in path.read_text() for text in ("bin/role", "scripts/role", "models.toml"))]
+        self.assertGreaterEqual({p.name for p in named}, {"cross-review", "orchestrate", "research", "rate"})
+        for skill in named:
+            with self.subTest(skill.name):
+                text = (skill / "SKILL.md").read_text()
+                self.assertIn("<this skill's directory>/scripts/role", text)
+                self.assertNotIn("../../bin/role", text)
+                self.assertEqual((skill / "scripts" / "role").resolve(), ROLE.resolve())
+
+
+def time_now() -> float:
+    import time
+    return time.time()
 
 
 TABLE_HEAD = '''schema = 1

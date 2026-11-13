@@ -47,7 +47,7 @@ review = ["codex", "review", "-c", "model=\"{id}\"", "-c", "model_reasoning_effo
 # Quotas the conditions refer to.
 [limits.codex_weekly]
 meaning = "percent of the weekly Codex limit left"
-read = "codex app-server, method account/rateLimits/read: 100 - primary.usedPercent (window 10080 min)"
+read = "codex app-server, method account/rateLimits/read: 100 - usedPercent of the window whose windowDurationMins is 10080 (primary or secondary)"
 
 [roles.design]
 purpose = "plans, interface design, final synthesis, judgment calls"

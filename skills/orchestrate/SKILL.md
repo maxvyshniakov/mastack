@@ -36,8 +36,8 @@ repository, so `cleanup` finds them.
 ## Run
 
 4. **Launch** each lane in the background with the model and effort
-   `role implement` prints (`<this skill's directory>/../../bin/role`; it reads
-   the live quotas):
+   `<this skill's directory>/scripts/role implement` prints (it reads the
+   live quotas):
    a short prompt with ticket links, base branch, claims, which lanes work
    nearby, [references/implementer.md](references/implementer.md), and the
    project's brief additions and report labels. Point at the spec and tickets;

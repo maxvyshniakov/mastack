@@ -91,8 +91,8 @@ them.
 ## Review
 - Project rules the reviewer checks on top of the documented standards, and
   what it ignores.
-- Reviewer model, only when it differs from the `review` role in
-  `models.toml`, with the reason, e.g. "Opus medium: the other family has no
+- Reviewer model, only when it differs from what `bin/role review` picks,
+  with the reason, e.g. "Opus medium: the other family has no
   access to this repository".
 ```
 

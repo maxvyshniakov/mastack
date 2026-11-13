@@ -12,7 +12,16 @@
     {"name": "inside bash -lc", "command": "bash -lc 'codex exec \"review the diff\"'"},
     {"name": "behind env and nohup", "command": "env FOO=1 nohup codex exec 'review' > out.log 2>&1 &"},
     {"name": "an override that is not 1", "command": "MASTACK_ALLOW_CREDITS=0 codex exec 'review'"},
-    {"name": "the override on another command only", "command": "MASTACK_ALLOW_CREDITS=1 true && codex exec 'review'"}
+    {"name": "the override on another command only", "command": "MASTACK_ALLOW_CREDITS=1 true && codex exec 'review'"},
+    {"name": "leased through slotfather", "command": "slotfather run -n 1 --label 'r5 sol review' -- codex exec 'review'"},
+    {"name": "owned by junkfather", "command": "junkfather own --ttl 20m --label r5 -- codex review --base main"},
+    {"name": "behind gtimeout with options", "command": "gtimeout -k 10 600 codex exec 'review'"},
+    {"name": "behind xargs", "command": "printf '%s' prompt.md | xargs -0 -n 1 codex exec"},
+    {"name": "through npx, scoped and pinned", "command": "npx -y @openai/codex@0.98 exec 'review'"},
+    {"name": "through npx by name", "command": "npx codex@latest review --base main"},
+    {"name": "through eval", "command": "eval \"codex exec 'review'\""},
+    {"name": "an unknown global option with a value", "command": "codex --new-option value exec 'review'"},
+    {"name": "flags in a variable", "command": "codex $FLAGS exec 'review'"}
   ],
   "allow": [
     {"name": "which", "command": "which codex"},
@@ -24,6 +33,10 @@
     {"name": "text that names it", "command": "grep -rn 'codex exec' docs && echo codex review"},
     {"name": "a commit message", "command": "git commit -qm 'refuse codex exec on credits'"},
     {"name": "the owner's override", "command": "MASTACK_ALLOW_CREDITS=1 codex exec 'review'"},
-    {"name": "the override through env", "command": "env MASTACK_ALLOW_CREDITS=1 codex review --base main"}
+    {"name": "the override through env", "command": "env MASTACK_ALLOW_CREDITS=1 codex review --base main"},
+    {"name": "the override before a lease", "command": "MASTACK_ALLOW_CREDITS=1 slotfather run -n 1 --label 'r5 sol review' -- codex exec 'review'"},
+    {"name": "an interactive session with a prompt", "command": "codex 'summarize this repository'"},
+    {"name": "a leased test that names codex", "command": "slotfather run -n 1 --label 'r5 codex tests' -- python3 tests/codex_test.py"},
+    {"name": "npx of another package", "command": "npx prettier --check codex.md"}
   ]
 }

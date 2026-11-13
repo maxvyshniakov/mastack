@@ -6,8 +6,8 @@ description: Use when a decision needs facts from outside the repository. A back
 # Research
 
 Hand the reading to a background agent, with the model and effort
-`role research` prints (`<this skill's directory>/../../bin/role`), and keep
-working while it reads.
+`<this skill's directory>/scripts/role research` prints, and keep working
+while it reads.
 
 The brief names:
 
