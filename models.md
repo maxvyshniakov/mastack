@@ -9,7 +9,7 @@ evals, and update the reasons here if they changed.
 | Role | First choice | Fallback | Why |
 |---|---|---|---|
 | design | Fable, high | Opus, high | Plans and interfaces decide what everything after them costs. The most expensive tokens go here, and to the final synthesis. |
-| implement | Opus, high | Sol, xhigh | Implementation against a written contract is where most tokens go; a strong model with a clear brief is enough. |
+| implement | Opus, medium | Sol, xhigh | Implementation against a written contract is where most tokens go; a strong model with a clear brief is enough. |
 | visual | Opus, high | none | The author prefers to keep work judged by eye with the Anthropic family. |
 | review | Sol, medium | Opus, medium | The reviewer is of another family than the implementer, so it does not share the implementer's blind spots. |
 | routine | Sol, medium | Opus, medium | Bulk, low-risk work: renames, mirroring docs, running checks. |

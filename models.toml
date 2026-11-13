@@ -58,7 +58,7 @@ choices = [
 [roles.implement]
 purpose = "writing code against a spec or brief"
 choices = [
-  { model = "opus", effort = "high" },
+  { model = "opus", effort = "medium" },
   { model = "sol", effort = "xhigh", when = { limit = { codex_weekly = 15 } } },
 ]
 
