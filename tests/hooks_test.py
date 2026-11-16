@@ -679,6 +679,59 @@ class BashGuardTests(HookCase):
 class RegisterTests(HookCase):
     """What tests/install_test.sh cannot stage: Claude Code writing the settings while the installer runs."""
 
+    def test_the_rules_lifecycle_entries_ask_for_are_added_recorded_and_removed(self):
+        import register
+        rule = "Bash(/opt/tool background:*)"
+        self.settings({"lifecycle": {"PreToolUse": [{"command": "/opt/tool hook", "rewrite": True,
+                                                     "allow": [rule, rule]}]}})
+        self.assertEqual([rule], register.lifecycle_allow(self.config))
+        mine = {"permissions": {"allow": ["Bash(ls:*)"]}, "model": "kept"}
+        report, claimed = [], []
+        added = register.updated(mine, False, set(), report, (), False, [rule], set(), claimed)
+        self.assertEqual(["Bash(ls:*)", rule], added["permissions"]["allow"])
+        self.assertEqual(([rule], [f"add    permission: {rule}"]), (claimed, [r for r in report if "permission" in r]))
+        again = register.updated(added, False, set(), [], (), False, [rule], {rule}, claimed)
+        self.assertEqual((added["permissions"], [rule]), (again["permissions"], claimed), "once")
+        gone = register.updated(again, False, set(), [], (), False, [], {rule}, claimed)
+        self.assertEqual((["Bash(ls:*)"], []), (gone["permissions"]["allow"], claimed),
+                         "no entry asks for it any more")
+        theirs = register.updated(mine, False, set(), [], (), False, ["Bash(ls:*)"], set(), claimed)
+        self.assertEqual(([], ["Bash(ls:*)"]), (claimed, theirs["permissions"]["allow"]),
+                         "a rule that was there before is not claimed")
+        removed = register.updated(again, True, set(), [], (), False, [rule], {rule}, claimed)
+        self.assertEqual(["Bash(ls:*)"], removed["permissions"]["allow"], "uninstall removes only its own")
+        self.assertEqual("kept", removed["model"])
+        with self.assertRaises(register.Refused):
+            register.updated({"permissions": {"allow": "Bash"}}, False, set(), [], (), False, [rule], set(), [])
+
+    def test_a_handler_an_entry_replaces_is_removed(self):
+        import register
+        old = "sh -c 'exec \"$0\" hook' /opt/tool"
+        self.settings({"lifecycle": {"PreToolUse": [{"command": "/opt/tool hook", "rewrite": True,
+                                                     "replaces": [old]}]}})
+        self.assertEqual({old}, register.lifecycle_replaces(self.config))
+        theirs = {"type": "command", "command": "other hook"}
+        settings = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": old}]},
+                                             {"matcher": "Bash", "hooks": [theirs]}]}}
+        result = register.updated(settings, False, set(), [], (), False, replaces={old})
+        commands = [h["command"] for g in result["hooks"]["PreToolUse"] for h in g["hooks"]]
+        self.assertNotIn(old, commands)
+        self.assertIn("other hook", commands)
+
+    def test_install_records_the_rules_it_added(self):
+        import register
+        rule = "Bash(/opt/tool background:*)"
+        self.settings({"lifecycle": {"PreToolUse": [{"command": "/opt/tool hook", "rewrite": True, "allow": [rule]}]}})
+        settings = self.tmp / "settings.json"
+        argv = ["register.py", "--settings", str(settings), "--config", str(self.config), "--from-worktree"]
+        with mock.patch.object(sys, "argv", argv), mock.patch("sys.stdout"):
+            self.assertEqual(register.main(), 0)
+        self.assertEqual([rule], json.loads(settings.read_text())["permissions"]["allow"])
+        self.assertEqual([rule], register.recorded_allow(self.config))
+        with mock.patch.object(sys, "argv", argv + ["--uninstall"]), mock.patch("sys.stdout"):
+            self.assertEqual(register.main(), 0)
+        self.assertNotIn("permissions", json.loads(settings.read_text()))
+
     def test_a_concurrent_write_is_kept_and_the_install_retried(self):
         import register
         settings = self.tmp / "settings.json"
@@ -761,6 +814,68 @@ class LifecycleTests(HookCase):
             hook_io_reset()
         self.assertEqual([], self.seen("late"))
         self.assertIn("spent the budget", (self.tmp / "state" / "guard.log").read_text())
+
+    def rewriter(self, prefix: str = "echo rewritten") -> str:
+        """A rewriter as a tool would register it: it answers with the call's input, its command prefixed."""
+        script = self.tmp / "rewriter.py"
+        script.write_text("import json, sys\n"
+                          "data = json.load(sys.stdin)\n"
+                          f"data['tool_input']['command'] = {prefix!r} + '\\n' + data['tool_input']['command']\n"
+                          "print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse',"
+                          " 'updatedInput': data['tool_input']}}))\n")
+        return f"{sys.executable} {script}"
+
+    def background(self, command: str, background: bool = True, cwd: str | None = None):
+        return self.bash("bash_guard.py", command, cwd, tool_use_id="t1",
+                         tool_input={"command": self.fill(command), "run_in_background": background,
+                                     "description": "kept"})
+
+    def test_a_rewriter_answers_for_background_calls_beside_the_observers(self):
+        self.settings({"checkouts": ["~/app"], "lifecycle": {"PreToolUse": [
+            {"command": self.rewriter(), "background": True, "rewrite": True},
+            {"command": self.recorder("seen"), "contains": ["sleep"]}]}})
+        output = self.background("sleep 600")
+        self.assertEqual({"hookEventName": "PreToolUse",
+                          "updatedInput": {"command": "echo rewritten\nsleep 600", "run_in_background": True,
+                                           "description": "kept"}}, output["hookSpecificOutput"],
+                         "no permission decision of its own: Claude Code's rules judge the rewritten call")
+        self.assertEqual(["sleep 600"], [c["tool_input"]["command"] for c in self.seen("seen")],
+                         "observers see the agent's command")
+        self.assertIsNone(self.background("sleep 600", background=False), "a foreground call is not rewritten")
+        self.denied(self.background("git push origin main; sleep 600", cwd="{home}/app"))
+
+    def test_a_check_that_asks_keeps_its_question_beside_the_rewrite(self):
+        import bash_guard
+        import hook_io
+        self.settings({"lifecycle": {"PreToolUse": [{"command": self.rewriter(), "background": True,
+                                                     "rewrite": True}]}})
+        data = {"tool_name": "Bash", "tool_input": {"command": "sleep 1", "run_in_background": True}}
+        with mock.patch.dict(os.environ, {"MASTACK_CONFIG": str(self.config)}), \
+                mock.patch.object(bash_guard, "decide", return_value=("ask", "owner decides")):
+            hook_io_reset()
+            answer = bash_guard.guard(data)
+            hook_io_reset()
+        self.assertEqual((("ask", "owner decides"), "echo rewritten\nsleep 1"),
+                         (answer.decision, answer.updated_input["command"]))
+
+    def test_a_rewriter_that_fails_or_answers_nonsense_leaves_the_call_alone(self):
+        for command in ("exit 3", "echo not json", "echo '{\"hookSpecificOutput\": {\"updatedInput\": {}}}'",
+                        "sleep 30", "/nonexistent/rewriter"):
+            with self.subTest(command=command):
+                self.settings({"lifecycle": {"PreToolUse": [{"command": command, "rewrite": True}]}})
+                started = time.monotonic()
+                self.assertIsNone(self.background("sleep 600"))
+                self.assertLess(time.monotonic() - started, 9)
+        self.assertIn("lifecycle rewrite", (self.tmp / "state" / "guard.log").read_text())
+
+    def test_what_a_timed_out_entry_left_running_is_killed_with_it(self):
+        marker = f"{os.getpid() % 1000 + 6000}.5"  # a sleep this test alone runs
+        self.settings({"lifecycle": {"PreToolUse": [
+            {"command": f"sleep {marker} & wait", "rewrite": True},
+            {"command": f"sleep {marker}1 & wait", "contains": ["sleep"]}]}})
+        self.assertIsNone(self.background("sleep 600"))
+        left = subprocess.run(["ps", "-axo", "command="], capture_output=True, text=True).stdout.splitlines()
+        self.assertEqual([], [line for line in left if line.strip().startswith(f"sleep {marker}")])
 
     def test_a_slow_observer_is_cut_off_and_the_command_still_passes(self):
         self.settings({"lifecycle": {"PreToolUse": [{"command": "sleep 30", "contains": ["junkfather"]}]}})

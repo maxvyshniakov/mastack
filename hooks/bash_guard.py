@@ -11,8 +11,8 @@ only when nothing is denied yet (a deny already wins). All of it shares a BUDGET
 each subprocess gets what is left of it, and once it is spent the hook answers with what it has, so a slow
 slotfather never lets Claude Code's timeout drop a deny that was already found.
 
-After the checks, a command that is not denied goes to the lifecycle observers that wait for its text (hooks/
-lifecycle.py), which only watch.
+After the checks, a command that is not denied goes to the lifecycle rewriters, the first of which may answer with
+the call's input rewritten, and to the observers that wait for its text (hooks/lifecycle.py), which only watch.
 
 Each check is a module of its own with `check(data) -> (decision, reason) | None`, and runs alone as a hook too:
 `python3 hooks/git_guard.py < input.json`.
@@ -74,17 +74,21 @@ def decide(data: dict, budget: float = BUDGET):
 
 
 def guard(data: dict):
-    """The hook: the checks' decision, then, for a command that is not denied, the lifecycle observers that wait for
-    its text (`lifecycle.PreToolUse` in the machine settings; hooks/lifecycle.py). They see the call and cannot
-    change the decision."""
+    """The hook: the checks' decision, then, for a command that is not denied, the lifecycle entries of
+    `lifecycle.PreToolUse` in the machine settings (hooks/lifecycle.py): a rewriter's answer becomes the call's
+    `updatedInput` beside the decision (hook_io.Answer), and the observers see the call. Neither changes the
+    decision, and a deny is never rewritten."""
     decision = decide(data)
+    updated = None
     try:
         lifecycle = hook_io.config().get("lifecycle")
         if not (decision and decision[0] == "deny") and isinstance(lifecycle, dict) and lifecycle.get("PreToolUse"):
-            importlib.import_module("lifecycle").observe(data, hook_io.remaining())
-    except Exception as error:  # noqa: BLE001 - an observer never costs the decision
-        hook_io.log("guard.log", f"lifecycle observer error {error!r}")
-    return decision
+            module = importlib.import_module("lifecycle")
+            updated = module.rewrite(data, hook_io.remaining())
+            module.observe(data, hook_io.remaining())
+    except Exception as error:  # noqa: BLE001 - a lifecycle entry never costs the decision
+        hook_io.log("guard.log", f"lifecycle error {error!r}")
+    return hook_io.Answer(decision, updated) if updated is not None else decision
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 # A heredoc operator and its delimiter: <<EOF, <<-'EOF', << "EOF"; the caller rules out the here-string <<<.
 HEREDOC = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
@@ -242,8 +243,20 @@ def ask(reason: str) -> tuple[str, str]:
     return ("ask", reason)
 
 
-def emit(decision: tuple[str, str] | None) -> None:
-    if decision:
+class Answer(NamedTuple):
+    """A PreToolUse answer that rewrites the tool's input (a lifecycle rewriter's, hooks/lifecycle.py), with the
+    checks' decision when there is one; without it Claude Code's own permission flow judges the rewritten input."""
+    decision: tuple[str, str] | None
+    updated_input: dict
+
+
+def emit(decision: tuple[str, str] | Answer | None) -> None:
+    if isinstance(decision, Answer):
+        output: dict = {"hookEventName": "PreToolUse", "updatedInput": decision.updated_input}
+        if decision.decision:
+            output.update(permissionDecision=decision.decision[0], permissionDecisionReason=decision.decision[1])
+        json.dump({"hookSpecificOutput": output}, sys.stdout)
+    elif decision:
         json.dump({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": decision[0],
                                           "permissionDecisionReason": decision[1]}}, sys.stdout)
 
