@@ -15,7 +15,8 @@
   tool's fix-round path (`lanefather review <id> --fix-lane`, or `start
   <fix-id> --fix-of A,B,C` for several lanes, fathers#174), never a plain
   `start`, which Lanefather reviews at land; a review of fix work that runs
-  anyway opens no new round (mastack#17).
+  anyway opens no new round, and its findings are marked `rejected: fix round, not reviewed again (one review per lane)`
+  so the lane finishes (mastack#17).
 - `models.toml`: a `scout` role for read-only scouting in the repository,
   Sol at medium effort while at least 15% of the weekly Codex limit is left,
   then Sonnet at medium. `orchestrate` runs `scripts/role scout` before such

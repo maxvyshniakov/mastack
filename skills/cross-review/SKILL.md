@@ -70,7 +70,9 @@ several lanes' findings), never a plain `start`: the tool reviews an ordinary
 lane at land, and fix lanes started that way chained six rounds deep.
 
 No second review of the fixes; review loops do not converge. A review of fix
-work that runs anyway opens no new round. A finding that needs a decision
+work that runs anyway opens no new round: each of its findings is marked
+`rejected: fix round, not reviewed again (one review per lane)`, so the lane
+finishes. A finding that needs a decision
 from the owner goes to them with a recommendation instead of being fixed or
 rejected.
 

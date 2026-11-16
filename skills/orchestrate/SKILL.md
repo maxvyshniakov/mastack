@@ -92,8 +92,10 @@ Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
    --fix-of A,B,C` for the findings of several (fathers#174; until it ships,
    one `--fix-lane` per lane). A plain `start` is an ordinary lane, which
    `land` reviews: batched fix lanes started that way chained six and seven
-   rounds deep. Nobody reviews the fix; a review of it that runs anyway opens
-   no new round and no new fix lane. Finish the lane in
+   rounds deep. Nobody reviews the fix. A review of it that runs anyway opens
+   no new round and no new fix lane: mark each of its findings
+   `rejected: fix round, not reviewed again (one review per lane)` so the
+   lane finishes. Finish the lane in
    the lane tool (Lanefather's `done`) as soon as its last finding is marked:
    it removes only merged worktrees, branches and scratch, and finished lanes
    left for batch end fill the disk until the lane tool refuses new lanes.
