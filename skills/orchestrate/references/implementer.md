@@ -18,6 +18,8 @@ spec and tickets are the contract; read them with their comments first.
 - A product question you cannot settle: implement the ticket's default, or
   today's behavior for anything the owner sees, and put the question in your
   report.
+- A refactor the ticket did not ask for (tdd, "Where the code goes"): the small
+  one inside your claims; a larger one goes under Questions.
 - Keep the diff to your tickets; other lanes edit nearby files right now.
 - Focused checks while working; heavy ones through the project's slot wrapper.
 

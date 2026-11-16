@@ -1,6 +1,6 @@
 ---
 name: cross-review
-description: Use when asked for a review, or before shipping a large change. A model of another family reviews in two blind passes, then one round of fixes.
+description: Use when asked for a review, or before shipping a large change. A model of another family reviews blind, as deeply as the change's risk calls for, then one round of fixes.
 ---
 
 # Cross-review
@@ -16,7 +16,10 @@ description: Use when asked for a review, or before shipping a large change. A m
    top, a smell baseline, always as a judgment call that a documented rule
    overrides: unclear names, duplication, feature envy, data clumps, primitive
    obsession, repeated switches, shotgun surgery, speculative generality,
-   middle men. And a test baseline, since nothing else reads the tests and the
+   middle men. Two design questions on top: does the change fit the structure
+   it lands in, or is it bolted on beside it (and which refactor would make it
+   fit); and does it add a copy of behaviour the repository already has (name
+   the existing code). And a test baseline, since nothing else reads the tests and the
    implementer wrote them to pass: a tautology (asserts a constant, recomputes
    the code's answer), a test of a mock or fake instead of the real thing, the
    wrong layer (a browser for text, a DOM emulator for paint), fixed sleeps or
@@ -26,8 +29,18 @@ description: Use when asked for a review, or before shipping a large change. A m
    else what `<this skill's directory>/scripts/role review
    --implementer-family <family>` prints: model, effort and command, and its
    note and caution in the report. Use its answer, not your reading of
-   `models.toml`: only it reads the live quotas. For risky surfaces
-   (migrations, auth, money, deletion) run both families in parallel.
+   `models.toml`: only it reads the live quotas.
+5. **Depth.** Match the review to what the change can break; the Review
+   section of `docs/agents/checks.md` says which paths fall where, else judge
+   by the diff. State the depth you chose and why in the report.
+   - Mechanical (docs, a rename or move, regenerated files with no code
+     change): no review.
+   - Ordinary change: the spec pass only.
+   - Behaviour change in the core, or a refactor declared "behaviour
+     identical": both passes.
+   - Risky surface (migrations, auth, money, deletion, signals to processes,
+     releasing what another process holds): both passes, and both families in
+     parallel where `role` offers a reviewer of another family.
 
 ## Review blind
 
@@ -35,7 +48,8 @@ The reviewer gets the diff command, the spec and the standards, and nothing
 else: not the implementer's report, summary or self-assessment. Reviewers are
 read-only; they run no gates.
 
-Two passes, separate contexts, never merged or reranked against each other:
+The passes the depth calls for, in separate contexts, never merged or reranked
+against each other:
 
 - **Standards**: each violation with the rule it breaks, hard violations apart
   from judgment calls; skip what tooling already enforces.
@@ -56,5 +70,5 @@ being fixed or rejected.
 
 ## Report
 
-Both passes as returned, then the disposition list, then one line per pass: the
-number of findings and the worst one.
+The depth and why, each pass as returned, then the disposition list, then one
+line per pass: the number of findings and the worst one.

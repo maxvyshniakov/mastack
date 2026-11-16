@@ -2,7 +2,11 @@
 
 ## Focused
 - A changed skill: reread it against the no-op test (would a strong model do
-  this without the line?) and run its scenarios: `bin/eval <skill>`.
+  this without the line?). Run its scenarios, `bin/eval <skill>`, only when the
+  change alters what the agent does: when the skill starts, a step, what it
+  reports, what it must never do. A mechanical edit (a path, a command's name,
+  a link, wording that means the same) needs no run; say in the report that it
+  was skipped as mechanical.
 - A changed scenario or `evals/lib.sh`: `bin/eval <skill> --agent none` must
   fail its grade, then a real run must pass.
 - `tests/install_test.sh` after changing the installer.

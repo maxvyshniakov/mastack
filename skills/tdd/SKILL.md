@@ -13,6 +13,15 @@ seams yourself, prefer existing interfaces, and name them before the first test:
 is still undecided, not about seams or test strategy. When the interface itself
 is in question, use the vocabulary of `architecture`.
 
+## Where the code goes
+
+Build the change where it belongs in the existing structure, not beside it.
+Before writing a behaviour, look for the code that already does it, in the
+module, the package and the repository's shared code, and use or extend it.
+When a clean version needs a refactor nobody asked for, do the small one in
+your scope, or build the asked version and propose the refactor in the report;
+never add a second copy silently.
+
 ## The loop
 
 One slice per cycle, vertical: one test, the least code that passes it, repeat.
@@ -23,7 +32,8 @@ Each test is a tracer that reacts to what the previous cycle taught.
 2. **Green.** Write the minimum to pass. No speculative features.
 3. Next slice.
 
-Refactoring is not part of the loop; it belongs to review.
+Refactoring inside the loop is limited to fitting the change in (above); a wider
+one is proposed, not done, and review judges it.
 
 ## Tests worth keeping
 
