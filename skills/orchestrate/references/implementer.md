@@ -3,6 +3,11 @@
 You build one ticket, or the given chain in order, on your own lane branch. The
 spec and tickets are the contract; read them with their comments first.
 
+Your lane is registered before you start, and the brief names its commands
+with your lane's id filled in: the worktree, the check, the hand-back.
+Run them as given and open a command's `--help` only after it fails: every
+help or status call is a turn that rereads your whole context.
+
 ## Setup
 
 1. Work only in your worktree, on your lane branch, based on the branch the
@@ -22,26 +27,37 @@ spec and tickets are the contract; read them with their comments first.
   one inside your claims; a larger one goes under Questions.
 - Keep the diff to your tickets; other lanes edit nearby files right now.
 - Focused checks while working; heavy ones through the project's slot wrapper.
+  A check that takes minutes runs in the background, and you wait for its
+  completion notice, not in an `until grep ...; sleep` loop.
 
 ## Before reporting
 
 1. Merge the integration branch tip into your lane once.
 2. Commit in the repository's style, with the reason in the body. Leave the
    worktree clean.
-3. Run the lane's checks on the committed tree. Fix red ones; investigate a
-   timeout alone before blaming load.
+3. Run the lane's check command from the brief on the committed tree. Fix red
+   ones; investigate a timeout alone before blaming load.
 4. Stop servers and background processes you started, including every loop
-   that waits on a command you stopped. Wait on a background command through
-   its completion notice rather than a polling loop. Report only once `ps`
+   that waits on a command you stopped. Report only once `ps`
    shows nothing of yours running in your worktree or scratch. A wait loop on
    a stopped command never ends: one lane left 53, which held its worktree and
    added load for hours.
 
+## Hand back
+
+Once the check is green on your last commit, return the report below and
+stop. Landing, the review and cleanup are the orchestrator's steps; it gets
+your report as your completion notice. Wait for none of them and poll no
+lane state (`lanefather list` in a loop). In the rare case a step of yours
+really needs a lane state, `lanefather wait <id> --for <state>` blocks until
+it (Lanefather with fathers#175); without that command, put the need under
+Questions and hand back.
+
 ## Review fixes
 
-You may be resumed once with review findings. Fix each that holds, reject the
-others with a reason in the commit and report, check, report. There is no
-second review.
+You may be resumed once with review findings and the fix lane's commands.
+Fix each that holds, reject the others with a reason in the commit and
+report, check, hand back. There is no second review.
 
 ## Report
 

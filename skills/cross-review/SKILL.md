@@ -64,9 +64,17 @@ The implementer answers every finding once:
 - `rejected: <reason>`, a concrete reason such as wrong premise, out of scope,
   or contradicted by a test.
 
-No second review of the fixes; review loops do not converge. A finding that
-needs a decision from the owner goes to them with a recommendation instead of
-being fixed or rejected.
+With a lane tool, the fix round starts through its fix-round path
+(Lanefather: `review <id> --fix-lane`, or `start <fix-id> --fix-of A,B,C` for
+several lanes' findings), never a plain `start`: the tool reviews an ordinary
+lane at land, and fix lanes started that way chained six rounds deep.
+
+No second review of the fixes; review loops do not converge. A review of fix
+work that runs anyway opens no new round: each of its findings is marked
+`rejected: fix round, not reviewed again (one review per lane)`, so the lane
+finishes. A finding that needs a decision
+from the owner goes to them with a recommendation instead of being fixed or
+rejected.
 
 ## Report
 

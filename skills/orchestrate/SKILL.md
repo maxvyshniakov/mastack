@@ -33,18 +33,43 @@ repository, so `cleanup` finds them.
    limits are low. Lanes whose claims overlap run in sequence; land a prefactor
    that moves files before lanes that edit around it.
 
+**Scouting.** Before you hand off a read-only scouting task (map X, find where
+Y lives, list the callers of Z), run `<this skill's directory>/scripts/role
+scout`; it picks Sol while Codex has quota, so reading stops spending the
+Claude limit. Sol: its `run` command with `-s read-only -C <repo>
+--output-last-message <file> "<task>" < /dev/null` in the background, then
+read the file; without `< /dev/null` `codex exec` waits on stdin. Sonnet: the
+Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
+(a design, what should replace X) goes to `scripts/role design` instead.
+
 ## Run
 
 4. **Launch** each lane in the background with the model and effort
    `<this skill's directory>/scripts/role implement` prints (it reads the
-   live quotas):
-   a short prompt with ticket links, base branch, claims, which lanes work
-   nearby, [references/implementer.md](references/implementer.md), and the
-   project's brief additions and report labels. Point at the spec and tickets;
-   do not paste them. Register every lane with its ticket (`--ticket`).
-5. **Land** a lane when it reports green: merge it into the integration branch,
-   run a quick smoke on the merge, send a red smoke to the lane whose change
-   broke it. Resolve trivial conflicts yourself, real ones in the lane.
+   live quotas). Register the lane with its ticket (`--ticket`) first, so the
+   brief can name its worktree. Point at the spec and tickets; do not paste
+   them. Fill every command with the lane's id and paths: implementers spent
+   hundreds of turns on `lanefather --help` and polling `lanefather list`
+   for steps that were yours, each turn rereading their whole context.
+
+   ```text
+   Tickets: <links, in order>. Spec: <link>.
+   Lane <id>, registered. Base: <integration branch>. Claims: <globs>.
+   Nearby lanes: <id: claims>, ...
+   Worktree: <absolute path>. Branch: <lane branch>.
+   Check: <the lane's check command, e.g. lanefather check <id>>
+   Hand back: commit, a green check on the committed tree, then return your
+   report and stop.
+   After you: I land the lane (<land command>), its review runs, and the
+   findings come back to you once, in the fix lane.
+   Read <this skill's directory>/references/implementer.md, then:
+   <the project's brief additions>. Report labels: <labels>.
+   ```
+5. **Land** a lane when it reports green. The report reaches you as the
+   agent's completion notice; wait for that, not on `lanefather list`. Merge
+   it into the integration branch, run a quick smoke on the merge, send a red
+   smoke to the lane whose change broke it. Resolve trivial conflicts
+   yourself, real ones in the lane.
    The merge message ends with `Fixes #N`, so the ticket closes only when the
    merge reaches the default branch. After a green smoke, label the ticket
    `integrated` (create it if missing: green, "Done and landed in the
@@ -61,8 +86,16 @@ repository, so `cleanup` finds them.
 6. **Review** each landed lane once (`cross-review`), when and how the project's
    review policy says, else right after the land: the
    reviewer sees the diff, ticket and standards, never the lane's report. It
-   runs beside the next lands. One round of fixes in the same lane, every
-   finding marked fixed or rejected; nobody reviews the fix. Finish the lane in
+   runs beside the next lands. One round of fixes, every finding marked fixed
+   or rejected, started only through the lane tool's fix-round path:
+   `lanefather review <id> --fix-lane` for one lane, `lanefather start <fix-id>
+   --fix-of A,B,C` for the findings of several (fathers#174; until it ships,
+   one `--fix-lane` per lane). A plain `start` is an ordinary lane, which
+   `land` reviews: batched fix lanes started that way chained six and seven
+   rounds deep. Nobody reviews the fix. A review of it that runs anyway opens
+   no new round and no new fix lane: mark each of its findings
+   `rejected: fix round, not reviewed again (one review per lane)` so the
+   lane finishes. Finish the lane in
    the lane tool (Lanefather's `done`) as soon as its last finding is marked:
    it removes only merged worktrees, branches and scratch, and finished lanes
    left for batch end fill the disk until the lane tool refuses new lanes.

@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- `orchestrate`: the coordinator registers a lane before launching it, and
+  the implementer brief is a template with the lane's commands filled in:
+  worktree, check, the hand-back, and what the coordinator does after (land,
+  review, the one fix round). The implementer opens a command's `--help` only
+  after it fails, runs long checks in the background and waits for their
+  completion notice, hands back after a green check and stops, and polls no
+  lane state; `lanefather wait <id> --for <state>` (fathers#175) is for the
+  rare wait it needs. The coordinator waits for the agent's completion
+  notice, not on `lanefather list` (mastack#16).
+- `orchestrate`, `cross-review`: a fix round starts only through the lane
+  tool's fix-round path (`lanefather review <id> --fix-lane`, or `start
+  <fix-id> --fix-of A,B,C` for several lanes, fathers#174), never a plain
+  `start`, which Lanefather reviews at land; a review of fix work that runs
+  anyway opens no new round, and its findings are marked `rejected: fix round, not reviewed again (one review per lane)`
+  so the lane finishes (mastack#17).
+- `models.toml`: a `scout` role for read-only scouting in the repository,
+  Sol at medium effort while at least 15% of the weekly Codex limit is left,
+  then Sonnet at medium. `orchestrate` runs `scripts/role scout` before such
+  a task: Sol headless through `[cli.codex].run` in a read-only sandbox with
+  stdin closed, Sonnet through the Agent tool. Judgment and proposals stay
+  with `design` (mastack#18).
 - Lifecycle `PreToolUse` entries can rewrite a Bash call: `"rewrite": true`
   makes the entry's answer (`hookSpecificOutput.updatedInput`) the call's new
   input, passed on by `bash_guard` without a permission decision of its own,
