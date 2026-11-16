@@ -30,13 +30,20 @@ A `PreToolUse` entry may also say:
                           call as it was. Rewriters run before the observers, within REWRITE_BUDGET seconds.
     "allow": [rules]      permission rules bin/install adds to Claude Code's `permissions.allow` while the entry is
                           listed (hooks/register.py), such as the one that lets a rewriter's added line run
+    "replaces": [commands]  Bash PreToolUse handlers, by their exact command, that bin/install removes from Claude
+                          Code's settings: what the tool registered there itself before it had this entry
+
+Every command runs in a process group of its own, killed whole when its time is up.
 
     "PreToolUse": [{"command": "~/.local/bin/junkfather hook", "background": true, "rewrite": true,
                     "allow": ["Bash(<its absolute path> background:*)"]}]
 """
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import signal
 import subprocess
 import sys
 import time
@@ -95,15 +102,29 @@ def run(event: str, data: dict, raw: str, budget: float) -> int:
             hook_io.log("guard.log", f"lifecycle {event} budget spent before {command!r}")
             break
         try:
-            result = subprocess.run(["/bin/sh", "-c", command], input=raw, text=True, timeout=left,
-                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-            if result.returncode:
-                hook_io.log("guard.log", f"lifecycle {event} {command!r} exited {result.returncode}: "
-                                         f"{result.stderr.strip()[:200]}")
+            code, _, stderr = run_group(command, raw, left)
+            if code:
+                hook_io.log("guard.log", f"lifecycle {event} {command!r} exited {code}: {stderr.strip()[:200]}")
         except (OSError, subprocess.TimeoutExpired) as error:
             hook_io.log("guard.log", f"lifecycle {event} {command!r} failed: {error!r}")
         ran += 1
     return ran
+
+
+def run_group(command: str, stdin: str, timeout: float) -> tuple[int, str, str]:
+    """Run `command` through /bin/sh in a process group of its own: (exit code, stdout, stderr). On a timeout the
+    whole group is killed, so what the command left running (`sleep 600 & wait`) goes with it, then
+    TimeoutExpired is raised. The group id is the shell's pid, which cannot be taken again before it is waited for."""
+    child = subprocess.Popen(["/bin/sh", "-c", command], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        stdout, stderr = child.communicate(stdin, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(OSError):
+            os.killpg(child.pid, signal.SIGKILL)
+        child.communicate()
+        raise
+    return child.returncode, stdout, stderr
 
 
 def rewrite(data: dict, left: float | None = None) -> dict | None:
@@ -121,16 +142,14 @@ def rewrite(data: dict, left: float | None = None) -> dict | None:
                 hook_io.log("guard.log", f"lifecycle rewrite budget spent before {entry.command!r}")
                 return None
             try:
-                result = subprocess.run(["/bin/sh", "-c", entry.command], input=raw, text=True, timeout=remaining,
-                                        capture_output=True)
+                code, stdout, stderr = run_group(entry.command, raw, remaining)
             except (OSError, subprocess.TimeoutExpired) as error:
                 hook_io.log("guard.log", f"lifecycle rewrite {entry.command!r} failed: {error!r}")
                 continue
-            if result.returncode:
-                hook_io.log("guard.log", f"lifecycle rewrite {entry.command!r} exited {result.returncode}: "
-                                         f"{result.stderr.strip()[:200]}")
+            if code:
+                hook_io.log("guard.log", f"lifecycle rewrite {entry.command!r} exited {code}: {stderr.strip()[:200]}")
                 continue
-            updated = updated_input(result.stdout)
+            updated = updated_input(stdout)
             if updated is not None:
                 return updated
     except Exception as error:  # noqa: BLE001 - a rewriter never changes the decision

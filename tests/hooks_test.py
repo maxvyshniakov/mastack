@@ -704,6 +704,20 @@ class RegisterTests(HookCase):
         with self.assertRaises(register.Refused):
             register.updated({"permissions": {"allow": "Bash"}}, False, set(), [], (), False, [rule], set(), [])
 
+    def test_a_handler_an_entry_replaces_is_removed(self):
+        import register
+        old = "sh -c 'exec \"$0\" hook' /opt/tool"
+        self.settings({"lifecycle": {"PreToolUse": [{"command": "/opt/tool hook", "rewrite": True,
+                                                     "replaces": [old]}]}})
+        self.assertEqual({old}, register.lifecycle_replaces(self.config))
+        theirs = {"type": "command", "command": "other hook"}
+        settings = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": old}]},
+                                             {"matcher": "Bash", "hooks": [theirs]}]}}
+        result = register.updated(settings, False, set(), [], (), False, replaces={old})
+        commands = [h["command"] for g in result["hooks"]["PreToolUse"] for h in g["hooks"]]
+        self.assertNotIn(old, commands)
+        self.assertIn("other hook", commands)
+
     def test_install_records_the_rules_it_added(self):
         import register
         rule = "Bash(/opt/tool background:*)"
@@ -853,6 +867,15 @@ class LifecycleTests(HookCase):
                 self.assertIsNone(self.background("sleep 600"))
                 self.assertLess(time.monotonic() - started, 9)
         self.assertIn("lifecycle rewrite", (self.tmp / "state" / "guard.log").read_text())
+
+    def test_what_a_timed_out_entry_left_running_is_killed_with_it(self):
+        marker = f"{os.getpid() % 1000 + 6000}.5"  # a sleep this test alone runs
+        self.settings({"lifecycle": {"PreToolUse": [
+            {"command": f"sleep {marker} & wait", "rewrite": True},
+            {"command": f"sleep {marker}1 & wait", "contains": ["sleep"]}]}})
+        self.assertIsNone(self.background("sleep 600"))
+        left = subprocess.run(["ps", "-axo", "command="], capture_output=True, text=True).stdout.splitlines()
+        self.assertEqual([], [line for line in left if line.strip().startswith(f"sleep {marker}")])
 
     def test_a_slow_observer_is_cut_off_and_the_command_still_passes(self):
         self.settings({"lifecycle": {"PreToolUse": [{"command": "sleep 30", "contains": ["junkfather"]}]}})

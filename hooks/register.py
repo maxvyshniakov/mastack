@@ -15,7 +15,8 @@ SessionStart, SessionEnd; hooks/lifecycle.py), install adds one group that runs 
 that group from the events no longer listed. `lifecycle.PreToolUse` needs no group: bash_guard.py runs it. The
 permission rules a `lifecycle.PreToolUse` entry lists under `allow` go into `permissions.allow`; install records the
 ones it added and removes them once no entry lists them, or on uninstall. A rule that was there before is left to
-whoever put it there.
+whoever put it there. The Bash handlers an entry lists under `replaces` (what a tool registered itself before) are
+removed.
 
 When DIR/friction.json exists (hooks/friction_journal.py), install adds one PostToolUse group (matcher Bash) that runs
 hooks/friction_hook.py, which logs TypeScript errors about the configured packages; without the file it removes it.
@@ -210,6 +211,21 @@ def lifecycle_allow(config: Path) -> list[str]:
     return rules
 
 
+def lifecycle_replaces(config: Path) -> set[str]:
+    """The Bash PreToolUse handler commands the machine settings' `lifecycle.PreToolUse` entries replace."""
+    try:
+        data = json.loads((config / "hooks.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    lifecycle = data.get("lifecycle") if isinstance(data, dict) else None
+    listed = lifecycle.get("PreToolUse") if isinstance(lifecycle, dict) else None
+    found: set[str] = set()
+    for entry in listed if isinstance(listed, list) else []:
+        replaced = entry.get("replaces") if isinstance(entry, dict) else None
+        found |= {c for c in replaced if isinstance(c, str) and c.strip()} if isinstance(replaced, list) else set()
+    return found
+
+
 def record(config: Path, commands: list[str], allow: list[str] | None = None) -> None:
     config.mkdir(parents=True, exist_ok=True)
     (config / RECORD).write_text(json.dumps({"commands": commands, "allow": allow or []}, indent=2) + "\n",
@@ -250,7 +266,7 @@ def permission_rules(result: dict, wanted: list[str], ours: set[str], report: li
 
 def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], events=(), friction=False,
             allow: list[str] | None = None, ours_allow: set[str] | None = None,
-            claimed: list[str] | None = None) -> dict:
+            claimed: list[str] | None = None, replaces: set[str] | None = None) -> dict:
     if not isinstance(settings, dict):
         raise Refused("not a JSON object")
     result = json.loads(json.dumps(settings))
@@ -270,7 +286,7 @@ def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], 
         for entry in entries:
             text = entry.get("command") if isinstance(entry, dict) else None
             mine = isinstance(text, str) and text in ours
-            old = isinstance(text, str) and not uninstall and REPLACED.search(text)
+            old = isinstance(text, str) and not uninstall and (REPLACED.search(text) or text in (replaces or ()))
             if mine or old:
                 if uninstall or entry != handler() or len(entries) != 1:
                     report.append(f"remove PreToolUse Bash: {tilde(text)}")
@@ -357,7 +373,7 @@ def main() -> int:
                 raise Refused(f"not JSON: {error}") from None
             report: list[str] = []
             after_settings = updated(settings, args.uninstall, ours, report, events, friction, allow, ours_allow,
-                                     claimed)
+                                     claimed, lifecycle_replaces(args.config))
             if after_settings == settings:
                 print("  ok     hooks" if not args.uninstall else "  ok     no mastack hook")
                 break

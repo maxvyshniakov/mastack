@@ -8,7 +8,10 @@
   never for a denied call; `"background": true` runs an entry only for
   `run_in_background` calls; `"allow": [rules]` has `bin/install` add those
   permission rules to Claude Code's settings, recorded and removed again once
-  no entry lists them. Junkfather uses it to own agents' background commands.
+  no entry lists them; `"replaces": [commands]` removes Bash handlers a tool
+  registered itself before. Junkfather uses it to own agents' background
+  commands. Every lifecycle command now runs in a process group of its own,
+  killed whole on its timeout, so `sleep 600 & wait` leaves nothing behind.
 - New Bash check `docker_desktop`: `bash_guard` refuses quitting, killing or
   restarting Docker Desktop (`osascript` quit, `killall`, `pkill`, `kill` of a
   pid found by name, `docker desktop stop`/`restart`) and opening it in front;

@@ -262,7 +262,10 @@ slow `slotfather` cannot let the timeout drop a deny already found.
   a rewriter that fails, hangs or answers nothing leaves the call as it was.
   `"allow": [rules]` lists permission rules `bin/install` adds to Claude
   Code's `permissions.allow` while the entry is listed (for the line a
-  rewriter adds), and removes once it no longer is.
+  rewriter adds), and removes once it no longer is; `"replaces": [commands]`
+  has it remove Bash handlers a tool registered itself before. Every
+  lifecycle command runs in a process group of its own, killed whole when
+  its time is up.
 
   ```json
   { "lifecycle": { "SubagentStop": ["~/.local/bin/junkfather hook"],
