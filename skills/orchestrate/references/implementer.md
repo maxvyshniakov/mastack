@@ -30,7 +30,12 @@ spec and tickets are the contract; read them with their comments first.
    worktree clean.
 3. Run the lane's checks on the committed tree. Fix red ones; investigate a
    timeout alone before blaming load.
-4. Stop servers and background processes you started.
+4. Stop servers and background processes you started, including every loop
+   that waits on a command you stopped. Wait on a background command through
+   its completion notice rather than a polling loop. Report only once `ps`
+   shows nothing of yours running in your worktree or scratch. A wait loop on
+   a stopped command never ends: one lane left 53, which held its worktree and
+   added load for hours.
 
 ## Review fixes
 

@@ -52,12 +52,20 @@ repository, so `cleanup` finds them.
    SHA, the integration branch, whether it is pushed (a SHA origin lacks is
    "local only" and not linked), the checks it passed and the preview to try
    it on. Where the lane tool does this (Lanefather's `[tickets]`), read its
-   output instead.
+   output instead. Writes to the project's own tracker are bookkeeping, not
+   publishing: post the evidence comments the lane tool asks for, file
+   follow-up tickets and correct your own comments without asking, then link
+   them in the report. Push, release, publish and closing a ticket before its
+   fix ships follow `publishing.md`; another project's tracker needs the
+   owner's yes first.
 6. **Review** each landed lane once (`cross-review`), when and how the project's
    review policy says, else right after the land: the
    reviewer sees the diff, ticket and standards, never the lane's report. It
    runs beside the next lands. One round of fixes in the same lane, every
-   finding marked fixed or rejected; nobody reviews the fix.
+   finding marked fixed or rejected; nobody reviews the fix. Finish the lane in
+   the lane tool (Lanefather's `done`) as soon as its last finding is marked:
+   it removes only merged worktrees, branches and scratch, and finished lanes
+   left for batch end fill the disk until the lane tool refuses new lanes.
 7. **Recompute the frontier** after every land and launch what became ready.
 
 ## Batch

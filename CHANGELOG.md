@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- `orchestrate`: writes to the project's own tracker (evidence comments,
+  follow-up tickets, fixes to its own comments) need no owner confirmation;
+  push, release, publish and early closing still follow `publishing.md`. A lane
+  is finished in the lane tool as soon as its last review finding is marked,
+  not at batch end, since finished lanes otherwise fill the disk until new
+  lanes are refused. The implementer brief now stops loops waiting on a stopped
+  command, waits on completion notices instead of polling, and checks that no
+  process of its own is left before reporting.
+
 - New `bin/role <role> [--implementer-family F] [--json]`: evaluates
   `models.toml` with the live quotas its conditions name (the weekly Codex
   limit through `codex app-server`) and prints the winning model, effort,
