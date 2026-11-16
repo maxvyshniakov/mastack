@@ -1,0 +1,635 @@
+{
+  "$comment": "The friction journal format, owned by @maxvyshniakov/repo-kit. Other writers keep a pinned copy with its SHA-256 and run every case. Changing schema needs a new schema.version and new cases.",
+  "name": "friction-journal",
+  "schema": {
+    "version": 1,
+    "fields": [
+      {
+        "name": "v",
+        "type": "integer",
+        "required": true,
+        "const": "version",
+        "description": "the schema version"
+      },
+      {
+        "name": "ts",
+        "type": "string",
+        "required": true,
+        "format": "date-time",
+        "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d",
+        "description": "ISO 8601 time of the moment: matches pattern and parses as a date and time"
+      },
+      {
+        "name": "project",
+        "type": "string",
+        "required": true,
+        "description": "consuming repository; a linked worktree names its main repository"
+      },
+      {
+        "name": "package",
+        "type": "string",
+        "required": true,
+        "description": "npm name of the package the friction is about"
+      },
+      {
+        "name": "kind",
+        "type": "string",
+        "required": true,
+        "oneOf": "kinds",
+        "description": "one of schema.kinds"
+      },
+      {
+        "name": "component",
+        "type": "string",
+        "required": false,
+        "description": "the export involved, e.g. Button"
+      },
+      {
+        "name": "rule",
+        "type": "string",
+        "required": false,
+        "description": "lint rule, TypeScript code (TS2322) or review category"
+      },
+      {
+        "name": "detail",
+        "type": "string",
+        "required": false,
+        "description": "local text, at most limits.detail long; never exported as written",
+        "maxLength": "detail"
+      },
+      {
+        "name": "session",
+        "type": "string",
+        "required": false,
+        "description": "agent session id"
+      },
+      {
+        "name": "source",
+        "type": "string",
+        "required": true,
+        "description": "the writer (repo-kit, mastack-hook, a linter, ...)"
+      },
+      {
+        "name": "why",
+        "type": "string",
+        "required": false,
+        "description": "why a hook or scanner flagged it"
+      },
+      {
+        "name": "file",
+        "type": "string",
+        "required": false,
+        "description": "path relative to the project, or to the package for a vendored copy"
+      },
+      {
+        "name": "fingerprint",
+        "type": "string",
+        "required": false,
+        "description": "stable key of the underlying fact, so repeats count apart from distinct facts"
+      }
+    ],
+    "kinds": [
+      "lint-finding",
+      "selector-reach-in",
+      "type-error",
+      "owner-correction",
+      "misuse",
+      "vendored-patch",
+      "review-finding",
+      "note"
+    ],
+    "limits": {
+      "detail": 500,
+      "line": 4000,
+      "unit": "UTF-16 code units (JavaScript string length)"
+    },
+    "rules": {
+      "required": "a required string field is a string with a non-whitespace character; v equals version; ts matches its pattern and parses",
+      "optional": "an optional field is missing, null or a string",
+      "extra": "readers keep and ignore fields the schema does not name",
+      "version": "readers skip and count lines of another version; renaming, retyping or removing a field, a new required field, a new kind or a changed limit is a new version",
+      "problems": "a validator reports, in this order: not an object (alone); v; ts; each required string field in field order; kind; each string field other than ts that is neither missing, null nor a string, in field order; detail longer than limits.detail",
+      "line": "one JSON object per line: no whitespace between tokens, every field in field order, characters outside ASCII as UTF-8 except lone surrogates (\\udxxx, lowercase), control characters U+0000-U+001F escaped (\\b \\t \\n \\f \\r, else \\u00xx lowercase), ended by \\n and appended in one write (O_APPEND)",
+      "lineLimit": "when the line is longer than limits.line, detail loses its last (line length - limits.line) units once and the line is written again"
+    }
+  },
+  "build": {
+    "ts": "the given ts, else the time of building as ISO 8601 UTC with milliseconds and Z (2026-11-12T00:00:00.000Z)",
+    "project": "the given project, else the name of the directory holding .git above the working directory (a linked worktree's .git file names its main repository), else the working directory's own name",
+    "session": {
+      "env": [
+        "FRICTION_SESSION",
+        "CLAUDE_CODE_SESSION_ID",
+        "CODEX_SESSION_ID"
+      ],
+      "rule": "the given session, else the first of env that is set and not empty, else null"
+    },
+    "text": "a field given as missing, null or empty string is null; detail is a string (empty when not given) cut to limits.detail",
+    "defaults": "package and source have no default here: each writer gives them"
+  },
+  "fingerprint": {
+    "algorithm": "sha256",
+    "separator": "\u0000",
+    "encoding": "utf-8",
+    "digest": "hex",
+    "length": 16,
+    "rule": "the first length hex digits of the digest of the parts, as text, joined by separator"
+  },
+  "redaction": {
+    "dialect": "JavaScript regular expressions (source and flags)",
+    "note": {
+      "remove": [
+        {
+          "pattern": "`[^`]*`",
+          "flags": "g"
+        },
+        {
+          "pattern": "\\bhttps?:\\/\\/\\S+",
+          "flags": "gi"
+        },
+        {
+          "pattern": "[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+",
+          "flags": "g"
+        }
+      ],
+      "dropNoteIf": {
+        "pattern": "[{}<>=;$\\\\|]|=>|\\(\\)",
+        "flags": ""
+      },
+      "split": {
+        "pattern": "\\s+",
+        "flags": ""
+      },
+      "dropWordIf": [
+        {
+          "pattern": "[/~]",
+          "flags": ""
+        },
+        {
+          "pattern": "\\d{5,}|[0-9a-f]{8,}",
+          "flags": "i"
+        }
+      ],
+      "trimWord": {
+        "pattern": "^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$",
+        "flags": "gu"
+      },
+      "keepWordIf": {
+        "pattern": "^[\\p{L}\\p{N}'’-]+$",
+        "flags": "u"
+      },
+      "maxWords": 12,
+      "rule": "replace each remove match with a space; a note still matching dropNoteIf is code and becomes empty; split on whitespace; drop words matching a dropWordIf; strip trimWord; keep words matching keepWordIf; join the first maxWords with one space"
+    },
+    "noteKinds": [
+      "owner-correction",
+      "misuse",
+      "review-finding",
+      "note"
+    ],
+    "identifier": {
+      "pattern": "^[A-Za-z_$][\\w$.\\-/]{0,79}$",
+      "flags": "",
+      "rule": "an exported component or rule that does not match becomes (other)"
+    },
+    "packageName": {
+      "pattern": "^(?:@[a-z0-9][\\w.-]*\\/)?[a-z0-9][\\w.-]*$",
+      "flags": "",
+      "rule": "an event whose package does not match is left out of an export"
+    },
+    "exported": "package, component, rule and kind with counts and template paraphrases; never projects, sessions, files, times or detail text"
+  },
+  "cases": {
+    "build": [
+      {
+        "name": "minimal: project from the working directory, session from the environment, time of building",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "note"
+        },
+        "cwd": "/repos/app",
+        "env": {
+          "CLAUDE_CODE_SESSION_ID": "abc"
+        },
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"note\",\"component\":null,\"rule\":null,\"detail\":\"\",\"session\":\"abc\",\"source\":\"mastack-hook\",\"why\":null,\"file\":null,\"fingerprint\":null}"
+      },
+      {
+        "name": "every field given",
+        "fields": {
+          "ts": "2026-11-10T10:00:00.000Z",
+          "project": "web",
+          "package": "@acme/kit",
+          "kind": "type-error",
+          "component": "Button",
+          "rule": "TS2322",
+          "detail": "TS2322: Type 'string' is not assignable to type 'Tone'.",
+          "session": "s1",
+          "source": "mastack-hook",
+          "why": "the TS2322 message names @acme/kit",
+          "file": "src/panel.tsx",
+          "fingerprint": "0123456789abcdef"
+        },
+        "cwd": "/repos/app",
+        "env": {
+          "CLAUDE_CODE_SESSION_ID": "ignored"
+        },
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"web\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"TS2322: Type 'string' is not assignable to type 'Tone'.\",\"session\":\"s1\",\"source\":\"mastack-hook\",\"why\":\"the TS2322 message names @acme/kit\",\"file\":\"src/panel.tsx\",\"fingerprint\":\"0123456789abcdef\"}"
+      },
+      {
+        "name": "FRICTION_SESSION comes before CLAUDE_CODE_SESSION_ID and CODEX_SESSION_ID",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "misuse"
+        },
+        "cwd": "/repos/app",
+        "env": {
+          "FRICTION_SESSION": "f",
+          "CLAUDE_CODE_SESSION_ID": "c",
+          "CODEX_SESSION_ID": "x"
+        },
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"misuse\",\"component\":null,\"rule\":null,\"detail\":\"\",\"session\":\"f\",\"source\":\"mastack-hook\",\"why\":null,\"file\":null,\"fingerprint\":null}"
+      },
+      {
+        "name": "an empty session variable is skipped",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "misuse"
+        },
+        "cwd": "/repos/app",
+        "env": {
+          "FRICTION_SESSION": "",
+          "CLAUDE_CODE_SESSION_ID": "",
+          "CODEX_SESSION_ID": "x"
+        },
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"misuse\",\"component\":null,\"rule\":null,\"detail\":\"\",\"session\":\"x\",\"source\":\"mastack-hook\",\"why\":null,\"file\":null,\"fingerprint\":null}"
+      },
+      {
+        "name": "no session anywhere is null",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "lint-finding",
+          "rule": "kit/no-restyle"
+        },
+        "cwd": "/repos/app",
+        "env": {},
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"lint-finding\",\"component\":null,\"rule\":\"kit/no-restyle\",\"detail\":\"\",\"session\":null,\"source\":\"mastack-hook\",\"why\":null,\"file\":null,\"fingerprint\":null}"
+      },
+      {
+        "name": "empty strings are null, an empty detail stays a string",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "note",
+          "component": "",
+          "rule": "",
+          "detail": "",
+          "why": "",
+          "file": "",
+          "fingerprint": "",
+          "session": ""
+        },
+        "cwd": "/repos/app",
+        "env": {},
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"note\",\"component\":null,\"rule\":null,\"detail\":\"\",\"session\":null,\"source\":\"mastack-hook\",\"why\":null,\"file\":null,\"fingerprint\":null}"
+      },
+      {
+        "name": "a trailing slash in the working directory",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "note"
+        },
+        "cwd": "/repos/app/",
+        "env": {},
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"note\",\"component\":null,\"rule\":null,\"detail\":\"\",\"session\":null,\"source\":\"mastack-hook\",\"why\":null,\"file\":null,\"fingerprint\":null}"
+      },
+      {
+        "name": "detail is cut to limits.detail",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "owner-correction",
+          "detail": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "cwd": "/repos/app",
+        "env": {},
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"owner-correction\",\"component\":null,\"rule\":null,\"detail\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"session\":null,\"source\":\"mastack-hook\",\"why\":null,\"file\":null,\"fingerprint\":null}"
+      },
+      {
+        "name": "the cut counts UTF-16 units and may split a surrogate pair, written escaped",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "note",
+          "detail": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀tail"
+        },
+        "cwd": "/repos/app",
+        "env": {},
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"note\",\"component\":null,\"rule\":null,\"detail\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\ud83d\",\"session\":null,\"source\":\"mastack-hook\",\"why\":null,\"file\":null,\"fingerprint\":null}"
+      },
+      {
+        "name": "text outside ASCII as is; quotes, backslashes and control characters escaped",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "owner-correction",
+          "component": "Item",
+          "detail": "вместо Item — «ItemBody» é 😀 \"q\" \\ /path\ttab\nline\u0001 "
+        },
+        "cwd": "/repos/app",
+        "env": {},
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"owner-correction\",\"component\":\"Item\",\"rule\":null,\"detail\":\"вместо Item — «ItemBody» é 😀 \\\"q\\\" \\\\ /path\\ttab\\nline\\u0001 \",\"session\":null,\"source\":\"mastack-hook\",\"why\":null,\"file\":null,\"fingerprint\":null}"
+      },
+      {
+        "name": "a line longer than limits.line loses the excess from detail",
+        "fields": {
+          "package": "@acme/kit",
+          "source": "mastack-hook",
+          "kind": "note",
+          "why": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+          "detail": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "cwd": "/repos/app",
+        "env": {},
+        "now": "2026-11-12T00:00:00.000Z",
+        "line": "{\"v\":1,\"ts\":\"2026-11-12T00:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"note\",\"component\":null,\"rule\":null,\"detail\":\"ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"session\":null,\"source\":\"mastack-hook\",\"why\":\"wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww\",\"file\":null,\"fingerprint\":null}"
+      }
+    ],
+    "validate": [
+      {
+        "name": "a full event",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": []
+      },
+      {
+        "name": "optional fields missing; an unknown extra field",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"source\":\"repo-kit\",\"extra\":{\"any\":1}}",
+        "problems": []
+      },
+      {
+        "name": "ts without milliseconds, with an offset",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00+02:00\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": []
+      },
+      {
+        "name": "ts to the minute",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": []
+      },
+      {
+        "name": "detail of exactly limits.detail",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": []
+      },
+      {
+        "name": "an array is not an event",
+        "line": "[]",
+        "problems": [
+          "an event is a JSON object"
+        ]
+      },
+      {
+        "name": "a string is not an event",
+        "line": "\"text\"",
+        "problems": [
+          "an event is a JSON object"
+        ]
+      },
+      {
+        "name": "null is not an event",
+        "line": "null",
+        "problems": [
+          "an event is a JSON object"
+        ]
+      },
+      {
+        "name": "another version",
+        "line": "{\"v\":2,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "v must be 1"
+        ]
+      },
+      {
+        "name": "v true is not 1",
+        "line": "{\"v\":true,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "v must be 1"
+        ]
+      },
+      {
+        "name": "v \"1\" is not 1",
+        "line": "{\"v\":\"1\",\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "v must be 1"
+        ]
+      },
+      {
+        "name": "ts in words",
+        "line": "{\"v\":1,\"ts\":\"yesterday\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "ts must be an ISO 8601 time"
+        ]
+      },
+      {
+        "name": "ts with month 13",
+        "line": "{\"v\":1,\"ts\":\"2026-13-45T10:00:00Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "ts must be an ISO 8601 time"
+        ]
+      },
+      {
+        "name": "ts as a number",
+        "line": "{\"v\":1,\"ts\":1794304800000,\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "ts must be an ISO 8601 time"
+        ]
+      },
+      {
+        "name": "ts missing",
+        "line": "{\"v\":1,\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "ts must be an ISO 8601 time"
+        ]
+      },
+      {
+        "name": "blank project and empty package",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"  \",\"package\":\"\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "project is required",
+          "package is required"
+        ]
+      },
+      {
+        "name": "source missing",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "source is required"
+        ]
+      },
+      {
+        "name": "unknown kind",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"oops\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "kind must be one of lint-finding, selector-reach-in, type-error, owner-correction, misuse, vendored-patch, review-finding, note"
+        ]
+      },
+      {
+        "name": "kind missing",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "kind must be one of lint-finding, selector-reach-in, type-error, owner-correction, misuse, vendored-patch, review-finding, note"
+        ]
+      },
+      {
+        "name": "optional fields of another type",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":5,\"rule\":\"TS2322\",\"detail\":\"\",\"session\":false,\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "component must be a string or null",
+          "session must be a string or null"
+        ]
+      },
+      {
+        "name": "project of another type is missing and mistyped",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":5,\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "project is required",
+          "project must be a string or null"
+        ]
+      },
+      {
+        "name": "kind of another type",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":3,\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "kind must be one of lint-finding, selector-reach-in, type-error, owner-correction, misuse, vendored-patch, review-finding, note",
+          "kind must be a string or null"
+        ]
+      },
+      {
+        "name": "detail longer than limits.detail",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "detail is longer than 500 characters"
+        ]
+      },
+      {
+        "name": "detail length counts UTF-16 units",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀\",\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "detail is longer than 500 characters"
+        ]
+      },
+      {
+        "name": "detail as a list is mistyped, not long",
+        "line": "{\"v\":1,\"ts\":\"2026-11-10T10:00:00.000Z\",\"project\":\"app\",\"package\":\"@acme/kit\",\"kind\":\"type-error\",\"component\":\"Button\",\"rule\":\"TS2322\",\"detail\":[\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\"],\"session\":\"s1\",\"source\":\"repo-kit\",\"why\":null,\"file\":null,\"fingerprint\":null}",
+        "problems": [
+          "detail must be a string or null"
+        ]
+      },
+      {
+        "name": "every problem at once, in order",
+        "line": "{\"v\":0,\"ts\":\"\",\"project\":null,\"package\":1,\"kind\":\"?\",\"rule\":[],\"detail\":\"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\",\"why\":{}}",
+        "problems": [
+          "v must be 1",
+          "ts must be an ISO 8601 time",
+          "project is required",
+          "package is required",
+          "source is required",
+          "kind must be one of lint-finding, selector-reach-in, type-error, owner-correction, misuse, vendored-patch, review-finding, note",
+          "package must be a string or null",
+          "rule must be a string or null",
+          "why must be a string or null",
+          "detail is longer than 500 characters"
+        ]
+      }
+    ],
+    "fingerprint": [
+      {
+        "name": "a type error: project, file, code, message with digits as N",
+        "parts": [
+          "app",
+          "src/panel.tsx",
+          "TS2322",
+          "Type 'N' is not assignable"
+        ],
+        "fingerprint": "385fbc29cb994b56"
+      },
+      {
+        "name": "text outside ASCII is hashed as UTF-8",
+        "parts": [
+          "app",
+          "correction",
+          "s1",
+          "вместо Item используй ItemBody"
+        ],
+        "fingerprint": "ad95ba283aa1b19f"
+      },
+      {
+        "name": "no parts is the digest of empty text",
+        "parts": [],
+        "fingerprint": "e3b0c44298fc1c14"
+      },
+      {
+        "name": "parts are joined by NUL, so a boundary changes the key",
+        "parts": [
+          "ab",
+          "c"
+        ],
+        "fingerprint": "6c032e631d39a14d"
+      },
+      {
+        "name": "parts are joined by NUL, the other boundary",
+        "parts": [
+          "a",
+          "bc"
+        ],
+        "fingerprint": "40bb547d936bbd31"
+      }
+    ],
+    "redact": [
+      {
+        "name": "code, paths, URLs, e-mail addresses and long numbers go",
+        "note": "Use `<Button iconOnly />` not raw html in ~/work/app/src/a.tsx see https://x.io/y mail me@example.com id 12345678",
+        "redacted": "Use not raw html in see mail id"
+      },
+      {
+        "name": "a note with code punctuation outside backticks is dropped whole",
+        "note": "const x = {a: 1}; return x",
+        "redacted": ""
+      },
+      {
+        "name": "at most maxWords words",
+        "note": "one two three four five six seven eight nine ten eleven twelve thirteen",
+        "redacted": "one two three four five six seven eight nine ten eleven twelve"
+      },
+      {
+        "name": "words with ~ or / go; letters of any script stay",
+        "note": "~/secret/plan.md и ещё вместо Button",
+        "redacted": "и ещё вместо Button"
+      },
+      {
+        "name": "punctuation around words is trimmed, hex ids go",
+        "note": "(Item) already clamps, see deadbeef01: put “full” text in ItemBody!",
+        "redacted": "Item already clamps see put full text in ItemBody"
+      },
+      {
+        "name": "an empty note",
+        "note": "",
+        "redacted": ""
+      }
+    ]
+  }
+}

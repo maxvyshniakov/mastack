@@ -311,6 +311,9 @@ a redacted bundle to share), so `friction-audit` starts from counts. Which
 packages count is `~/.config/mastack/friction.json` (`$MASTACK_CONFIG`); see
 `hooks/friction_journal.py`. Without it nothing is logged;
 `FRICTION_JOURNAL=off` turns every writer off. Nothing goes over the network.
+The format comes from `hooks/friction-contract.json`, a pinned copy of
+repo-kit's `friction-contract.json` (its hash is `FRICTION_CONTRACT_SHA256`);
+to follow a new repo-kit format, copy that file and update the hash.
 
 ```json
 { "scopes": ["@scope/"],

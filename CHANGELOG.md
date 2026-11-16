@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- The friction journal writer (`hooks/friction_journal.py`) takes the format
+  from `hooks/friction-contract.json`, a pinned copy of repo-kit's
+  `friction-contract.json` with its SHA-256 in `FRICTION_CONTRACT_SHA256`;
+  change it only by copying repo-kit's file and updating the hash. Version,
+  fields, kinds, limits, session variables and the fingerprint rule come from
+  it, and `tests/friction_contract_test.py` runs every build, validate and
+  fingerprint case of the copy against the writer, and compares the copy with
+  a repo-kit checkout (`$REPO_KIT_DIR`, else `~/repo-kit`) when one has the
+  file, naming the parts that drifted. Following the contract, lines are now
+  compact JSON as repo-kit writes them, the detail limit counts UTF-16 units,
+  and an event with a mistyped optional field, `v: true` or an unparseable
+  time is no longer written. Still stdlib-only Python; no node at hook time.
+
 - `orchestrate`: writes to the project's own tracker (evidence comments,
   follow-up tickets, fixes to its own comments) need no owner confirmation;
   push, release, publish and early closing still follow `publishing.md`. A lane
