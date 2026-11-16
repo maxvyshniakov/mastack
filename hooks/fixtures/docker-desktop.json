@@ -1,0 +1,243 @@
+{
+  "comment": "Docker Desktop: quitting, killing or restarting it to refresh services stops every container on the machine, and opening it in front pulls it onto the active Space. Deny cases name what the command does to Docker Desktop (`says`); allow cases are ordinary docker CLI use, OrbStack, the hidden start, look-only signals and kills that reach no Docker Desktop process.",
+  "deny": [
+    {
+      "name": "osascript quit app",
+      "command": "osascript -e 'quit app \"Docker\"'",
+      "says": "quits Docker Desktop"
+    },
+    {
+      "name": "osascript tell to quit, then reopen",
+      "command": "osascript -e 'tell application \"Docker Desktop\" to quit' && sleep 5 && open -gja Docker",
+      "says": "quits Docker Desktop"
+    },
+    {
+      "name": "osascript by bundle id",
+      "command": "osascript -e 'tell application id \"com.docker.docker\" to quit'",
+      "says": "quits Docker Desktop"
+    },
+    {
+      "name": "JXA quit",
+      "command": "osascript -l JavaScript -e 'Application(\"Docker\").quit()'",
+      "says": "quits Docker Desktop"
+    },
+    {
+      "name": "killall Docker",
+      "command": "killall Docker",
+      "says": "kills Docker Desktop's processes by name"
+    },
+    {
+      "name": "killall Docker Desktop with a signal",
+      "command": "killall -9 \"Docker Desktop\"",
+      "says": "kills Docker Desktop's processes by name"
+    },
+    {
+      "name": "killall by regex",
+      "command": "killall -m 'Dock.*'",
+      "says": "kills Docker Desktop's processes by name"
+    },
+    {
+      "name": "open hidden but in front",
+      "command": "open -ja Docker",
+      "says": "opens Docker Desktop in front"
+    },
+    {
+      "name": "killall the backend",
+      "command": "killall com.docker.backend; open -gja Docker",
+      "says": "kills Docker Desktop's processes by name"
+    },
+    {
+      "name": "pkill -f Docker Desktop",
+      "command": "pkill -f \"Docker Desktop\"",
+      "says": "matches Docker Desktop's processes"
+    },
+    {
+      "name": "pkill Docker",
+      "command": "pkill Docker",
+      "says": "matches Docker Desktop's processes"
+    },
+    {
+      "name": "pkill -f docker reaches the backend",
+      "command": "pkill -9 -f docker",
+      "says": "matches Docker Desktop's processes"
+    },
+    {
+      "name": "kill of a pgrep substitution",
+      "command": "kill -9 $(pgrep Docker)",
+      "says": "kills a Docker Desktop process found by name"
+    },
+    {
+      "name": "kill of a ps | grep substitution",
+      "command": "kill $(ps ax | grep -i 'docker desktop' | awk '{print $1}')",
+      "says": "kills a Docker Desktop process found by name"
+    },
+    {
+      "name": "pgrep piped to xargs kill",
+      "command": "pgrep -f com.docker.backend | xargs kill -9",
+      "says": "kills a Docker Desktop process found by name"
+    },
+    {
+      "name": "ps grep awk xargs kill",
+      "command": "ps aux | grep Docker | awk '{print $2}' | xargs kill",
+      "says": "kills a Docker Desktop process found by name"
+    },
+    {
+      "name": "docker desktop restart",
+      "command": "docker desktop restart",
+      "says": "restarts Docker Desktop"
+    },
+    {
+      "name": "docker desktop stop in a chain",
+      "command": "cd app && docker desktop stop && docker desktop start",
+      "says": "stops Docker Desktop"
+    },
+    {
+      "name": "docker desktop restart with a context",
+      "command": "docker --context desktop-linux desktop restart",
+      "says": "restarts Docker Desktop"
+    },
+    {
+      "name": "open -a Docker in front",
+      "command": "open -a Docker",
+      "says": "opens Docker Desktop in front"
+    },
+    {
+      "name": "open -a Docker Desktop, background only",
+      "command": "open -g -a \"Docker Desktop\"",
+      "says": "opens Docker Desktop in front"
+    },
+    {
+      "name": "open the app bundle",
+      "command": "open /Applications/Docker.app",
+      "says": "opens Docker Desktop in front"
+    },
+    {
+      "name": "open by bundle id",
+      "command": "open -b com.docker.docker",
+      "says": "opens Docker Desktop in front"
+    },
+    {
+      "name": "inside sh -c",
+      "command": "sh -c 'killall Docker && open -a Docker'",
+      "says": "kills Docker Desktop's processes by name"
+    },
+    {
+      "name": "inside bash -lc after a semicolon",
+      "command": "bash -lc \"docker compose down; osascript -e 'quit app \\\"Docker\\\"'\"",
+      "says": "quits Docker Desktop"
+    },
+    {
+      "name": "inside a command substitution",
+      "command": "echo \"$(docker desktop restart 2>&1)\"",
+      "says": "restarts Docker Desktop"
+    },
+    {
+      "name": "inside an if",
+      "command": "if ! docker info >/dev/null 2>&1; then killall Docker; fi",
+      "says": "kills Docker Desktop's processes by name"
+    },
+    {
+      "name": "through sudo",
+      "command": "sudo pkill -f com.docker.vmnetd",
+      "says": "matches Docker Desktop's processes"
+    }
+  ],
+  "allow": [
+    {
+      "name": "compose restart",
+      "command": "docker compose restart"
+    },
+    {
+      "name": "compose restart one service",
+      "command": "docker compose restart api"
+    },
+    {
+      "name": "compose recreate",
+      "command": "docker compose up -d --force-recreate api"
+    },
+    {
+      "name": "restart a container",
+      "command": "docker restart db"
+    },
+    {
+      "name": "stop and kill containers",
+      "command": "docker stop web && docker kill worker"
+    },
+    {
+      "name": "daemon check",
+      "command": "docker info >/dev/null 2>&1 || open -gja Docker"
+    },
+    {
+      "name": "docker ps",
+      "command": "docker ps --format '{{.Names}}'"
+    },
+    {
+      "name": "hidden start, split flags",
+      "command": "open -g -j -a Docker"
+    },
+    {
+      "name": "hidden start, long flags",
+      "command": "open --background --hide -a \"Docker Desktop\""
+    },
+    {
+      "name": "docker desktop start and status",
+      "command": "docker desktop start && docker desktop status"
+    },
+    {
+      "name": "OrbStack restart",
+      "command": "orb restart docker"
+    },
+    {
+      "name": "orbctl stop",
+      "command": "orbctl stop && orbctl start"
+    },
+    {
+      "name": "pgrep only looks",
+      "command": "pgrep -fl Docker"
+    },
+    {
+      "name": "killall -s only lists",
+      "command": "killall -s Docker"
+    },
+    {
+      "name": "signal 0 only checks",
+      "command": "kill -0 $(pgrep Docker)"
+    },
+    {
+      "name": "killall the docker CLI",
+      "command": "killall docker"
+    },
+    {
+      "name": "kill a compose logs follower",
+      "command": "pkill -f 'docker compose logs'"
+    },
+    {
+      "name": "kill a dev server found by grep",
+      "command": "ps ax | grep vite | awk '{print $1}' | xargs kill"
+    },
+    {
+      "name": "inverted grep is not judged",
+      "command": "ps ax | grep -v Docker | grep node | awk '{print $1}' | xargs kill"
+    },
+    {
+      "name": "osascript that quits another app",
+      "command": "osascript -e 'quit app \"Safari\"'"
+    },
+    {
+      "name": "osascript that only asks Docker",
+      "command": "osascript -e 'tell application \"Docker\" to get version'"
+    },
+    {
+      "name": "open a compose file",
+      "command": "open docker-compose.yml"
+    },
+    {
+      "name": "quoted text",
+      "command": "echo 'never killall Docker; use docker compose restart'"
+    },
+    {
+      "name": "unparseable",
+      "command": "killall Docker \"unterminated"
+    }
+  ]
+}

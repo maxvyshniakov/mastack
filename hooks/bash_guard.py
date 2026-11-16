@@ -36,6 +36,8 @@ CHECKS = (
     ("pgrep_self_match", "pgrep-self-match", ("pgrep", "pkill")),
     ("slot_label", "slot-label", ("slotfather",)),
     ("codex_credits", "codex-credits", ("codex",)),
+    ("docker_desktop", "docker-desktop", ("docker", "Dock")),
+    ("simctl_boot", "simctl-boot", ("simctl",)),
     ("lease_guard", "lease-guard", ("kill",)),
 )
 ONLY_WITHOUT_DENY = {"lease_guard"}

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- New Bash check `docker_desktop`: `bash_guard` refuses quitting, killing or
+  restarting Docker Desktop (`osascript` quit, `killall`, `pkill`, `kill` of a
+  pid found by name, `docker desktop stop`/`restart`) and opening it in front;
+  the refusal names `docker compose restart`, `docker compose up -d
+  --force-recreate`, `docker info` and the hidden start `open -gja Docker`.
+- New Bash check `simctl_boot`: `bash_guard` refuses `xcrun simctl boot` (and
+  `bootstatus -b`) outside `junkfather own --kind simulator`, which shuts the
+  simulator down at session end or its TTL, and shows the wrapped command.
+  Without junkfather installed every command passes.
 - `orchestrate`: writes to the project's own tracker (evidence comments,
   follow-up tickets, fixes to its own comments) need no owner confirmation;
   push, release, publish and early closing still follow `publishing.md`. A lane

@@ -486,6 +486,83 @@ class CodexCreditsTests(HookCase):
 
 # ---- the dispatcher -----------------------------------------------------------------------------------------------
 
+class DockerDesktopTests(HookCase):
+    cases = fixture("docker-desktop.json")
+
+    def decide(self, command, script="docker_desktop.py"):
+        return self.bash(script, command, "{home}/app")
+
+    @staticmethod
+    def expect(test, case, reason):
+        test.assertIn("docker-desktop denied", reason)
+        test.assertIn(case["says"], reason)
+        for alternative in ("docker compose restart", "docker compose up -d --force-recreate", "docker info",
+                            "open -gja Docker"):
+            test.assertIn(alternative, reason)
+
+    def test_quitting_killing_restarting_or_opening_in_front_is_denied_with_the_alternatives(self):
+        for case in self.cases["deny"]:
+            with self.subTest(case["name"]):
+                self.expect(self, case, self.denied(self.decide(case["command"])))
+
+    def test_docker_cli_orbstack_hidden_start_and_looks_pass(self):
+        for case in self.cases["allow"]:
+            with self.subTest(case["name"]):
+                self.assertIsNone(self.decide(case["command"]))
+
+    def test_unreadable_or_empty_input_passes(self):
+        self.assertFailsOpen("docker_desktop.py")
+
+
+class SimctlBootTests(HookCase):
+    """A simulator boot must run under `junkfather own --kind simulator`; a stand-in junkfather marks it installed
+    (the check only looks for it, never runs it)."""
+
+    cases = fixture("simctl-boot.json")
+
+    def stand_in(self):
+        fake = self.tmp / "junkfather"
+        if not fake.exists():
+            fake.write_text("#!/bin/sh\nexit 1\n")
+            fake.chmod(0o755)
+        self.env["MASTACK_JUNKFATHER"] = str(fake)
+
+    def decide(self, command, script="simctl_boot.py"):
+        if "MASTACK_JUNKFATHER" not in self.env:
+            self.stand_in()
+        return self.bash(script, command, "{home}/app")
+
+    @staticmethod
+    def expect(test, case, reason):
+        test.assertIn("simctl-boot denied", reason)
+        test.assertIn(case["says"], reason)
+        test.assertIn(test.fill(case["run"]), reason)
+        test.assertIn("junkfather own --kind simulator [--ttl 2h] [--label L] -- xcrun simctl boot <udid>", reason)
+
+    def test_boots_outside_junkfather_are_denied_with_the_wrapped_form(self):
+        for case in self.cases["deny"]:
+            with self.subTest(case["name"]):
+                self.expect(self, case, self.denied(self.decide(case["command"])))
+
+    def test_owned_boots_and_other_subcommands_pass(self):
+        for case in self.cases["allow"]:
+            with self.subTest(case["name"]):
+                self.assertIsNone(self.decide(case["command"]))
+
+    def test_without_junkfather_every_boot_passes(self):
+        self.env["MASTACK_JUNKFATHER"] = str(self.tmp / "missing-junkfather")
+        for case in self.cases["deny"]:
+            with self.subTest(case["name"]):
+                self.assertIsNone(self.decide(case["command"]))
+        self.env.pop("MASTACK_JUNKFATHER")
+        self.env["PATH"] = "/usr/bin:/bin"
+        self.assertIsNone(self.bash("simctl_boot.py", "xcrun simctl boot $UDID", "{home}/app"))
+
+    def test_unreadable_or_empty_input_passes(self):
+        self.stand_in()
+        self.assertFailsOpen("simctl_boot.py")
+
+
 class BashGuardTests(HookCase):
     """bash_guard.py runs every check in one process and decides as they do."""
 
@@ -505,7 +582,11 @@ class BashGuardTests(HookCase):
                 (SlotLabelTests, SlotLabelTests.cases, SlotLabelTests.expect, ("slot-label denied",),
                  lambda t, c: t.decide(c, "bash_guard.py")),
                 (CodexCreditsTests, CodexCreditsTests.cases, CodexCreditsTests.expect, ("codex-credits denied",),
-                 lambda t, c: t.decide(c, "bash_guard.py"))]
+                 lambda t, c: t.decide(c, "bash_guard.py")),
+                (DockerDesktopTests, DockerDesktopTests.cases, DockerDesktopTests.expect, ("docker-desktop denied",),
+                 lambda t, c: t.decide(c["command"], "bash_guard.py")),
+                (SimctlBootTests, SimctlBootTests.cases, SimctlBootTests.expect, ("simctl-boot denied",),
+                 lambda t, c: t.decide(c["command"], "bash_guard.py"))]
         for kind, cases, expect, mine, decide in sets:
             runner = kind()
             runner.__dict__.update(self.__dict__)

@@ -1,0 +1,27 @@
+{
+  "comment": "simctl boot: a simulator booted outside junkfather stays booted after the session ends. Deny cases name why (`says`) and the wrapped form the message shows (`run`); allow cases are other simctl subcommands and boots junkfather owns. junkfather is installed in these cases; without it every command passes.",
+  "deny": [
+    {"name": "bare boot", "command": "xcrun simctl boot 8A1F0C2E-1111-4222-8333-944455556666", "says": "boots a simulator nothing shuts down", "run": "junkfather own --kind simulator --label \"<what it is for>\" -- xcrun simctl boot 8A1F0C2E-1111-4222-8333-944455556666"},
+    {"name": "boot by name in a chain", "command": "xcrun simctl boot \"iPhone 17 Pro\" && xcrun simctl install booted App.app", "says": "boots a simulator nothing shuts down", "run": "-- xcrun simctl boot \"iPhone 17 Pro\"`"},
+    {"name": "boot after a semicolon", "command": "xcrun simctl shutdown all; xcrun simctl boot $UDID", "says": "boots a simulator nothing shuts down", "run": "-- xcrun simctl boot $UDID`"},
+    {"name": "boot with xcrun options", "command": "xcrun --sdk iphonesimulator simctl boot $UDID", "says": "boots a simulator nothing shuts down", "run": "-- xcrun --sdk iphonesimulator simctl boot $UDID`"},
+    {"name": "bootstatus -b boots", "command": "xcrun simctl bootstatus $UDID -b", "says": "boots a simulator nothing shuts down", "run": "-- xcrun simctl bootstatus $UDID -b`"},
+    {"name": "inside sh -c", "command": "sh -c 'xcrun simctl boot $0' \"$UDID\"", "says": "boots a simulator nothing shuts down", "run": "-- xcrun simctl boot $0`"},
+    {"name": "inside a command substitution", "command": "out=$(xcrun simctl boot \"$UDID\" 2>&1) || echo \"$out\"", "says": "boots a simulator nothing shuts down", "run": "-- xcrun simctl boot \"$UDID\"`"},
+    {"name": "simctl by path", "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/simctl boot $UDID", "says": "boots a simulator nothing shuts down", "run": "-- /Applications/Xcode.app/Contents/Developer/usr/bin/simctl boot $UDID`"},
+    {"name": "junkfather own without the simulator kind", "command": "junkfather own --ttl 2h -- xcrun simctl boot $UDID", "says": "without `--kind simulator`", "run": "junkfather own --kind simulator --label \"<what it is for>\" -- xcrun simctl boot $UDID`"},
+    {"name": "junkfather own without the kind around sh -c", "command": "junkfather own -- bash -c 'xcrun simctl boot \"$UDID\"'", "says": "without `--kind simulator`", "run": "-- xcrun simctl boot \"$UDID\"`"}
+  ],
+  "allow": [
+    {"name": "owned boot", "command": "junkfather own --kind simulator -- xcrun simctl boot $UDID"},
+    {"name": "owned boot with ttl and label", "command": "junkfather own --kind simulator --ttl 2h --label \"ui check\" -- xcrun simctl boot \"iPhone 17 Pro\" && xcrun simctl install booted App.app"},
+    {"name": "owned boot, kind with equals", "command": "junkfather own --kind=simulator xcrun simctl boot $UDID"},
+    {"name": "shutdown", "command": "xcrun simctl shutdown $UDID"},
+    {"name": "list", "command": "xcrun simctl list devices booted -j"},
+    {"name": "bootstatus only waits", "command": "xcrun simctl bootstatus $UDID"},
+    {"name": "launch and screenshot", "command": "xcrun simctl launch booted com.example.app && xcrun simctl io booted screenshot shot.png"},
+    {"name": "xcrun -f only finds", "command": "xcrun -f simctl"},
+    {"name": "text that mentions a boot", "command": "echo 'run xcrun simctl boot under junkfather'"},
+    {"name": "unparseable", "command": "xcrun simctl boot \"unterminated"}
+  ]
+}
