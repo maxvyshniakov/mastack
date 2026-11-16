@@ -1,6 +1,9 @@
 """The friction journal: moments an agent misread or misused one of your packages, one JSON line each.
 
-The format is repo-kit's friction schema, version 1 (`repo-kit friction report` and `export` read it):
+The format is repo-kit's friction schema (`repo-kit friction report` and `export` read it), taken from
+`friction-contract.json` beside this file: a pinned copy of repo-kit's contract, changed only by copying repo-kit's
+file and updating FRICTION_CONTRACT_SHA256. Its version, fields, kinds, limits, line encoding, session variables and
+fingerprint rule are read from it; tests/friction_contract_test.py runs its golden cases against this writer.
 
     {"v": 1, "ts": ISO time, "project", "package", "kind", "component", "rule", "detail", "session", "source",
      "why", "file", "fingerprint"}
@@ -32,13 +35,28 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-SCHEMA = 1
-KINDS = ("lint-finding", "selector-reach-in", "type-error", "owner-correction", "misuse", "vendored-patch",
-         "review-finding", "note")
-FIELDS = ("v", "ts", "project", "package", "kind", "component", "rule", "detail", "session", "source", "why", "file",
-          "fingerprint")
-DETAIL_LIMIT = 500
-LINE_LIMIT = 4000
+import hook_io
+
+CONTRACT_FILE = Path(__file__).resolve().with_name("friction-contract.json")
+FRICTION_CONTRACT_SHA256 = "28da0c2c47b8cfb2a02bb2e9bc5081e9dfd1ba5d87446ca5b47afa5e4f331af6"
+CONTRACT = json.loads(CONTRACT_FILE.read_text(encoding="utf-8"))
+_FIELDS = CONTRACT["schema"]["fields"]
+
+SCHEMA = CONTRACT["schema"]["version"]
+KINDS = tuple(CONTRACT["schema"]["kinds"])
+FIELDS = tuple(field["name"] for field in _FIELDS)
+DETAIL_LIMIT = CONTRACT["schema"]["limits"]["detail"]  # UTF-16 code units, as JavaScript counts a string
+LINE_LIMIT = CONTRACT["schema"]["limits"]["line"]
+SESSION_ENV = tuple(CONTRACT["build"]["session"]["env"])
+_TS = re.compile(next(field for field in _FIELDS if field["name"] == "ts")["pattern"], re.ASCII)
+_REQUIRED_TEXT = tuple(field["name"] for field in _FIELDS
+                       if field["required"] and field["type"] == "string" and not field.get("format") and not field.get("oneOf"))
+_STRING_FIELDS = tuple(field["name"] for field in _FIELDS if field["type"] == "string" and not field.get("format"))
+_LONE_SURROGATE = re.compile("[\ud800-\udfff]")
+# The ISO 8601 shapes JavaScript's Date.parse takes for a time that starts like the contract's pattern, so this
+# writer refuses no time repo-kit's reader keeps: 24:00 only as the end of a day, any day up to 31, z or Z,
+# an offset with or without its colon, any number of fraction digits.
+_JS_TIME = re.compile(r"\d{4}-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d)(?:\.(\d+))?)?(?:[Zz]|([+-])(\d\d):?(\d\d))?", re.ASCII)
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 # tsc: `src/a.tsx(12,5): error TS2322: ...` and the pretty `src/a.tsx:12:5 - error TS2322: ...`.
@@ -150,46 +168,139 @@ def project_root(cwd) -> Path | None:
 
 
 def fingerprint(*parts) -> str:
-    return hashlib.sha256("\0".join(str(p) for p in parts).encode()).hexdigest()[:16]
+    """The contract's key of a fact: sha256 of the parts as text joined by NUL, its first 16 hex digits."""
+    rule = CONTRACT["fingerprint"]
+    text = rule["separator"].join(str(p) for p in parts)
+    return hashlib.new(rule["algorithm"], text.encode(rule["encoding"])).hexdigest()[:rule["length"]]
+
+
+def _units(text: str) -> int:
+    """Length in UTF-16 code units, as JavaScript counts a string: the unit of the contract's limits."""
+    return len(text.encode("utf-16-le", "surrogatepass")) // 2
+
+
+def _cut(text: str, units: int) -> str:
+    """The first `units` UTF-16 code units; like JavaScript's slice it may leave half a surrogate pair."""
+    return text.encode("utf-16-le", "surrogatepass")[:2 * units].decode("utf-16-le", "surrogatepass")
+
+
+def session_id(env) -> str | None:
+    return next((env[name] for name in SESSION_ENV if env.get(name)), None)
+
+
+def build_event(fields: dict, *, cwd=None, env=None, now: datetime | None = None) -> dict:
+    """An event by the contract's build rule: missing, null or empty fields are null, detail is a string cut to
+    DETAIL_LIMIT, ts defaults to `now`, project to the repository of `cwd`, session to SESSION_ENV in `env`."""
+    env = {} if env is None else env
+
+    def text(value):
+        return None if value is None or value == "" else str(value)
+
+    ts = fields.get("ts")
+    if ts is None:
+        ts = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="milliseconds")
+        ts = ts.replace("+00:00", "Z")
+    project = text(fields.get("project"))
+    if project is None and cwd is not None:
+        project = project_name(cwd)
+    session = text(fields.get("session"))
+    return {"v": SCHEMA, "ts": ts, "project": project, "package": text(fields.get("package")) or "",
+            "kind": fields.get("kind"), "component": text(fields.get("component")), "rule": text(fields.get("rule")),
+            "detail": _cut(text(fields.get("detail")) or "", DETAIL_LIMIT),
+            "session": session if session is not None else session_id(env), "source": text(fields.get("source")),
+            "why": text(fields.get("why")), "file": text(fields.get("file")), "fingerprint": text(fields.get("fingerprint"))}
 
 
 def event(*, package: str, kind: str, project: str, source: str, ts: str | None = None, component=None, rule=None,
           detail: str = "", session=None, why=None, file=None, fp=None) -> dict:
-    return {"v": SCHEMA, "ts": ts or datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
-            "project": project, "package": package, "kind": kind, "component": component or None, "rule": rule or None,
-            "detail": (detail or "")[:DETAIL_LIMIT], "session": session or None, "source": source, "why": why or None,
-            "file": file or None, "fingerprint": fp or None}
+    return build_event({"ts": ts or None, "project": project, "package": package, "kind": kind, "component": component,
+                        "rule": rule, "detail": detail, "session": session, "source": source, "why": why, "file": file,
+                        "fingerprint": fp})
 
 
-def problems(item: dict) -> list[str]:
+def _parses(ts: str) -> bool:
+    """Whether JavaScript's Date.parse takes the time (held to the contract's edge-time cases)."""
+    match = _JS_TIME.fullmatch(ts)
+    if not match:
+        return False
+    month, day, hour, minute, second, fraction, sign, offset_hours, offset_minutes = match.groups()
+    hour, minute, second = int(hour), int(minute), int(second or 0)
+    if not (1 <= int(month) <= 12 and 1 <= int(day) <= 31 and minute <= 59 and second <= 59 and hour <= 24):
+        return False
+    if hour == 24 and (minute or second or int(fraction or 0)):
+        return False
+    return not sign or (int(offset_hours) <= 23 and int(offset_minutes) <= 59)
+
+
+def problems(item) -> list[str]:
+    """What makes an item no event of this schema, in the contract's order; [] for a valid one."""
+    if not isinstance(item, dict):
+        return ["an event is a JSON object"]
     found = []
-    if item.get("v") != SCHEMA:
+    version = item.get("v")
+    if isinstance(version, bool) or not isinstance(version, (int, float)) or version != SCHEMA:
         found.append(f"v must be {SCHEMA}")
-    if not re.match(r"^\d{4}-\d\d-\d\dT\d\d:\d\d", str(item.get("ts", ""))):
+    ts = item.get("ts")
+    if not isinstance(ts, str) or not _TS.match(ts) or not _parses(ts):
         found.append("ts must be an ISO 8601 time")
-    for field in ("project", "package", "source"):
+    for field in _REQUIRED_TEXT:
         if not isinstance(item.get(field), str) or not item[field].strip():
             found.append(f"{field} is required")
     if item.get("kind") not in KINDS:
         found.append(f"kind must be one of {', '.join(KINDS)}")
-    if len(item.get("detail") or "") > DETAIL_LIMIT:
+    for field in _STRING_FIELDS:
+        if item.get(field) is not None and not isinstance(item[field], str):
+            found.append(f"{field} must be a string or null")
+    if isinstance(item.get("detail"), str) and _units(item["detail"]) > DETAIL_LIMIT:
         found.append(f"detail is longer than {DETAIL_LIMIT} characters")
     return found
 
 
+def _json(item: dict) -> str:
+    """Compact JSON as JavaScript's JSON.stringify writes it: raw UTF-8, a lone surrogate as \\udxxx."""
+    text = json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+    return _LONE_SURROGATE.sub(lambda match: f"\\u{ord(match.group()):04x}", text)
+
+
+def journal_event(item):
+    """An event as the contract's write rule hands it to the journal: every field in FIELDS order (a missing one None),
+    then the fields the schema does not name, and a string detail cut to DETAIL_LIMIT. A non-dict is left as is."""
+    if not isinstance(item, dict):
+        return item
+    ready = {name: item.get(name) for name in FIELDS}
+    ready.update((key, value) for key, value in item.items() if key not in ready)
+    if isinstance(ready["detail"], str):
+        ready["detail"] = _cut(ready["detail"], DETAIL_LIMIT)
+    return ready
+
+
+def line(item: dict) -> str:
+    """The journal line of an event in schema order; when longer than LINE_LIMIT its detail loses the excess, once."""
+    ready = journal_event(item)
+    text = _json(ready)
+    over = _units(text) - LINE_LIMIT
+    if over <= 0 or not isinstance(ready["detail"], str):
+        return text
+    return _json({**ready, "detail": _cut(ready["detail"], max(0, _units(ready["detail"]) - over))})
+
+
 def append(events: list[dict], env=None) -> int:
-    """Append valid events, one line each in one write; returns how many. Never raises: a journal problem is silent."""
+    """Append valid events, one line each in one write; returns how many. Never raises: an event with problems is
+    left out and logged to the hooks' guard.log, an unwritable journal is silent."""
     path = journal_path(env)
-    good = [e for e in events if not problems(e)]
-    if not path or not good:
+    if not path:
         return 0
-    lines = []
-    for item in good:
-        line = json.dumps(item, ensure_ascii=False)
-        if len(line) > LINE_LIMIT:
-            line = json.dumps({**item, "detail": item["detail"][:max(0, len(item["detail"]) - (len(line) - LINE_LIMIT))]},
-                              ensure_ascii=False)
-        lines.append(line + "\n")
+    good = []
+    for item in map(journal_event, events):
+        found = problems(item)
+        if found:
+            kind = item.get("kind") if isinstance(item, dict) else None
+            hook_io.log("guard.log", f"friction journal refused a {kind} event: {'; '.join(found)}")
+        else:
+            good.append(item)
+    if not good:
+        return 0
+    lines = [line(item) + "\n" for item in good]
     try:
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
