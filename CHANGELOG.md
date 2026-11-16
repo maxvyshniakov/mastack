@@ -11,9 +11,13 @@
   fingerprint case of the copy against the writer, and compares the copy with
   a repo-kit checkout (`$REPO_KIT_DIR`, else `~/repo-kit`) when one has the
   file, naming the parts that drifted. Following the contract, lines are now
-  compact JSON as repo-kit writes them, the detail limit counts UTF-16 units,
-  and an event with a mistyped optional field, `v: true` or an unparseable
-  time is no longer written. Still stdlib-only Python; no node at hook time.
+  compact JSON in schema order as repo-kit writes them, the detail limit
+  counts UTF-16 units and `append` cuts a long detail as `event` does, and an
+  event with a mistyped optional field, `v: true` or a time JavaScript's
+  `Date.parse` rejects is no longer written; every time it takes (24:00, day
+  31 of any month, lowercase `z`, `+0200`) still is. A refused event is
+  logged to the hooks' `guard.log` instead of vanishing. Still stdlib-only
+  Python; no node at hook time.
 
 - `orchestrate`: writes to the project's own tracker (evidence comments,
   follow-up tickets, fixes to its own comments) need no owner confirmation;

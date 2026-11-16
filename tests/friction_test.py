@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOKS = ROOT / "hooks"
@@ -49,7 +50,11 @@ class FrictionCase(unittest.TestCase):
         self.env = {k: v for k, v in os.environ.items()
                     if not k.startswith(("MASTACK_", "FRICTION_", "CLAUDE_CODE_SESSION", "CODEX_")) and k != "XDG_STATE_HOME"}
         self.env.update(HOME=str(self.home), MASTACK_CONFIG=str(self.config), FRICTION_JOURNAL=str(self.journal),
-                        XDG_STATE_HOME=str(self.tmp / "state"))
+                        XDG_STATE_HOME=str(self.tmp / "state"), MASTACK_HOOK_STATE=str(self.tmp / "hook-state"))
+        # In-process writers log refusals to the hooks' guard.log: keep it in the scratch tree too.
+        patcher = mock.patch.dict(os.environ, {"MASTACK_HOOK_STATE": str(self.tmp / "hook-state")})
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def write_config(self, extra: dict):
         base = {"scopes": ["@acme/"],
@@ -84,6 +89,8 @@ class JournalTests(FrictionCase):
         bad = {**good, "kind": "bogus"}
         self.assertEqual(friction_journal.append([good, bad], {"FRICTION_JOURNAL": str(self.journal)}), 1)
         self.assertEqual([e["kind"] for e in self.events()], ["note"])
+        self.assertIn("friction journal refused a bogus event: kind must be one of",
+                      (self.tmp / "hook-state" / "guard.log").read_text(), "a refused event is logged, not dropped silently")
         self.assertEqual(self.journal.stat().st_mode & 0o777, 0o600)
         self.assertEqual(friction_journal.append([good], {"FRICTION_JOURNAL": str(self.journal / "x")}), 0,
                          "an unwritable journal is silent")

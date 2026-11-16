@@ -35,8 +35,10 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+import hook_io
+
 CONTRACT_FILE = Path(__file__).resolve().with_name("friction-contract.json")
-FRICTION_CONTRACT_SHA256 = "e207f806202df5a75d8ac044d8fc93dc943aa80b955582badac9604924d937c0"
+FRICTION_CONTRACT_SHA256 = "28da0c2c47b8cfb2a02bb2e9bc5081e9dfd1ba5d87446ca5b47afa5e4f331af6"
 CONTRACT = json.loads(CONTRACT_FILE.read_text(encoding="utf-8"))
 _FIELDS = CONTRACT["schema"]["fields"]
 
@@ -51,6 +53,10 @@ _REQUIRED_TEXT = tuple(field["name"] for field in _FIELDS
                        if field["required"] and field["type"] == "string" and not field.get("format") and not field.get("oneOf"))
 _STRING_FIELDS = tuple(field["name"] for field in _FIELDS if field["type"] == "string" and not field.get("format"))
 _LONE_SURROGATE = re.compile("[\ud800-\udfff]")
+# The ISO 8601 shapes JavaScript's Date.parse takes for a time that starts like the contract's pattern, so this
+# writer refuses no time repo-kit's reader keeps: 24:00 only as the end of a day, any day up to 31, z or Z,
+# an offset with or without its colon, any number of fraction digits.
+_JS_TIME = re.compile(r"\d{4}-(\d\d)-(\d\d)T(\d\d):(\d\d)(?::(\d\d)(?:\.(\d+))?)?(?:[Zz]|([+-])(\d\d):?(\d\d))?", re.ASCII)
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 # tsc: `src/a.tsx(12,5): error TS2322: ...` and the pretty `src/a.tsx:12:5 - error TS2322: ...`.
@@ -213,11 +219,17 @@ def event(*, package: str, kind: str, project: str, source: str, ts: str | None 
 
 
 def _parses(ts: str) -> bool:
-    try:
-        datetime.fromisoformat(ts)
-    except ValueError:
+    """Whether JavaScript's Date.parse takes the time (held to the contract's edge-time cases)."""
+    match = _JS_TIME.fullmatch(ts)
+    if not match:
         return False
-    return True
+    month, day, hour, minute, second, fraction, sign, offset_hours, offset_minutes = match.groups()
+    hour, minute, second = int(hour), int(minute), int(second or 0)
+    if not (1 <= int(month) <= 12 and 1 <= int(day) <= 31 and minute <= 59 and second <= 59 and hour <= 24):
+        return False
+    if hour == 24 and (minute or second or int(fraction or 0)):
+        return False
+    return not sign or (int(offset_hours) <= 23 and int(offset_minutes) <= 59)
 
 
 def problems(item) -> list[str]:
@@ -250,20 +262,43 @@ def _json(item: dict) -> str:
     return _LONE_SURROGATE.sub(lambda match: f"\\u{ord(match.group()):04x}", text)
 
 
+def journal_event(item):
+    """An event as the contract's write rule hands it to the journal: every field in FIELDS order (a missing one None),
+    then the fields the schema does not name, and a string detail cut to DETAIL_LIMIT. A non-dict is left as is."""
+    if not isinstance(item, dict):
+        return item
+    ready = {name: item.get(name) for name in FIELDS}
+    ready.update((key, value) for key, value in item.items() if key not in ready)
+    if isinstance(ready["detail"], str):
+        ready["detail"] = _cut(ready["detail"], DETAIL_LIMIT)
+    return ready
+
+
 def line(item: dict) -> str:
-    """The journal line of an event; when longer than LINE_LIMIT its detail loses the excess, once."""
-    text = _json(item)
+    """The journal line of an event in schema order; when longer than LINE_LIMIT its detail loses the excess, once."""
+    ready = journal_event(item)
+    text = _json(ready)
     over = _units(text) - LINE_LIMIT
-    if over <= 0:
+    if over <= 0 or not isinstance(ready["detail"], str):
         return text
-    return _json({**item, "detail": _cut(item["detail"], max(0, _units(item["detail"]) - over))})
+    return _json({**ready, "detail": _cut(ready["detail"], max(0, _units(ready["detail"]) - over))})
 
 
 def append(events: list[dict], env=None) -> int:
-    """Append valid events, one line each in one write; returns how many. Never raises: a journal problem is silent."""
+    """Append valid events, one line each in one write; returns how many. Never raises: an event with problems is
+    left out and logged to the hooks' guard.log, an unwritable journal is silent."""
     path = journal_path(env)
-    good = [e for e in events if not problems(e)]
-    if not path or not good:
+    if not path:
+        return 0
+    good = []
+    for item in map(journal_event, events):
+        found = problems(item)
+        if found:
+            kind = item.get("kind") if isinstance(item, dict) else None
+            hook_io.log("guard.log", f"friction journal refused a {kind} event: {'; '.join(found)}")
+        else:
+            good.append(item)
+    if not good:
         return 0
     lines = [line(item) + "\n" for item in good]
     try:

@@ -15,6 +15,7 @@ import sys
 import tempfile
 import unittest
 from datetime import datetime
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 COPY = ROOT / "hooks" / "friction-contract.json"
@@ -24,7 +25,7 @@ import friction_journal as fj  # noqa: E402
 
 CONTRACT = json.loads(COPY.read_text(encoding="utf-8"))
 # The case groups a writer runs, and the ones only an exporter (repo-kit's `friction export`) runs.
-WRITER_CASES = {"build", "validate", "fingerprint"}
+WRITER_CASES = {"build", "write", "validate", "fingerprint"}
 EXPORTER_CASES = {"redact"}
 
 
@@ -94,6 +95,27 @@ class GoldenCases(unittest.TestCase):
                 self.assertEqual(list(event), list(fj.FIELDS))
                 self.assertEqual(fj.line(event), case["line"])
                 self.assertEqual(fj.problems(json.loads(case["line"])), [])
+
+    def test_write_cases_give_the_line_or_a_logged_refusal(self):
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="mastack-friction-write-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        state = tmp / "state"
+        patcher = mock.patch.dict(os.environ, {"MASTACK_HOOK_STATE": str(state)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        for index, case in enumerate(CONTRACT["cases"]["write"]):
+            with self.subTest(case["name"]):
+                journal = tmp / f"{index}.jsonl"
+                written = fj.append([case["event"]], {"FRICTION_JOURNAL": str(journal)})
+                if "problems" in case:
+                    self.assertEqual(fj.problems(fj.journal_event(case["event"])), case["problems"])
+                    self.assertEqual((written, journal.exists()), (0, False))
+                    log = (state / "guard.log").read_text(encoding="utf-8")
+                    self.assertIn(f"friction journal refused a {case['event'].get('kind')} event", log)
+                    self.assertIn(case["problems"][0], log, "the refusal names its problems")
+                else:
+                    self.assertEqual(fj.line(case["event"]), case["line"])
+                    self.assertEqual((written, journal.read_text(encoding="utf-8")), (1, case["line"] + "\n"))
 
     def test_validate_cases_give_the_problems_in_order(self):
         for case in CONTRACT["cases"]["validate"]:
