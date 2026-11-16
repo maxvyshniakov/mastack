@@ -86,8 +86,14 @@ Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
 6. **Review** each landed lane once (`cross-review`), when and how the project's
    review policy says, else right after the land: the
    reviewer sees the diff, ticket and standards, never the lane's report. It
-   runs beside the next lands. One round of fixes in the same lane, every
-   finding marked fixed or rejected; nobody reviews the fix. Finish the lane in
+   runs beside the next lands. One round of fixes, every finding marked fixed
+   or rejected, started only through the lane tool's fix-round path:
+   `lanefather review <id> --fix-lane` for one lane, `lanefather start <fix-id>
+   --fix-of A,B,C` for the findings of several (fathers#174; until it ships,
+   one `--fix-lane` per lane). A plain `start` is an ordinary lane, which
+   `land` reviews: batched fix lanes started that way chained six and seven
+   rounds deep. Nobody reviews the fix; a review of it that runs anyway opens
+   no new round and no new fix lane. Finish the lane in
    the lane tool (Lanefather's `done`) as soon as its last finding is marked:
    it removes only merged worktrees, branches and scratch, and finished lanes
    left for batch end fill the disk until the lane tool refuses new lanes.

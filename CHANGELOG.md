@@ -11,6 +11,11 @@
   lane state; `lanefather wait <id> --for <state>` (fathers#175) is for the
   rare wait it needs. The coordinator waits for the agent's completion
   notice, not on `lanefather list` (mastack#16).
+- `orchestrate`, `cross-review`: a fix round starts only through the lane
+  tool's fix-round path (`lanefather review <id> --fix-lane`, or `start
+  <fix-id> --fix-of A,B,C` for several lanes, fathers#174), never a plain
+  `start`, which Lanefather reviews at land; a review of fix work that runs
+  anyway opens no new round (mastack#17).
 - `models.toml`: a `scout` role for read-only scouting in the repository,
   Sol at medium effort while at least 15% of the weekly Codex limit is left,
   then Sonnet at medium. `orchestrate` runs `scripts/role scout` before such
