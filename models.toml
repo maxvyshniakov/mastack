@@ -85,6 +85,13 @@ choices = [
   { model = "opus", effort = "medium" },
 ]
 
+[roles.scout]
+purpose = "read-only scouting inside the repository: map code, find where something lives, list call sites; no judgment or proposal"
+choices = [
+  { model = "sol", effort = "medium", when = { limit = { codex_weekly = 15 } } },
+  { model = "sonnet", effort = "medium" },
+]
+
 [roles.research]
 purpose = "reading docs and sources, collecting facts, release notes"
 choices = [

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `models.toml`: a `scout` role for read-only scouting in the repository,
+  Sol at medium effort while at least 15% of the weekly Codex limit is left,
+  then Sonnet at medium. `orchestrate` runs `scripts/role scout` before such
+  a task: Sol headless through `[cli.codex].run` in a read-only sandbox with
+  stdin closed, Sonnet through the Agent tool. Judgment and proposals stay
+  with `design` (mastack#18).
 - Lifecycle `PreToolUse` entries can rewrite a Bash call: `"rewrite": true`
   makes the entry's answer (`hookSpecificOutput.updatedInput`) the call's new
   input, passed on by `bash_guard` without a permission decision of its own,

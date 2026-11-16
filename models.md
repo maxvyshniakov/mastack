@@ -13,6 +13,7 @@ evals, and update the reasons here if they changed.
 | visual | Opus, high | none | The author prefers to keep work judged by eye with the Anthropic family. |
 | review | Sol, medium | Opus, medium | The reviewer is of another family than the implementer, so it does not share the implementer's blind spots. |
 | routine | Sol, medium | Opus, medium | Bulk, low-risk work: renames, mirroring docs, running checks. |
+| scout | Sol, medium | Sonnet, medium | Read-only scouting in the repository (map code, find where something lives) needs no judgment, and it ran on Opus and spent the Claude limit while Codex had quota. Not part of research: Codex runs it in a read-only sandbox, which writes no file and reads no web. |
 | research | Opus, medium | Sonnet, medium | Collecting facts needs care, not frontier judgment. Sonnet only for plain reading and search. |
 | audit | Fable, high | Opus, high | A finding from a cheaper model is a lead until a strong model has verified it. |
 
@@ -27,7 +28,7 @@ evals, and update the reasons here if they changed.
 - **Both lenses for dangerous surfaces.** Migrations, auth, money and
   deletion get reviewers from both families in parallel, on the author's view
   that two families are likely to catch different defects.
-- **Quota decides the order, not taste.** Codex leads review and routine while
+- **Quota decides the order, not taste.** Codex leads review, routine and scouting while
   at least 15% of its weekly limit is left, because its tokens are cheaper; below
   that, work moves to Claude so the last of the quota stays for review.
 - **Subagents name their model.** A subagent inherits the session's model unless

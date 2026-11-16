@@ -98,6 +98,14 @@ class ResolveTests(RoleCase):
         self.assertEqual(self.answer("routine", used=85)["model"], "sol")
         self.assertEqual(self.answer("routine", used=85.5)["model"], "opus")
 
+    def test_scouting_goes_to_sol_while_codex_has_its_threshold_left_then_to_sonnet(self):
+        answer = self.answer("scout", used=85)
+        self.assertEqual((answer["model"], answer["effort"]), ("sol", "medium"))
+        self.assertEqual(answer["argv"]["run"][:2], ["codex", "exec"])
+        answer = self.answer("scout", used=86)
+        self.assertEqual((answer["model"], answer["id"], answer["effort"]), ("sonnet", model_id("sonnet"), "medium"))
+        self.assertIn("sol: codex_weekly 14% left, needs 15%", answer["skipped"][0]["reason"])
+
     def test_a_missing_codex_counts_as_not_met_and_is_named(self):
         answer = self.answer("routine", PATH="/usr/bin:/bin")
         self.assertEqual(answer["model"], "opus")

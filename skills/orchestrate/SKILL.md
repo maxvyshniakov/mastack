@@ -33,6 +33,15 @@ repository, so `cleanup` finds them.
    limits are low. Lanes whose claims overlap run in sequence; land a prefactor
    that moves files before lanes that edit around it.
 
+**Scouting.** Before you hand off a read-only scouting task (map X, find where
+Y lives, list the callers of Z), run `<this skill's directory>/scripts/role
+scout`; it picks Sol while Codex has quota, so reading stops spending the
+Claude limit. Sol: its `run` command with `-s read-only -C <repo>
+--output-last-message <file> "<task>" < /dev/null` in the background, then
+read the file; without `< /dev/null` `codex exec` waits on stdin. Sonnet: the
+Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
+(a design, what should replace X) goes to `scripts/role design` instead.
+
 ## Run
 
 4. **Launch** each lane in the background with the model and effort

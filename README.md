@@ -205,7 +205,7 @@ repository's own [docs/agents/](docs/agents/) is a small example.
 ## Models
 
 [models.toml](models.toml) maps roles (design, implement, visual, review,
-routine, research, audit) to an ordered list of models with effort and
+routine, scout, research, audit) to an ordered list of models with effort and
 conditions, for example "a reviewer of another family than the implementer,
 while at least 15% of the weekly Codex quota is left". `bin/role <role>`
 evaluates it with the live quotas and prints the model, effort and headless
