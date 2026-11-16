@@ -91,3 +91,38 @@ for line in open(path, encoding="utf-8"):
             print(f"{block['name']}\t{json.dumps(block.get('input', {}), ensure_ascii=False)}")
 PY
 }
+
+# install_lane: tools/lane, a stand-in lane tool with Lanefather's command
+# line. Every call lands in $EVAL/log/lane.log. `check <id>` refuses a dirty
+# tree, runs ./check.sh and logs the tree it passed to $EVAL/log/receipts.log;
+# `review <id>` prints $EVAL/state/findings-<id>; `list` prints
+# $EVAL/state/lanes; `--help` anywhere prints a usage line. Other commands only
+# log and answer ok.
+install_lane() {
+  mkdir -p tools &&
+    printf '#!/usr/bin/env bash\nEVAL=%q\n' "$EVAL" > tools/lane &&
+    cat >> tools/lane <<'TOOL'
+echo "$*" >> "$EVAL/log/lane.log"
+for arg in "$@"; do
+  [[ $arg == -h || $arg == --help ]] && { echo "usage: tools/lane <command> [args] (Lanefather's command line)"; exit 0; }
+done
+cmd=${1:-}; shift
+case $cmd in
+  check)
+    [[ -z $(git status --porcelain) ]] || { echo "check $1: refused, the worktree has uncommitted changes"; exit 1; }
+    tree=$(git rev-parse 'HEAD^{tree}')
+    if ./check.sh; then echo "$1 $tree green" >> "$EVAL/log/receipts.log"; echo "check $1: green, receipt for tree $tree"
+    else echo "check $1: red"; exit 1; fi ;;
+  list) cat "$EVAL/state/lanes" 2>/dev/null ;;
+  review)
+    case " $* " in
+      *" --fix-lane "*) echo "registered $1-review-fixes on the worktree of $1" ;;
+      *" --mark "*) echo "marked" ;;
+      *) cat "$EVAL/state/findings-$1" 2>/dev/null || echo "review $1: none" ;;
+    esac ;;
+  start) echo "registered ${1:-?}" ;;
+  *) echo "$cmd: ok" ;;
+esac
+TOOL
+  chmod +x tools/lane
+}

@@ -46,14 +46,30 @@ Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
 
 4. **Launch** each lane in the background with the model and effort
    `<this skill's directory>/scripts/role implement` prints (it reads the
-   live quotas):
-   a short prompt with ticket links, base branch, claims, which lanes work
-   nearby, [references/implementer.md](references/implementer.md), and the
-   project's brief additions and report labels. Point at the spec and tickets;
-   do not paste them. Register every lane with its ticket (`--ticket`).
-5. **Land** a lane when it reports green: merge it into the integration branch,
-   run a quick smoke on the merge, send a red smoke to the lane whose change
-   broke it. Resolve trivial conflicts yourself, real ones in the lane.
+   live quotas). Register the lane with its ticket (`--ticket`) first, so the
+   brief can name its worktree. Point at the spec and tickets; do not paste
+   them. Fill every command with the lane's id and paths: implementers spent
+   hundreds of turns on `lanefather --help` and polling `lanefather list`
+   for steps that were yours, each turn rereading their whole context.
+
+   ```text
+   Tickets: <links, in order>. Spec: <link>.
+   Lane <id>, registered. Base: <integration branch>. Claims: <globs>.
+   Nearby lanes: <id: claims>, ...
+   Worktree: <absolute path>. Branch: <lane branch>.
+   Check: <the lane's check command, e.g. lanefather check <id>>
+   Hand back: commit, a green check on the committed tree, then return your
+   report and stop.
+   After you: I land the lane (<land command>), its review runs, and the
+   findings come back to you once, in the fix lane.
+   Read <this skill's directory>/references/implementer.md, then:
+   <the project's brief additions>. Report labels: <labels>.
+   ```
+5. **Land** a lane when it reports green. The report reaches you as the
+   agent's completion notice; wait for that, not on `lanefather list`. Merge
+   it into the integration branch, run a quick smoke on the merge, send a red
+   smoke to the lane whose change broke it. Resolve trivial conflicts
+   yourself, real ones in the lane.
    The merge message ends with `Fixes #N`, so the ticket closes only when the
    merge reaches the default branch. After a green smoke, label the ticket
    `integrated` (create it if missing: green, "Done and landed in the

@@ -27,7 +27,7 @@ scenario, since an agent that hits one usually stops and asks. It prints `PASS` 
 
 - One behavior per scenario, ideally one that once went wrong.
 - Setup uses the helpers in [lib.sh](lib.sh): `make_repo`, `commit_file`,
-  `save`/`state`, `origin_rev`, `install_promote`, `install_pre_push`,
+  `save`/`state`, `origin_rev`, `install_promote`, `install_pre_push`, `install_lane`,
   `install_gate`. The stand-in promote tool and pre-push hook log every call,
   so the grade can tell a promoted push from a bare one.
 - Grade with `expect "<what>" <command>` and `refute "<what>" <command>`.

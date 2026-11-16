@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- `orchestrate`: the coordinator registers a lane before launching it, and
+  the implementer brief is a template with the lane's commands filled in:
+  worktree, check, the hand-back, and what the coordinator does after (land,
+  review, the one fix round). The implementer opens a command's `--help` only
+  after it fails, runs long checks in the background and waits for their
+  completion notice, hands back after a green check and stops, and polls no
+  lane state; `lanefather wait <id> --for <state>` (fathers#175) is for the
+  rare wait it needs. The coordinator waits for the agent's completion
+  notice, not on `lanefather list` (mastack#16).
 - `models.toml`: a `scout` role for read-only scouting in the repository,
   Sol at medium effort while at least 15% of the weekly Codex limit is left,
   then Sonnet at medium. `orchestrate` runs `scripts/role scout` before such
