@@ -253,9 +253,22 @@ slow `slotfather` cannot let the timeout drop a deny already found.
   its output is discarded, so a lifecycle hook never blocks a stop or a tool
   call. Claude Code's `Stop` ends a turn, `SessionEnd` the session.
 
+  A `PreToolUse` entry with `"background": true` runs only for a Bash call
+  with `run_in_background`. One with `"rewrite": true` is a rewriter: it
+  answers with the call's whole input, its command rewritten
+  (`hookSpecificOutput.updatedInput`), and `bash_guard.py` passes the first
+  such answer to Claude Code without a permission decision of its own, so
+  Claude Code's rules judge the rewritten call. A deny is never rewritten;
+  a rewriter that fails, hangs or answers nothing leaves the call as it was.
+  `"allow": [rules]` lists permission rules `bin/install` adds to Claude
+  Code's `permissions.allow` while the entry is listed (for the line a
+  rewriter adds), and removes once it no longer is.
+
   ```json
   { "lifecycle": { "SubagentStop": ["~/.local/bin/junkfather hook"],
-                   "PreToolUse": [{ "command": "~/.local/bin/junkfather hook", "contains": ["junkfather"] }] } }
+                   "PreToolUse": [{ "command": "~/.local/bin/junkfather hook", "contains": ["junkfather"] },
+                                  { "command": "<bin>/junkfather hook", "background": true, "rewrite": true,
+                                    "allow": ["Bash(<bin>/junkfather background:*)"] }] } }
   ```
 - **Machine settings**, `~/.config/mastack/hooks.json` (`$MASTACK_CONFIG`
   moves the directory), outside the repository: `checkouts` (shared main

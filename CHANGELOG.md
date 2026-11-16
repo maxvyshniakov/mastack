@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Lifecycle `PreToolUse` entries can rewrite a Bash call: `"rewrite": true`
+  makes the entry's answer (`hookSpecificOutput.updatedInput`) the call's new
+  input, passed on by `bash_guard` without a permission decision of its own,
+  never for a denied call; `"background": true` runs an entry only for
+  `run_in_background` calls; `"allow": [rules]` has `bin/install` add those
+  permission rules to Claude Code's settings, recorded and removed again once
+  no entry lists them. Junkfather uses it to own agents' background commands.
 - New Bash check `docker_desktop`: `bash_guard` refuses quitting, killing or
   restarting Docker Desktop (`osascript` quit, `killall`, `pkill`, `kill` of a
   pid found by name, `docker desktop stop`/`restart`) and opening it in front;

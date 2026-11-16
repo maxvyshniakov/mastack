@@ -12,7 +12,10 @@ stays as it is. Uninstall removes only the recorded mastack commands and this ch
 
 For each lifecycle event the machine settings list under `lifecycle` (SubagentStart, SubagentStop, Stop,
 SessionStart, SessionEnd; hooks/lifecycle.py), install adds one group that runs hooks/lifecycle.py EVENT, and removes
-that group from the events no longer listed. `lifecycle.PreToolUse` needs no group: bash_guard.py runs it.
+that group from the events no longer listed. `lifecycle.PreToolUse` needs no group: bash_guard.py runs it. The
+permission rules a `lifecycle.PreToolUse` entry lists under `allow` go into `permissions.allow`; install records the
+ones it added and removes them once no entry lists them, or on uninstall. A rule that was there before is left to
+whoever put it there.
 
 When DIR/friction.json exists (hooks/friction_journal.py), install adds one PostToolUse group (matcher Bash) that runs
 hooks/friction_hook.py, which logs TypeScript errors about the configured packages; without the file it removes it.
@@ -180,12 +183,74 @@ def recorded(config: Path) -> list[str]:
     return [c for c in commands if isinstance(c, str)] if isinstance(commands, list) else []
 
 
-def record(config: Path, commands: list[str]) -> None:
+def recorded_allow(config: Path) -> list[str]:
+    """The permission rules an earlier install added (`allow` in the record)."""
+    try:
+        data = json.loads((config / RECORD).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    rules = data.get("allow") if isinstance(data, dict) else None
+    return [r for r in rules if isinstance(r, str)] if isinstance(rules, list) else []
+
+
+def lifecycle_allow(config: Path) -> list[str]:
+    """The permission rules the machine settings' `lifecycle.PreToolUse` entries ask for, in order, once each."""
+    try:
+        data = json.loads((config / "hooks.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    lifecycle = data.get("lifecycle") if isinstance(data, dict) else None
+    listed = lifecycle.get("PreToolUse") if isinstance(lifecycle, dict) else None
+    rules: list[str] = []
+    for entry in listed if isinstance(listed, list) else []:
+        asked = entry.get("allow") if isinstance(entry, dict) else None
+        for rule in asked if isinstance(asked, list) else []:
+            if isinstance(rule, str) and rule.strip() and rule not in rules:
+                rules.append(rule)
+    return rules
+
+
+def record(config: Path, commands: list[str], allow: list[str] | None = None) -> None:
     config.mkdir(parents=True, exist_ok=True)
-    (config / RECORD).write_text(json.dumps({"commands": commands}, indent=2) + "\n", encoding="utf-8")
+    (config / RECORD).write_text(json.dumps({"commands": commands, "allow": allow or []}, indent=2) + "\n",
+                                 encoding="utf-8")
 
 
-def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], events=(), friction=False) -> dict:
+def permission_rules(result: dict, wanted: list[str], ours: set[str], report: list[str]) -> list[str]:
+    """Make `permissions.allow` hold `wanted` and none of `ours` (what an earlier install added) beyond it; the rules
+    to record as this install's: the wanted ones it added now or added before."""
+    permissions = result.get("permissions", {})
+    if not isinstance(permissions, dict):
+        raise Refused("`permissions` is not an object")
+    allowed = permissions.get("allow", [])
+    if not isinstance(allowed, list):
+        raise Refused("`permissions.allow` is not a list")
+    if not wanted and not (ours & {r for r in allowed if isinstance(r, str)}):
+        return []
+    claimed = [rule for rule in wanted if rule in ours or rule not in allowed]
+    kept = [rule for rule in allowed if not (isinstance(rule, str) and rule in ours and rule not in wanted)]
+    for rule in allowed:
+        if rule not in kept:
+            report.append(f"remove permission: {rule}")
+    for rule in wanted:
+        if rule not in kept:
+            kept.append(rule)
+            report.append(f"add    permission: {rule}")
+    if kept:
+        permissions["allow"] = kept
+        result["permissions"] = permissions
+    else:
+        permissions.pop("allow", None)
+        if permissions:
+            result["permissions"] = permissions
+        else:
+            result.pop("permissions", None)
+    return claimed
+
+
+def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], events=(), friction=False,
+            allow: list[str] | None = None, ours_allow: set[str] | None = None,
+            claimed: list[str] | None = None) -> dict:
     if not isinstance(settings, dict):
         raise Refused("not a JSON object")
     result = json.loads(json.dumps(settings))
@@ -224,6 +289,9 @@ def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], 
             lifecycle_groups(hooks, event, not uninstall and event in events, ours, report)
     if "PostToolUse" in hooks or friction:
         friction_groups(hooks, friction and not uninstall, ours | {friction_command()}, report)
+    rules = permission_rules(result, [] if uninstall else list(allow or []), set(ours_allow or ()), report)
+    if claimed is not None:
+        claimed[:] = rules
     if kept:
         hooks["PreToolUse"] = kept
         result["hooks"] = hooks
@@ -277,6 +345,7 @@ def main() -> int:
     friction = friction_wanted(args.config)
     ours = (set(recorded(args.config)) | {command(), friction_command()}
             | {lifecycle_command(event) for event in LIFECYCLE_EVENTS})
+    allow, ours_allow, claimed = lifecycle_allow(args.config), set(recorded_allow(args.config)), []
     backup = None
     try:
         preflight(args)
@@ -287,7 +356,8 @@ def main() -> int:
             except ValueError as error:
                 raise Refused(f"not JSON: {error}") from None
             report: list[str] = []
-            after_settings = updated(settings, args.uninstall, ours, report, events, friction)
+            after_settings = updated(settings, args.uninstall, ours, report, events, friction, allow, ours_allow,
+                                     claimed)
             if after_settings == settings:
                 print("  ok     hooks" if not args.uninstall else "  ok     no mastack hook")
                 break
@@ -322,7 +392,7 @@ def main() -> int:
         return 1
     if not args.dry_run:
         record(args.config, [] if args.uninstall else [command()] + [lifecycle_command(e) for e in events]
-               + ([friction_command()] if friction else []))
+               + ([friction_command()] if friction else []), [] if args.uninstall else claimed)
     return 0
 
 
