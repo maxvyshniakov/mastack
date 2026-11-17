@@ -14,7 +14,18 @@ source, version = os.environ["SOURCE"], os.environ["VERSION"]
 number = r"(?:0|[1-9][0-9]*)"
 if not re.fullmatch("[0-9a-f]{40}", source) or not re.fullmatch(fr"{number}\.{number}\.{number}", version):
     sys.exit("Invalid commit or version")
-if source != git("rev-parse", "origin/dev") or git("rev-parse", "HEAD") != git("rev-parse", "origin/main"):
+dev = git("rev-parse", "origin/dev")
+main = git("rev-parse", "origin/main")
+if git("rev-parse", "HEAD") != main:
+    sys.exit("The release workflow is stale")
+tag = f"refs/tags/v{version}"
+if git("tag", "--list", f"v{version}"):
+    if (git("cat-file", "-t", tag) == "tag" and git("rev-parse", f"{tag}^{{commit}}") == main == dev
+            and source in (main, git("rev-parse", f"{main}^"))):
+        print("Release already published; verifying remote refs.")
+        sys.exit(0)
+    sys.exit("Version already exists on a different release")
+if source != dev:
     sys.exit("The source or release workflow is stale")
 git("merge-base", "--is-ancestor", "origin/main", source)
 runs = json.loads(subprocess.check_output([
