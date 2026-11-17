@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- GitHub enforces promotion from a checked dev commit for updates to main.
+
 ## 0.4.0
 
 - Develop on `dev`. Each `bin/promote X.Y.Z` publishes a tagged release on `main`.

@@ -1,0 +1,53 @@
+name: promote
+run-name: Promote ${{ inputs.version }} from ${{ inputs.source }}
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: promote-main
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: promote-main
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Validate dev and prepare release from Git objects
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ inputs.source }}
+          VERSION: ${{ inputs.version }}
+        run: python3 .github/scripts/prepare-release.py
+      - name: Publish both branches and annotated tag
+        env:
+          PROMOTE_KEY: ${{ secrets.PROMOTE_KEY }}
+          SOURCE: ${{ inputs.source }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -eu
+          umask 077
+          key=$(mktemp)
+          hosts=$(mktemp)
+          trap 'rm -f "$key" "$hosts"' EXIT
+          printf '%s\n' "$PROMOTE_KEY" > "$key"
+          unset PROMOTE_KEY
+          curl -fsSL https://api.github.com/meta | jq -er '.ssh_keys[] | "github.com " + .' > "$hosts"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts"
+          tag="refs/tags/v$VERSION"
+          release=$(git rev-parse "$tag^{commit}")
+          git push --atomic --force-with-lease="refs/heads/dev:$SOURCE" \
+            "git@github.com:$GITHUB_REPOSITORY.git" \
+            "$release:refs/heads/dev" "$release:refs/heads/main" "$tag:$tag"
