@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0
+
 - Develop on `dev`. Each `bin/promote X.Y.Z` publishes a tagged release on `main`.
 
 - `orchestrate`: the coordinator registers a lane before launching it, and
