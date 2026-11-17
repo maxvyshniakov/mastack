@@ -319,8 +319,9 @@ def carrying(pids) -> set[int]:
     """Those of `pids` whose environment holds a SLOTFATHER_LEASE, read as slotfather reads it (`ps -wwE`)."""
     if not pids:
         return set()
+    env_flag = "eww" if sys.platform.startswith("linux") else "-wwE"
     try:
-        output = subprocess.run(["ps", "-wwE", "-o", "pid=,command=", "-p", ",".join(map(str, sorted(pids)))],
+        output = subprocess.run(["ps", env_flag, "-o", "pid=,command=", "-p", ",".join(map(str, sorted(pids)))],
                                 capture_output=True, text=True, timeout=hook_io.timeout(5), env={**os.environ, "LC_ALL": "C"}).stdout
     except (OSError, subprocess.SubprocessError):
         return set(pids)  # unknown: ask each
