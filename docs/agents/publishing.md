@@ -13,7 +13,7 @@
 
 ## CI
 - `.github/workflows/check.yml` runs `bin/check` and `bin/check --history` on
-  GitHub-hosted macOS for every push to `dev` or `main` and every pull request, with a
+  GitHub-hosted Ubuntu for every push to `dev` or `main` and every pull request, with a
   read-only token and no secrets. Find the run for a SHA with
   `gh run list --commit <sha>`; the push is finished when it is green.
 - Keep it that way: no `pull_request_target`, no self-hosted runners, no
