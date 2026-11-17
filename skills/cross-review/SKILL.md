@@ -58,7 +58,10 @@ against each other:
 
 ## One round of fixes
 
-The implementer answers every finding once:
+Triage findings when the review finishes or the lane list/stop hook reports
+them, while the diff is fresh; the [Lanefather gate](https://github.com/maxvyshniakov/fathers/issues/177)
+enforces this before further lands. Every finding is marked fixed or rejected
+before promotion or release. The implementer answers every finding once:
 
 - `fixed: <commit>`
 - `rejected: <reason>`, a concrete reason such as wrong premise, out of scope,

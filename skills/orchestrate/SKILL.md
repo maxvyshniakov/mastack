@@ -86,7 +86,11 @@ Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
 6. **Review** each landed lane once (`cross-review`), when and how the project's
    review policy says, else right after the land: the
    reviewer sees the diff, ticket and standards, never the lane's report. It
-   runs beside the next lands. One round of fixes, every finding marked fixed
+   runs beside implementation. Triage findings as soon as the review finishes
+   (or the lane list/stop hook reports them), while the diff is fresh; the
+   [Lanefather gate](https://github.com/maxvyshniakov/fathers/issues/177) enforces
+   this before further lands. Every finding is marked fixed or rejected before
+   promotion or release. One round of fixes, every finding marked fixed
    or rejected, started only through the lane tool's fix-round path:
    `lanefather review <id> --fix-lane` for one lane, `lanefather start <fix-id>
    --fix-of A,B,C` for the findings of several (fathers#174; until it ships,
