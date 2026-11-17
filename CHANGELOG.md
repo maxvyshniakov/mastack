@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.1
+
 - GitHub enforces promotion from a checked dev commit for updates to main.
 
 ## 0.4.0
