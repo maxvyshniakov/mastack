@@ -11,7 +11,7 @@ tree, a promote tool that owns the main branches, CI followed to the end. A set
 of Bash hooks for Claude Code turns the mechanical rules into checks.
 
 **Status.** This is one developer's daily setup, published as it is. It runs
-on macOS with Claude Code and Codex. Versions are Git tags with a
+on macOS with Claude Code and Codex. Development happens on `dev`. Each promotion to `main` publishes a Git tag with a
 [changelog](CHANGELOG.md); there is no support promise, and a rule changes when
 an incident shows it was wrong. Take what fits, adapt the rest.
 

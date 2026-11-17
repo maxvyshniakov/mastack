@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Release the published dev branch from an isolated checkout.
+set -eu
+version=${1:-}
+number='(0|[1-9][0-9]*)'
+if [[ $# != 1 || ! $version =~ ^${number}\.${number}\.${number}$ ]]; then
+  echo 'usage: bin/promote X.Y.Z' >&2
+  exit 2
+fi
+source_sha=$(git rev-parse HEAD)
+origin=$(git remote get-url origin)
+destination=$(git remote get-url --push origin)
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+git clone --quiet --branch dev -- "$origin" "$scratch"
+cd "$scratch"
+[[ $(git rev-parse HEAD) == "$source_sha" ]] || { echo "Run from the checked, published dev commit." >&2; exit 1; }
+git remote set-url --push origin "$destination"
+git merge-base --is-ancestor origin/main HEAD || { echo 'Merge main into dev first.' >&2; exit 1; }
+python3 - "$version" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path("CHANGELOG.md")
+notes = path.read_text()
+pattern = r"^## Unreleased\n(.*?)(?=^## ([0-9]+\.[0-9]+\.[0-9]+)$)"
+pending = re.search(pattern, notes, re.M | re.S)
+if not pending or not pending[1].strip():
+    sys.exit("No Unreleased notes to promote.")
+version = sys.argv[1]
+if tuple(map(int, version.split("."))) <= tuple(map(int, pending[2].split("."))):
+    sys.exit("Version must be newer than the latest release.")
+path.write_text(notes[:pending.start(1)] + "\n## " + version + "\n" + notes[pending.start(1):])
+PY
+git commit --only CHANGELOG.md -m "chore: release $version"
+sha=$(git rev-parse HEAD)
+git tag -a "v$version" "$sha" -m "Mastack $version"
+git -c core.hooksPath=.githooks push --atomic origin \
+  "$sha:refs/heads/dev" "$sha:refs/heads/main" "refs/tags/v$version"

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Develop on `dev`. Each `bin/promote X.Y.Z` publishes a tagged release on `main`.
+
 - `orchestrate`: the coordinator registers a lane before launching it, and
   the implementer brief is a template with the lane's commands filled in:
   worktree, check, the hand-back, and what the coordinator does after (land,
