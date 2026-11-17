@@ -1,46 +1,40 @@
-# Safari through Safari Technology Preview
+# Background Safari verification
 
-## Why not Safari itself
+Use the project’s existing Safari launcher before constructing another one. Real
+Safari Technology Preview and a system WKWebView are distinct verification targets.
+Playwright WebKit covers static layout without a native window.
 
-`safaridriver` only drives a Safari it launched for automation. With the
-owner's Safari open, `POST /session` times out after about 30 s; the reason
-("Safari was not launched for automation") appears only in the system log:
-`log show --last 1m --predicate 'process == "Safari"'`. Do not quit the
-owner's Safari. Safari Technology Preview is a separate app with its own
-driver, settings and engine build close to the shipping Safari.
+## Real Safari Technology Preview
 
-## One-time setup, by the owner
+The canonical real-STP route starts the app with `open -g -b` and
+`-ApplePersistenceIgnoreState YES`, under an exclusive lock. It evaluates page
+scripts through a tokenized local bridge, places the window through Accessibility
+without raising it, and captures that owned window. Gesture harnesses post events
+to the owned PID, not the global input stream. Its frontmost watcher aborts on
+activation; owner switches between other applications are allowed.
 
-- Install it: `brew install --cask safari-technology-preview`. The package
-  installer asks for an administrator password, so the owner runs it.
-- In Safari Technology Preview's own Settings: Advanced → "Show features for
-  web developers", then Developer → "Allow remote automation". Safari's own
-  setting does not carry over.
-- Until then the driver answers: "You must enable 'Allow remote automation'".
+Check the installed tool’s source and version for this route. Older `repo-kit
+shoot` versions use WebDriver session creation followed by best-effort app
+activation; that path caused focus stealing during the November 2026 incident.
+Do not assume a command named Safari uses the canonical harness. Reuse the
+verified background route while a replacement is awaiting native acceptance.
 
-## A session that leaves the owner alone
+Keep the window visible behind the owner's windows: hiding or minimising it
+stops rendering. Leave a pre-existing STP instance alone. Missing Accessibility
+or Screen Recording permission is a setup dependency, not a reason to switch to
+a foreground launcher or open a permission prompt during verification.
 
-1. Start `/Applications/Safari Technology Preview.app/Contents/MacOS/safaridriver -p <free port>`,
-   wait for `GET /status`.
-2. Record the frontmost app's bundle id, create the session with
-   `browserName: "Safari Technology Preview"`, then activate the recorded app
-   again (JXA: `NSRunningApplication.activateWithOptions`). No permission
-   prompt is involved.
-3. The window now works behind the owner's apps: it keeps drawing frames
-   (60 fps measured) and screenshots work.
+## System WebKit
 
-4. After `DELETE /session`, quit the browser if this run started it. In
-   automation mode it ignores real input, window close and a polite quit, so
-   it stays open: force-terminate it
-   (`NSRunningApplication.forceTerminate`). It holds no user data.
+A native WKWebView harness can use `.prohibited` activation policy and both native
+and process-level focus guards. Report it as system WebKit, not Safari application
+acceptance. Interactive recording modes are separate owner-driven operations.
 
-Keep it on screen. A hidden or minimised window makes the page
-`visibilityState: "hidden"`: `requestAnimationFrame` stops and screenshots
-fail. macOS clamps a window rect to the screen, so it cannot be parked off it.
+## Acceptance of a replacement launcher
 
-## Limits
-
-- WebDriver screenshots cover the viewport only.
-- The window rect includes the toolbar. Set it, read `innerWidth` and
-  `innerHeight`, and correct by the difference to get the viewport size.
-- `webinspectord` cannot be restarted: System Integrity Protection.
+First prove routing, ownership, cleanup and focus-abort behavior with mocked
+system calls and a local HTTP fixture. A source check or mocked pass does not prove
+native focus behavior. Native acceptance then checks the frontmost trace throughout
+launch, sizing, navigation, capture and cleanup; it also verifies viewport dimensions
+and screenshot cropping. An app activated and then handed focus back did not pass.
+Do not infer a runtime pass while native launches are paused by the owner.

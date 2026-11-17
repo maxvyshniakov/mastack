@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `browser-verify`: distinguish the canonical background Safari transport from
+  WebDriver focus handback, use headless engines for ordinary static layout, and
+  require native acceptance for replacement launchers (mastack#19).
+
 ## 0.4.1
 
 - GitHub enforces promotion from a checked dev commit for updates to main.

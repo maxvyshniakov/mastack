@@ -16,30 +16,31 @@ through the machine slot wrapper the project names.
 
 A claim about one engine needs that engine; "works everywhere" needs all four:
 Chromium, Firefox, WebKit and Safari. Layout and CSS changes get Chromium,
-Firefox and Safari at the widths and themes the project names.
+Firefox and Playwright WebKit at the widths and themes the project names. Add
+real Safari for Safari-specific behavior through the project's verified background
+route; identify system WKWebView separately from the Safari application.
 
 ## 3. Launch real engines, out of the owner's way
 
 - **Chromium**: Playwright's build, headless. For 2× pixels at full frame rate (video, frame
   timing), use a real window on a Retina display instead. Headless 2× reaches only about
   16 fps, and the page still reports DPR 1. The window keeps 60 fps behind the owner's apps
-  with `--disable-backgrounding-occluded-windows --disable-renderer-backgrounding`, focus
-  handed back as for Safari.
+  with `--disable-backgrounding-occluded-windows --disable-renderer-backgrounding`, a project-verified no-activation launcher and a focus guard.
 - **Firefox**: the installed Firefox through Playwright's BiDi channel,
   `firefox.launch({ channel: "moz-firefox" })`, headless. Playwright's own
   patched Firefox can fail on a new macOS with "Could not find profile folder",
   and it is not the Firefox users run.
 - **WebKit** (Playwright): renders like Safari but has none of Safari's
   scrolling physics or settings. Use it for static layout only.
-- **Safari**: Safari Technology Preview over its own `safaridriver`. Plain
-  Safari refuses WebDriver while the owner has it open; the driver reports only
-  a timeout. Setup, the focus hand-back and limits:
-  [references/safari.md](references/safari.md).
+- **Safari**: use the project's focus-guarded background Safari Technology
+  Preview harness. Check its launch path before using a different screenshot
+  tool: `safaridriver` plus later focus handback is not the same route.
+  [references/safari.md](references/safari.md) describes the transport boundary.
 
-Never take the owner's screen: headless where the engine allows it; otherwise
-the window works behind their apps with focus handed back. Close every browser,
-driver and dev server you started as soon as the check no longer needs it,
-without asking: they are yours.
+Keep the owner's focus unchanged. A native route must launch without activation,
+monitor frontmost state and abort if its app takes focus. Returning focus afterward
+is recovery, not evidence that the run left focus alone. Close only the browser,
+watcher and server owned by this run.
 
 ## 4. Wait for the page, not for time
 
