@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `orchestrate`: the implementer brief names the lane's focused checks for the
+  edit-check loop; `lanefather check` runs once on the committed tree before
+  hand-back, and a red lane check is fixed with focused checks before `--rerun`
+  (mastack#22).
+- `orchestrate`, `cross-review`: triage finished reviews on arrival (or when
+  the lane list/stop hook reports them) while the diff is fresh, enforced by
+  the Lanefather gate before further lands (mastack#11).
 - `browser-verify`: distinguish the canonical background Safari transport from
   WebDriver focus handback, use headless engines for ordinary static layout, and
   require native acceptance for replacement launchers (mastack#19).

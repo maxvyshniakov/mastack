@@ -57,9 +57,10 @@ Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
    Lane <id>, registered. Base: <integration branch>. Claims: <globs>.
    Nearby lanes: <id: claims>, ...
    Worktree: <absolute path>. Branch: <lane branch>.
-   Check: <the lane's check command, e.g. lanefather check <id>>
-   Hand back: commit, a green check on the committed tree, then return your
-   report and stop.
+   Focused checks: <the scripts and filters for what this lane changes>
+   Check (once, before hand-back): <the lane's check command, e.g. lanefather check <id>>
+   Hand back: commit, green focused checks, then one green lane check on the
+   committed tree, then return your report and stop.
    After you: I land the lane (<land command>), its review runs, and the
    findings come back to you once, in the fix lane.
    Read <this skill's directory>/references/implementer.md, then:

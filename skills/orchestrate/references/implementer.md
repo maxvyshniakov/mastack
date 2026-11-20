@@ -26,17 +26,20 @@ help or status call is a turn that rereads your whole context.
 - A refactor the ticket did not ask for (tdd, "Where the code goes"): the small
   one inside your claims; a larger one goes under Questions.
 - Keep the diff to your tickets; other lanes edit nearby files right now.
-- Focused checks while working; heavy ones through the project's slot wrapper.
-  A check that takes minutes runs in the background, and you wait for its
-  completion notice, not in an `until grep ...; sleep` loop.
+- Use the brief's focused checks as your edit-check loop, never the full lane
+  check; heavy focused checks go through the project's slot wrapper. A check
+  that takes minutes runs in the background, and you wait for its completion
+  notice, not in an `until grep ...; sleep` loop.
 
 ## Before reporting
 
 1. Merge the integration branch tip into your lane once.
 2. Commit in the repository's style, with the reason in the body. Leave the
    worktree clean.
-3. Run the lane's check command from the brief on the committed tree. Fix red
-   ones; investigate a timeout alone before blaming load.
+3. Once the focused checks pass, run the lane's full check command from the
+   brief (`lanefather check <id>`) once on the committed tree. If it is red,
+   fix and verify with focused checks first; run `--rerun` only after the
+   focused checks pass. Investigate a timeout alone before blaming load.
 4. Stop servers and background processes you started, including every loop
    that waits on a command you stopped. Report only once `ps`
    shows nothing of yours running in your worktree or scratch. A wait loop on
