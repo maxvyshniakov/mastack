@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `orchestrate`: replace the fixed chain-per-agent and review-fix resume rules
+  with warm-vs-fresh criteria (reuse when idle under ~50 minutes, context under
+  ~150–200K, and same code; otherwise start a fresh agent with a brief or WIP
+  commit) (mastack#21).
 - `orchestrate`: the implementer brief names the lane's focused checks for the
   edit-check loop; `lanefather check` runs once on the committed tree before
   hand-back, and a red lane check is fixed with focused checks before `--rerun`

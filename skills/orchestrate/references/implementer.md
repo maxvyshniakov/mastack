@@ -58,8 +58,10 @@ Questions and hand back.
 
 ## Review fixes
 
-You may be resumed once with review findings and the fix lane's commands.
-Fix each that holds, reject the others with a reason in the commit and
+The coordinator resumes you for the fix round only when you are still warm
+(idle under ~50 minutes) and your context is under ~200K; otherwise a fresh
+agent gets the findings, the lane's diff, and the fix lane's commands. Fix
+each finding that holds, reject the others with a reason in the commit and
 report, check, hand back. There is no second review.
 
 ## Report

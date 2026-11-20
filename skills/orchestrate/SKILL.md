@@ -28,10 +28,14 @@ repository, so `cleanup` finds them.
    for the batch and add follow-ups as they are accepted.
 2. Create an integration branch in its own worktree. Only you write to it, and
    only you move the main branches, through the promote tool if there is one.
-3. Budget lanes. A usage limit stops every agent at once, so give one agent a
-   chain of related tickets instead of one agent each, and run fewer lanes when
-   limits are low. Lanes whose claims overlap run in sequence; land a prefactor
-   that moves files before lanes that edit around it.
+3. Budget lanes. A usage limit stops every agent at once, so run fewer lanes
+   when limits are low. Choose between reusing a warm agent and starting a
+   fresh one instead of a fixed chain-per-agent rule: reuse an agent when it
+   is warm (idle under ~50 minutes, inside the subagent cache TTL), its
+   context is small (under ~150–200K), and the next task works on the same
+   code; otherwise start a fresh agent with a brief (a WIP commit on its
+   branch carries the state). Lanes whose claims overlap run in sequence; land
+   a prefactor that moves files before lanes that edit around it.
 
 **Scouting.** Before you hand off a read-only scouting task (map X, find where
 Y lives, list the callers of Z), run `<this skill's directory>/scripts/role
@@ -61,8 +65,8 @@ Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
    Check (once, before hand-back): <the lane's check command, e.g. lanefather check <id>>
    Hand back: commit, green focused checks, then one green lane check on the
    committed tree, then return your report and stop.
-   After you: I land the lane (<land command>), its review runs, and the
-   findings come back to you once, in the fix lane.
+   After you: I land the lane (<land command>), its review runs, and any
+   findings are handled once in the fix lane.
    Read <this skill's directory>/references/implementer.md, then:
    <the project's brief additions>. Report labels: <labels>.
    ```
@@ -95,7 +99,10 @@ Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
    or rejected, started only through the lane tool's fix-round path:
    `lanefather review <id> --fix-lane` for one lane, `lanefather start <fix-id>
    --fix-of A,B,C` for the findings of several (fathers#174; until it ships,
-   one `--fix-lane` per lane). A plain `start` is an ordinary lane, which
+   one `--fix-lane` per lane). For the fix round, resume the implementer when
+   it is still warm (idle under ~50 minutes) and its context is under ~200K;
+   otherwise start a fresh agent with the findings, the lane's diff, and the
+   fix lane's commands. A plain `start` is an ordinary lane, which
    `land` reviews: batched fix lanes started that way chained six and seven
    rounds deep. Nobody reviews the fix. A review of it that runs anyway opens
    no new round and no new fix lane: mark each of its findings
