@@ -50,13 +50,17 @@ Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
 
 4. **Launch** each lane in the background with the model and effort
    `<this skill's directory>/scripts/role implement` prints (it reads the
-   live quotas). Register the lane with its ticket (`--ticket`) first, so the
+   live quotas). Pass the role's model and effort on every agent launch,
+   including fix rounds and scouting, and name the role in the brief (`Role:
+   <role>`) so the PreToolUse Agent hook fills them in if omitted. Register
+   the lane with its ticket (`--ticket`) first, so the
    brief can name its worktree. Point at the spec and tickets; do not paste
    them. Fill every command with the lane's id and paths: implementers spent
    hundreds of turns on `lanefather --help` and polling `lanefather list`
    for steps that were yours, each turn rereading their whole context.
 
    ```text
+   Role: implement
    Tickets: <links, in order>. Spec: <link>.
    Lane <id>, registered. Base: <integration branch>. Claims: <globs>.
    Nearby lanes: <id: claims>, ...

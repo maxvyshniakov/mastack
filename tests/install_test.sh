@@ -221,7 +221,7 @@ check "the worktree refusal names the main checkout" said "install from the main
 check "a refused worktree changes nothing" cmp -s "$sf" "$scratch/settings.uninstalled"
 rm -f "$sf" "$scratch"/settings.json.mastack-backup-*
 install --only hooks
-check "a missing settings file is created" py "$commands == $ours and len($ours) == 1"
+check "a missing settings file is created" py "len($commands) == 2 and len($ours) == 1 and any(c.endswith('$root/hooks/agent_role.py') for c in $commands)"
 printf '{"hooks": ' > "$sf"
 check "an unreadable settings file is refused" sh -c "! '$root/bin/install' --target '$t' --only hooks >'$scratch/out' 2>&1"
 check "an unreadable settings file is left alone" test "$(cat "$sf")" = '{"hooks": '
@@ -250,7 +250,7 @@ life() { python3 -c "import json, sys; s = json.load(open(sys.argv[1])); e = sys
 install --only hooks
 check "a listed lifecycle event gets the dispatcher" test "$(life SubagentStop)$(life SessionEnd)" = "11"
 check "an empty or unlisted event gets none" test "$(life Stop)$(life SessionStart)" = "00"
-check "PreToolUse observers need no group of their own" py "len($commands) == 1"
+check "PreToolUse observers need no group of their own" py "len($bash_commands) == 1 and not any('lifecycle.py' in c for c in $commands)"
 check "another tool's SubagentStop hook stays first" py "s['hooks']['SubagentStop'][0]['hooks'][0]['command'].endswith('lane-stop.py')"
 check "the lifecycle commands are recorded" grep -q "lifecycle.py SessionEnd" "$MASTACK_CONFIG/hooks-installed.json"
 registered_life=$(python3 -c "import json, sys; s = json.load(open(sys.argv[1])); print(s['hooks']['SessionEnd'][0]['hooks'][0]['command'])" "$sf")

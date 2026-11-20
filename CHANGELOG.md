@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- New PreToolUse Agent hook (`hooks/agent_role.py`, registered by
+  `bin/install`): reads the launch's role from the prompt (`Role: <role>` or
+  `[role: <role>]`) or description and fills missing `model` and `effort` from
+  `models.toml`; launches without a known role pass through unchanged.
+  `orchestrate` step 4 names the role in the brief and passes the role's model
+  and effort on every launch, including fix rounds and scouting (mastack#24).
 - `orchestrate`: replace the fixed chain-per-agent and review-fix resume rules
   with warm-vs-fresh criteria (reuse when idle under ~50 minutes, context under
   ~150–200K, and same code; otherwise start a fresh agent with a brief or WIP

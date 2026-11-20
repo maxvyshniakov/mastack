@@ -44,6 +44,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 GUARD = ROOT / "hooks" / "bash_guard.py"
+AGENT_ROLE = ROOT / "hooks" / "agent_role.py"
+AGENT_ROLE_TIMEOUT = 10  # agent_role.HOOK_TIMEOUT
 LIFECYCLE = ROOT / "hooks" / "lifecycle.py"
 FRICTION = ROOT / "hooks" / "friction_hook.py"
 FRICTION_TIMEOUT = 10  # friction_hook.HOOK_TIMEOUT
@@ -72,6 +74,15 @@ def command() -> str:
 
 def handler() -> dict:
     return {"type": "command", "command": command(), "timeout": TIMEOUT}
+
+
+def agent_role_command() -> str:
+    """Runs the Agent role hook when its file exists and passes the launch when it does not."""
+    return f"sh -c '[ -f \"$0\" ] || exit 0; exec python3 \"$0\"' {shlex.quote(str(AGENT_ROLE))}"
+
+
+def agent_role_handler() -> dict:
+    return {"type": "command", "command": agent_role_command(), "timeout": AGENT_ROLE_TIMEOUT}
 
 
 def friction_command() -> str:
@@ -276,11 +287,30 @@ def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], 
     groups = hooks.get("PreToolUse", [])
     if not isinstance(groups, list):
         raise Refused("`hooks.PreToolUse` is not a list")
-    kept, position = [], None
+    kept, position, agent_position = [], None, None
+    agent_present = False
+    mine_agent = {"matcher": "Agent", "hooks": [agent_role_handler()]}
     for group in groups:
         entries = group.get("hooks") if isinstance(group, dict) else None
-        if not isinstance(entries, list) or group.get("matcher") != "Bash":
+        matcher = group.get("matcher") if isinstance(group, dict) else None
+        if not isinstance(entries, list) or matcher not in ("Bash", "Agent"):
             kept.append(group)
+            continue
+        if matcher == "Agent":
+            if not uninstall and not agent_present and group == mine_agent:
+                agent_present = True
+                kept.append(group)
+                continue
+            remaining = []
+            for entry in entries:
+                text = entry.get("command") if isinstance(entry, dict) else None
+                if isinstance(text, str) and text in ours:
+                    report.append(f"remove PreToolUse Agent: {tilde(text)}")
+                    agent_position = len(kept) if agent_position is None else agent_position
+                else:
+                    remaining.append(entry)
+            if remaining:
+                kept.append({**group, "hooks": remaining} if len(remaining) != len(entries) else group)
             continue
         remaining = []
         for entry in entries:
@@ -297,9 +327,14 @@ def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], 
             kept.append({**group, "hooks": remaining} if len(remaining) != len(entries) else group)
     if not uninstall:
         mine = {"matcher": "Bash", "hooks": [handler()]}
-        kept.insert(len(kept) if position is None else position, mine)
+        insert_at = len(kept) if position is None else position
+        kept.insert(insert_at, mine)
         if mine not in groups:
             report.append(f"add    PreToolUse Bash: {tilde(command())}")
+        if not agent_present:
+            agent_at = len(kept) if agent_position is None else (agent_position + (1 if insert_at <= agent_position else 0))
+            kept.insert(agent_at, mine_agent)
+            report.append(f"add    PreToolUse Agent: {tilde(agent_role_command())}")
     for event in LIFECYCLE_EVENTS:
         if event in hooks or event in events:
             lifecycle_groups(hooks, event, not uninstall and event in events, ours, report)
@@ -359,7 +394,7 @@ def main() -> int:
     target = path.resolve()  # a symlinked settings file stays a symlink
     events = lifecycle_events(args.config)
     friction = friction_wanted(args.config)
-    ours = (set(recorded(args.config)) | {command(), friction_command()}
+    ours = (set(recorded(args.config)) | {command(), agent_role_command(), friction_command()}
             | {lifecycle_command(event) for event in LIFECYCLE_EVENTS})
     allow, ours_allow, claimed = lifecycle_allow(args.config), set(recorded_allow(args.config)), []
     backup = None
@@ -407,7 +442,8 @@ def main() -> int:
         print(f"  refuse {error}", file=sys.stderr)
         return 1
     if not args.dry_run:
-        record(args.config, [] if args.uninstall else [command()] + [lifecycle_command(e) for e in events]
+        record(args.config, [] if args.uninstall else [command(), agent_role_command()]
+               + [lifecycle_command(e) for e in events]
                + ([friction_command()] if friction else []), [] if args.uninstall else claimed)
     return 0
 

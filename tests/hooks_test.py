@@ -750,7 +750,8 @@ class RegisterTests(HookCase):
             self.assertEqual(register.main(), 0)
         result = json.loads(settings.read_text())
         self.assertEqual(result["theme"], "dark", "the concurrent change survives")
-        self.assertEqual([h["command"] for g in result["hooks"]["PreToolUse"] for h in g["hooks"]], [register.command()])
+        self.assertEqual([h["command"] for g in result["hooks"]["PreToolUse"] for h in g["hooks"]],
+                         [register.command(), register.agent_role_command()])
         self.assertEqual(len(calls), 2)
         self.assertIn("retry", "".join(str(call) for call in out.write.call_args_list))
 
