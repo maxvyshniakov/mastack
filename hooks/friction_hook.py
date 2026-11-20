@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PostToolUse hook for Bash: log TypeScript errors about your packages to the friction journal.
+"""PostToolUse hook for Bash: log package TypeScript errors and oversized Bash outputs to the friction journal.
 
     hooks/friction_hook.py < hook.json
 
@@ -9,9 +9,11 @@ from such a package, it appends one `type-error` event per distinct error to the
 (hooks/friction_journal.py), with the session, the project and why it counted. An application's own type errors
 are never logged.
 
+When a Bash call's output exceeds 8,000 characters (`friction_journal.LARGE_OUTPUT_THRESHOLD`), it also appends a
+`note` event (`rule="large-bash-output"`) naming the command so the worst offenders show up by name.
+
 It only observes: it prints nothing, never blocks and exits 0, also on unreadable input or a journal it cannot
-write. Without friction.json, or with FRICTION_JOURNAL=off, it does nothing. `bin/install` registers it when
-friction.json exists.
+write. With FRICTION_JOURNAL=off it does nothing. `bin/install` registers it when friction.json exists.
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ def output_of(data: dict) -> str:
     if isinstance(response, str):
         return response
     if isinstance(response, dict):
-        return "\n".join(str(response.get(key) or "") for key in ("stdout", "stderr", "output"))
+        return "\n".join(str(response.get(key)) for key in ("stdout", "stderr", "output") if response.get(key))
     return ""
 
 
@@ -38,13 +40,21 @@ def main() -> int:
         data = json.loads(sys.stdin.read() or "{}")
         if not isinstance(data, dict) or data.get("tool_name") != "Bash":
             return 0
-        text = output_of(data)[-MAX_OUTPUT:]
-        if "error TS" not in text:
-            return 0
-        config = friction_journal.load_config()
-        events = friction_journal.type_errors(text, data.get("cwd"), config, session=data.get("session_id"),
-                                              source="mastack-hook")
-        friction_journal.append(events)
+        raw = output_of(data)
+        events = []
+        tool_input = data.get("tool_input")
+        command = tool_input.get("command") if isinstance(tool_input, dict) else None
+        large = friction_journal.large_bash_output(raw, command, data.get("cwd"), session=data.get("session_id"),
+                                                   source="mastack-hook")
+        if large:
+            events.append(large)
+        text = raw[-MAX_OUTPUT:]
+        if "error TS" in text:
+            config = friction_journal.load_config()
+            events.extend(friction_journal.type_errors(text, data.get("cwd"), config, session=data.get("session_id"),
+                                                       source="mastack-hook"))
+        if events:
+            friction_journal.append(events)
     except Exception:  # an observer never breaks the session
         pass
     return 0

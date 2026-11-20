@@ -32,6 +32,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -409,3 +410,72 @@ def type_errors(text: str, cwd, config: dict, *, session=None, source: str, ts: 
                             component=component, rule=code, detail=f"{code}: {full}", session=session, why=why,
                             file=relative, fp=key))
     return events
+
+
+LARGE_OUTPUT_THRESHOLD = 8_000
+_SUBCOMMAND_TOOLS = frozenset({
+    "git", "gh", "lanefather", "slotfather", "junkfather",
+    "bun", "npm", "pnpm", "yarn", "cargo", "docker", "kubectl", "repo-kit",
+})
+_WRAPPER_TOOLS = frozenset({"env", "nohup", "nice", "time", "command"})
+_ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def command_label(command: str | None) -> str:
+    """Short name of the command a Bash call ran (`git diff`, `sed`, `lanefather list`, ...)."""
+    if not isinstance(command, str) or not command.strip():
+        return "bash"
+    # Skip leading `cd <dir> &&` / `;` prefix so the real command is named.
+    segments = [seg.strip() for seg in re.split(r"\s*(?:&&|;)\s*", command.strip()) if seg.strip()]
+    for segment in segments:
+        first_line = segment.splitlines()[0].strip()
+        try:
+            tokens = shlex.split(first_line)
+        except ValueError:
+            tokens = first_line.split()
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i]
+            if _ENV_ASSIGN.match(tok):
+                i += 1
+                continue
+            base = os.path.basename(tok)
+            if base in _WRAPPER_TOOLS:
+                i += 1
+                continue
+            if base == "timeout":
+                i += 1
+                while i < len(tokens) and tokens[i].startswith("-"):
+                    i += 1
+                if i < len(tokens):
+                    i += 1  # duration
+                continue
+            break
+        if i >= len(tokens):
+            continue
+        tool = os.path.basename(tokens[i])
+        if tool == "cd" and len(segments) > 1:
+            continue
+        if tool in _SUBCOMMAND_TOOLS:
+            for arg in tokens[i + 1:]:
+                if not arg.startswith("-") and not _ENV_ASSIGN.match(arg):
+                    return f"{tool} {arg}"
+        return tool or "bash"
+    return "bash"
+
+
+def large_bash_output(text: str, command: str | None, cwd, *, session=None, source: str, ts: str | None = None,
+                      threshold: int = LARGE_OUTPUT_THRESHOLD) -> dict | None:
+    """A friction note when a Bash tool result exceeds `threshold` characters, naming the command."""
+    if not isinstance(text, str) or len(text) <= threshold:
+        return None
+    size = len(text)
+    project = project_name(cwd)
+    cmd = command.strip() if isinstance(command, str) else ""
+    label = command_label(cmd)
+    snippet = " ".join(cmd.split())[:200]
+    detail = f"{size} chars: {snippet}" if snippet else f"{size} chars"
+    why = f"Bash tool output was {size} characters (over {threshold})"
+    key = fingerprint(project, "large-bash-output", label, snippet)
+    return event(package="mastack", kind="note", project=project, source=source, ts=ts, component=label,
+                 rule="large-bash-output", detail=detail, session=session, why=why, fp=key)

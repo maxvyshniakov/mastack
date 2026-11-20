@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `orchestrate` (`implementer.md`) and `hooks/friction_hook.py`: add
+  range-reading and output-capping rules for tool calls, and journal Bash
+  results over 8,000 characters to the friction journal (`kind="note"`,
+  `rule="large-bash-output"`) naming the command (mastack#23).
 - New PreToolUse Agent hook (`hooks/agent_role.py`, registered by
   `bin/install`): reads the launch's role from the prompt (`Role: <role>` or
   `[role: <role>]`) or description and fills missing `model` and `effort` from

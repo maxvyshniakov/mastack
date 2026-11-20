@@ -26,6 +26,10 @@ help or status call is a turn that rereads your whole context.
 - A refactor the ticket did not ask for (tdd, "Where the code goes"): the small
   one inside your claims; a larger one goes under Questions.
 - Keep the diff to your tickets; other lanes edit nearby files right now.
+- Keep tool output small (every tool result stays in context and is re-read on
+  every later turn): read only a file's needed line range, not the whole file;
+  cap search output (`grep -m`, `| head`); run `git show --stat` / `git diff
+  --stat` before a full diff; never print a whole log — tail or grep it.
 - Use the brief's focused checks as your edit-check loop, never the full lane
   check; heavy focused checks go through the project's slot wrapper. A check
   that takes minutes runs in the background, and you wait for its completion

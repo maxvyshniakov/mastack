@@ -150,6 +150,58 @@ class TypeErrorTests(FrictionCase):
         self.assertEqual(self.events(), [])
 
 
+class LargeBashOutputTests(FrictionCase):
+    def run_hook(self, payload) -> subprocess.CompletedProcess:
+        stdin = payload if isinstance(payload, str) else json.dumps(payload)
+        return subprocess.run([sys.executable, str(HOOKS / "friction_hook.py")], input=stdin, capture_output=True,
+                              text=True, env=self.env, timeout=30)
+
+    def test_command_label_names_the_command_through_wrappers_and_cd(self):
+        cases = [
+            ("git diff HEAD~1", "git diff"),
+            ("cd /tmp/worktree && sed -n '1,500p' src/app.ts", "sed"),
+            ("FOO=1 env grep -rn needle src/", "grep"),
+            ("timeout 30 bun run test", "bun run"),
+            ("lanefather list --all", "lanefather list"),
+            ("", "bash"),
+        ]
+        for command, expected in cases:
+            with self.subTest(command=command):
+                self.assertEqual(friction_journal.command_label(command), expected)
+
+    def test_hook_journals_bash_output_over_8k_chars_and_ignores_smaller_output(self):
+        small = "x" * friction_journal.LARGE_OUTPUT_THRESHOLD
+        done_small = self.run_hook({"hook_event_name": "PostToolUse", "tool_name": "Bash", "session_id": "sess-2",
+                                    "cwd": str(self.app), "tool_input": {"command": "git diff HEAD~1"},
+                                    "tool_response": {"stdout": small, "stderr": ""}})
+        self.assertEqual((done_small.returncode, done_small.stdout, done_small.stderr), (0, "", ""))
+        self.assertEqual(self.events(), [], "output at or under 8,000 chars is not journaled")
+
+        big = "x" * (friction_journal.LARGE_OUTPUT_THRESHOLD + 500)
+        (self.config / "friction.json").unlink()  # works even without friction.json
+        done_big = self.run_hook({"hook_event_name": "PostToolUse", "tool_name": "Bash", "session_id": "sess-2",
+                                  "cwd": str(self.app), "tool_input": {"command": "git diff HEAD~1"},
+                                  "tool_response": {"stdout": big, "stderr": ""}})
+        self.assertEqual((done_big.returncode, done_big.stdout, done_big.stderr), (0, "", ""))
+        events = self.events()
+        self.assertEqual(len(events), 1)
+        ev = events[0]
+        self.assertEqual(list(ev), SCHEMA_FIELDS)
+        self.assertEqual(friction_journal.problems(ev), [])
+        self.assertEqual((ev["package"], ev["kind"], ev["component"], ev["rule"], ev["project"], ev["session"],
+                          ev["source"]),
+                         ("mastack", "note", "git diff", "large-bash-output", "app", "sess-2", "mastack-hook"))
+        self.assertIn("8500 chars: git diff HEAD~1", ev["detail"])
+
+    def test_large_output_respects_disabled_journal(self):
+        self.env["FRICTION_JOURNAL"] = "off"
+        big = "y" * (friction_journal.LARGE_OUTPUT_THRESHOLD + 100)
+        done = self.run_hook({"tool_name": "Bash", "cwd": str(self.app), "tool_input": {"command": "cat big.log"},
+                              "tool_response": {"stdout": big}})
+        self.assertEqual((done.returncode, done.stdout), (0, ""))
+        self.assertEqual(self.events(), [])
+
+
 class RegisterTests(FrictionCase):
     def test_install_adds_the_friction_hook_only_with_friction_settings_and_uninstall_removes_it(self):
         import register
