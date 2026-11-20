@@ -72,6 +72,20 @@ class AgentRoleTests(unittest.TestCase):
                 updated = out["hookSpecificOutput"]["updatedInput"]
                 self.assertEqual((updated["model"], updated["effort"]), (expected_model, expected_effort))
 
+    def test_explicit_prompt_markers_apply_aliases_and_prefer_earliest_match(self):
+        cases = [
+            ("Build lane", "Role: implementer\nTickets: acme/app#1", model_id("opus"), "medium"),
+            ("Check diff", "[role: reviewer] Inspect changes", model_id("opus"), "medium"),
+            ("Fix parser", "Role: implement\nNote: fix how [role: scout] is parsed", model_id("opus"), "medium"),
+            ("Plan API", "[role: design]\nRole: implement", model_id("fable"), "high"),
+        ]
+        for description, prompt, expected_model, expected_effort in cases:
+            with self.subTest(prompt=prompt):
+                out = self.launch({"description": description, "prompt": prompt})
+                self.assertIsNotNone(out)
+                updated = out["hookSpecificOutput"]["updatedInput"]
+                self.assertEqual((updated["model"], updated["effort"]), (expected_model, expected_effort))
+
     def test_fills_only_the_missing_field_and_preserves_explicit_values(self):
         only_model = self.launch({"description": "implement lane a", "prompt": "Do work", "model": "sonnet"})
         self.assertIsNotNone(only_model)

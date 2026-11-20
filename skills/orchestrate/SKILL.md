@@ -31,11 +31,13 @@ repository, so `cleanup` finds them.
 3. Budget lanes. A usage limit stops every agent at once, so run fewer lanes
    when limits are low. Choose between reusing a warm agent and starting a
    fresh one instead of a fixed chain-per-agent rule: reuse an agent when it
-   is warm (idle under ~50 minutes, inside the subagent cache TTL), its
-   context is small (under ~150–200K), and the next task works on the same
-   code; otherwise start a fresh agent with a brief (a WIP commit on its
-   branch carries the state). Lanes whose claims overlap run in sequence; land
-   a prefactor that moves files before lanes that edit around it.
+   is still within the active provider's prompt-cache window, its context is
+   small enough to stay well under compaction (e.g. for Claude Code with 1h
+   subagent TTL: idle under ~50 minutes and context under ~150–200K), and the
+   next task works on the same code; otherwise start a fresh agent with a
+   brief (a WIP commit on its branch carries the state). Lanes whose claims
+   overlap run in sequence; land a prefactor that moves files before lanes
+   that edit around it.
 
 **Scouting.** Before you hand off a read-only scouting task (map X, find where
 Y lives, list the callers of Z), run `<this skill's directory>/scripts/role
@@ -43,8 +45,9 @@ scout`; it picks Sol while Codex has quota, so reading stops spending the
 Claude limit. Sol: its `run` command with `-s read-only -C <repo>
 --output-last-message <file> "<task>" < /dev/null` in the background, then
 read the file; without `< /dev/null` `codex exec` waits on stdin. Sonnet: the
-Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
-(a design, what should replace X) goes to `scripts/role design` instead.
+Agent tool with the role's `model` and `effort`, and `Role: scout` in the
+prompt. A task that asks for judgment or a proposal (a design, what should
+replace X) goes to `scripts/role design` instead.
 
 ## Run
 
@@ -99,12 +102,14 @@ Agent tool with `model: sonnet`. A task that asks for judgment or a proposal
    (or the lane list/stop hook reports them), while the diff is fresh; the
    [Lanefather gate](https://github.com/maxvyshniakov/fathers/issues/177) enforces
    this before further lands. Every finding is marked fixed or rejected before
-   promotion or release. One round of fixes, every finding marked fixed
-   or rejected, started only through the lane tool's fix-round path:
+   promotion or release. One round of fixes, started only through the lane
+   tool's fix-round path:
    `lanefather review <id> --fix-lane` for one lane, `lanefather start <fix-id>
    --fix-of A,B,C` for the findings of several (fathers#174; until it ships,
    one `--fix-lane` per lane). For the fix round, resume the implementer when
-   it is still warm (idle under ~50 minutes) and its context is under ~200K;
+   it is still within the active provider's prompt-cache window and its
+   context is small enough to stay well under compaction (e.g. for Claude Code
+   with 1h subagent TTL: idle under ~50 minutes and context under ~150–200K);
    otherwise start a fresh agent with the findings, the lane's diff, and the
    fix lane's commands. A plain `start` is an ordinary lane, which
    `land` reviews: batched fix lanes started that way chained six and seven

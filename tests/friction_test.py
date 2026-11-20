@@ -158,16 +158,64 @@ class LargeBashOutputTests(FrictionCase):
 
     def test_command_label_names_the_command_through_wrappers_and_cd(self):
         cases = [
-            ("git diff HEAD~1", "git diff"),
+            ("git diff HEAD~1", "git/diff"),
             ("cd /tmp/worktree && sed -n '1,500p' src/app.ts", "sed"),
             ("FOO=1 env grep -rn needle src/", "grep"),
-            ("timeout 30 bun run test", "bun run"),
-            ("lanefather list --all", "lanefather list"),
+            ("timeout 30 bun run test", "bun/run"),
+            ("lanefather list --all", "lanefather/list"),
             ("", "bash"),
+            # Identifier validation, capping, and fallbacks
+            ("git foo:bar", "git"),
+            ("123bad arg", "bash"),
+            ("git " + "a" * 90, ("git/" + "a" * 90)[:80]),
+            # Value-taking flags skipped and path-like tokens rejected
+            ("git -C /tmp/worktree diff", "git/diff"),
+            ("git --git-dir /tmp/g --work-tree /tmp/w -c core.pager=cat status", "git/status"),
+            ("gh -R owner/repo pr view 1", "gh/pr"),
+            ("kubectl -n prod --context main get pods", "kubectl/get"),
+            ("kubectl --namespace staging logs pod-1", "kubectl/logs"),
+            ("bun ./scripts/build.ts extra", "bun"),
+            ("git /tmp/some-path diff", "git"),
+            ("git -- diff", "git"),
+            # Leading flags and value args after wrapper tools
+            ("env -u FOO -i BAR=1 git diff", "git/diff"),
+            ("nice -n 10 sed -n '1,500p' src/app.ts", "sed"),
+            ("command -p git status", "git/status"),
+            ("timeout -k 5 30 bun run test", "bun/run"),
         ]
         for command, expected in cases:
             with self.subTest(command=command):
-                self.assertEqual(friction_journal.command_label(command), expected)
+                label = friction_journal.command_label(command)
+                self.assertEqual(label, expected)
+                self.assertRegex(label, friction_journal._IDENTIFIER)
+
+    def test_large_bash_output_redacts_inline_secrets_in_detail_and_fingerprint(self):
+        big = "x" * (friction_journal.LARGE_OUTPUT_THRESHOLD + 10)
+        gh_tok = "ghp_" + "a" * 24
+        pat_tok = "github_pat_" + "b" * 24
+        sk_tok = "sk-" + "c" * 24
+        aws_tok = "AKIA" + "0" * 16
+        cmd1 = (f'API_KEY=secret123 TOKEN="my secret" curl -H "Authorization: Bearer tok999" '
+                f'--format=json {gh_tok} {pat_tok} {sk_tok} {aws_tok}')
+        cmd2 = (f'API_KEY=other456 TOKEN="other secret" curl -H "Authorization: Bearer tok888" '
+                f'--format=json {"ghp_" + "z" * 24} {"github_pat_" + "y" * 24} {"sk-" + "x" * 24} {"AKIA" + "9" * 16}')
+        ev1 = friction_journal.large_bash_output(big, cmd1, self.app, source="test")
+        ev2 = friction_journal.large_bash_output(big, cmd2, self.app, source="test")
+        self.assertIsNotNone(ev1)
+        self.assertIsNotNone(ev2)
+        for secret in ("secret123", "my secret", "tok999", gh_tok, pat_tok, sk_tok, aws_tok):
+            self.assertNotIn(secret, ev1["detail"])
+        self.assertIn("API_KEY=<redacted>", ev1["detail"])
+        self.assertIn("TOKEN=<redacted>", ev1["detail"])
+        self.assertIn("Authorization: <redacted>", ev1["detail"])
+        self.assertIn("--format=json", ev1["detail"])
+        self.assertEqual(ev1["fingerprint"], ev2["fingerprint"])
+
+        ev_bearer = friction_journal.large_bash_output(big, "curl -H 'X-Auth: Bearer secret_jwt' -c color.ui=false",
+                                                       self.app, source="test")
+        self.assertIn("Bearer <redacted>", ev_bearer["detail"])
+        self.assertIn("color.ui=false", ev_bearer["detail"])
+        self.assertNotIn("secret_jwt", ev_bearer["detail"])
 
     def test_hook_journals_bash_output_over_8k_chars_and_ignores_smaller_output(self):
         small = "x" * friction_journal.LARGE_OUTPUT_THRESHOLD
@@ -190,8 +238,30 @@ class LargeBashOutputTests(FrictionCase):
         self.assertEqual(friction_journal.problems(ev), [])
         self.assertEqual((ev["package"], ev["kind"], ev["component"], ev["rule"], ev["project"], ev["session"],
                           ev["source"]),
-                         ("mastack", "note", "git diff", "large-bash-output", "app", "sess-2", "mastack-hook"))
+                         ("mastack", "note", "git/diff", "large-bash-output", "app", "sess-2", "mastack-hook"))
         self.assertIn("8500 chars: git diff HEAD~1", ev["detail"])
+
+    def test_output_of_avoids_newline_inflation_and_double_counting(self):
+        import friction_hook
+        # stdout + stderr totaling exactly 8000 must not be inflated to 8001 by a synthetic newline.
+        half = friction_journal.LARGE_OUTPUT_THRESHOLD // 2
+        text, size = friction_hook.output_of({"tool_response": {"stdout": "a" * half, "stderr": "b" * half}})
+        self.assertEqual(size, friction_journal.LARGE_OUTPUT_THRESHOLD)
+        self.assertIn("\n", text)
+        self.run_hook({"tool_name": "Bash", "cwd": str(self.app), "tool_input": {"command": "git diff"},
+                       "tool_response": {"stdout": "a" * half, "stderr": "b" * half}})
+        self.assertEqual(self.events(), [])
+
+        # stdout + output must not double-count.
+        self.run_hook({"tool_name": "Bash", "cwd": str(self.app), "tool_input": {"command": "git diff"},
+                       "tool_response": {"stdout": "a" * 5000, "stderr": "", "output": "a" * 5000}})
+        self.assertEqual(self.events(), [])
+
+        # When stdout/stderr are empty, fall back to output.
+        self.run_hook({"tool_name": "Bash", "cwd": str(self.app), "tool_input": {"command": "git diff"},
+                       "tool_response": {"stdout": "", "stderr": "", "output": "c" * 8001}})
+        self.assertEqual(len(self.events()), 1)
+        self.assertIn("8001 chars: git diff", self.events()[0]["detail"])
 
     def test_large_output_respects_disabled_journal(self):
         self.env["FRICTION_JOURNAL"] = "off"
@@ -201,25 +271,44 @@ class LargeBashOutputTests(FrictionCase):
         self.assertEqual((done.returncode, done.stdout), (0, ""))
         self.assertEqual(self.events(), [])
 
+    def test_hook_short_circuits_before_reading_stdin_when_journal_is_off(self):
+        import friction_hook
+
+        class GuardedStdin:
+            def read(self):
+                raise AssertionError("stdin must not be read when FRICTION_JOURNAL=off")
+
+        with mock.patch.dict(os.environ, {"FRICTION_JOURNAL": "off"}), mock.patch.object(sys, "stdin", GuardedStdin()):
+            self.assertEqual(friction_hook.main(), 0)
+
 
 class RegisterTests(FrictionCase):
-    def test_install_adds_the_friction_hook_only_with_friction_settings_and_uninstall_removes_it(self):
+    def test_install_registers_friction_hook_unconditionally_and_uninstall_removes_it(self):
         import register
         report: list[str] = []
         ours = {register.command(), register.friction_command()}
-        added = register.updated({}, False, ours, report, (), friction=True)
+        added = register.updated({}, False, ours, report)
         post = added["hooks"]["PostToolUse"]
         self.assertEqual(post, [{"matcher": "Bash", "hooks": [register.friction_handler()]}])
-        self.assertNotIn("PostToolUse", register.updated({}, False, ours, [], (), friction=False).get("hooks", {}))
         kept = {"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "other"}]}]}}
-        again = register.updated(register.updated(kept, False, ours, [], (), friction=True), False, ours, [], (),
-                                 friction=True)
+        again = register.updated(register.updated(kept, False, ours, []), False, ours, [])
         self.assertEqual(len(again["hooks"]["PostToolUse"]), 2, "install is idempotent and keeps other hooks")
-        removed = register.updated(again, True, ours, [], (), friction=True)
+        removed = register.updated(again, True, ours, [])
         self.assertEqual(removed["hooks"]["PostToolUse"], kept["hooks"]["PostToolUse"])
-        self.assertTrue(register.friction_wanted(self.config))
+
+        # main() registers PostToolUse[Bash] even without friction.json.
         (self.config / "friction.json").unlink()
-        self.assertFalse(register.friction_wanted(self.config))
+        (self.config / "hooks.json").write_text("{}")
+        settings = self.tmp / "settings.json"
+        argv = ["register.py", "--settings", str(settings), "--config", str(self.config), "--from-worktree"]
+        with mock.patch.object(sys, "argv", argv), mock.patch("sys.stdout"):
+            self.assertEqual(register.main(), 0)
+        installed = json.loads(settings.read_text())
+        self.assertEqual(installed["hooks"]["PostToolUse"],
+                         [{"matcher": "Bash", "hooks": [register.friction_handler()]}])
+        with mock.patch.object(sys, "argv", argv + ["--uninstall"]), mock.patch("sys.stdout"):
+            self.assertEqual(register.main(), 0)
+        self.assertNotIn("hooks", json.loads(settings.read_text()))
 
 
 def claude_line(kind: str, content, **extra) -> str:

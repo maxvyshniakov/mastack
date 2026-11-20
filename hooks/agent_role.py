@@ -32,12 +32,17 @@ DESC_PREFIX_RE = re.compile(r"(?i)^\s*(?:\[([a-z][a-z0-9_-]*)\]|([a-z][a-z0-9_-]
 
 
 def _match_explicit(text: str, known_roles: set[str]) -> str | None:
-    for pattern in (TAG_ROLE_RE, LINE_ROLE_RE):
+    best: tuple[int, str] | None = None
+    for pattern in (LINE_ROLE_RE, TAG_ROLE_RE):
         for match in pattern.finditer(text):
-            candidate = match.group(1).lower()
+            raw = match.group(1).lower()
+            candidate = ROLE_ALIASES.get(raw, raw)
             if candidate in known_roles:
-                return candidate
-    return None
+                pos = match.start()
+                if best is None or pos < best[0]:
+                    best = (pos, candidate)
+                break
+    return best[1] if best is not None else None
 
 
 def extract_role(tool_input: dict, known_roles: set[str]) -> str | None:

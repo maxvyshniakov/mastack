@@ -221,7 +221,7 @@ check "the worktree refusal names the main checkout" said "install from the main
 check "a refused worktree changes nothing" cmp -s "$sf" "$scratch/settings.uninstalled"
 rm -f "$sf" "$scratch"/settings.json.mastack-backup-*
 install --only hooks
-check "a missing settings file is created" py "len($commands) == 2 and len($ours) == 1 and any(c.endswith('$root/hooks/agent_role.py') for c in $commands)"
+check "a missing settings file is created" py "len($commands) == 2 and len($ours) == 1 and any(c.endswith('$root/hooks/agent_role.py') for c in $commands) and any(h['command'].endswith('$root/hooks/friction_hook.py') for g in s['hooks'].get('PostToolUse', []) for h in g['hooks'])"
 printf '{"hooks": ' > "$sf"
 check "an unreadable settings file is refused" sh -c "! '$root/bin/install' --target '$t' --only hooks >'$scratch/out' 2>&1"
 check "an unreadable settings file is left alone" test "$(cat "$sf")" = '{"hooks": '

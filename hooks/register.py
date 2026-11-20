@@ -3,12 +3,13 @@
 
     hooks/register.py --settings FILE [--config DIR] [--dry-run] [--uninstall] [--from-worktree]
 
-Install adds one PreToolUse group (matcher Bash) that runs hooks/bash_guard.py of this checkout, through `sh` so a
-missing file lets every command through instead of blocking it. In Bash groups only, it removes the handlers that
-one replaces: the separate checks of an earlier agent-hooks directory (git-guard.py, zsh-word-split.py,
-unguarded-sequence.py, lease-guard.py), ~/.claude/hooks/macos-shell-pitfalls.sh, and the mastack commands an
-earlier install recorded in DIR/hooks-installed.json. A group left without handlers is dropped; every other entry
-stays as it is. Uninstall removes only the recorded mastack commands and this checkout's.
+Install adds one PreToolUse group (matcher Bash) that runs hooks/bash_guard.py and one PreToolUse group (matcher
+Agent) that runs hooks/agent_role.py of this checkout, through `sh` so a missing file lets every call through instead
+of blocking it. In Bash groups only, it removes the handlers that one replaces: the separate checks of an earlier
+agent-hooks directory (git-guard.py, zsh-word-split.py, unguarded-sequence.py, lease-guard.py),
+~/.claude/hooks/macos-shell-pitfalls.sh, and the mastack commands an earlier install recorded in
+DIR/hooks-installed.json. A group left without handlers is dropped; every other entry stays as it is. Uninstall
+removes only the recorded mastack commands and this checkout's.
 
 For each lifecycle event the machine settings list under `lifecycle` (SubagentStart, SubagentStop, Stop,
 SessionStart, SessionEnd; hooks/lifecycle.py), install adds one group that runs hooks/lifecycle.py EVENT, and removes
@@ -18,8 +19,8 @@ ones it added and removes them once no entry lists them, or on uninstall. A rule
 whoever put it there. The Bash handlers an entry lists under `replaces` (what a tool registered itself before) are
 removed.
 
-When DIR/friction.json exists (hooks/friction_journal.py), install adds one PostToolUse group (matcher Bash) that runs
-hooks/friction_hook.py, which logs TypeScript errors about the configured packages; without the file it removes it.
+Install also adds one PostToolUse group (matcher Bash) that runs hooks/friction_hook.py (hooks/friction_journal.py),
+which logs oversized Bash outputs and, when DIR/friction.json configures packages, TypeScript errors about them.
 
 Install refuses (exit 1) when DIR/hooks.json, the machine settings the checks read, is missing or unreadable:
 without it git-guard protects no checkout and the lease guard knows no lane (hooks/hooks.example.json shows the
@@ -92,14 +93,6 @@ def friction_command() -> str:
 
 def friction_handler() -> dict:
     return {"type": "command", "command": friction_command(), "timeout": FRICTION_TIMEOUT}
-
-
-def friction_wanted(config: Path) -> bool:
-    """The friction hook is registered while the machine has friction settings."""
-    try:
-        return isinstance(json.loads((config / "friction.json").read_text(encoding="utf-8")), dict)
-    except (OSError, ValueError):
-        return False
 
 
 def friction_groups(hooks: dict, want: bool, ours: set[str], report: list[str]) -> None:
@@ -275,7 +268,7 @@ def permission_rules(result: dict, wanted: list[str], ours: set[str], report: li
     return claimed
 
 
-def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], events=(), friction=False,
+def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], events=(), friction=True,
             allow: list[str] | None = None, ours_allow: set[str] | None = None,
             claimed: list[str] | None = None, replaces: set[str] | None = None) -> dict:
     if not isinstance(settings, dict):
@@ -393,7 +386,6 @@ def main() -> int:
     print(tilde(path))
     target = path.resolve()  # a symlinked settings file stays a symlink
     events = lifecycle_events(args.config)
-    friction = friction_wanted(args.config)
     ours = (set(recorded(args.config)) | {command(), agent_role_command(), friction_command()}
             | {lifecycle_command(event) for event in LIFECYCLE_EVENTS})
     allow, ours_allow, claimed = lifecycle_allow(args.config), set(recorded_allow(args.config)), []
@@ -407,7 +399,7 @@ def main() -> int:
             except ValueError as error:
                 raise Refused(f"not JSON: {error}") from None
             report: list[str] = []
-            after_settings = updated(settings, args.uninstall, ours, report, events, friction, allow, ours_allow,
+            after_settings = updated(settings, args.uninstall, ours, report, events, True, allow, ours_allow,
                                      claimed, lifecycle_replaces(args.config))
             if after_settings == settings:
                 print("  ok     hooks" if not args.uninstall else "  ok     no mastack hook")
@@ -442,9 +434,8 @@ def main() -> int:
         print(f"  refuse {error}", file=sys.stderr)
         return 1
     if not args.dry_run:
-        record(args.config, [] if args.uninstall else [command(), agent_role_command()]
-               + [lifecycle_command(e) for e in events]
-               + ([friction_command()] if friction else []), [] if args.uninstall else claimed)
+        record(args.config, [] if args.uninstall else [command(), agent_role_command(), friction_command()]
+               + [lifecycle_command(e) for e in events], [] if args.uninstall else claimed)
     return 0
 
 

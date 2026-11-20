@@ -24,7 +24,8 @@ Which packages count comes from `$MASTACK_CONFIG/friction.json` (default `~/.con
       "vendored": [ ... ]                             copies for `bin/friction vendor` (see there)
     }
 
-Without the file, nothing is about a package and nothing is written.
+Without the file, no package is configured, so package-specific events (type errors, scans, vendored patches)
+are skipped; tool-level notes such as `large-bash-output` still record unless `FRICTION_JOURNAL=off`.
 """
 from __future__ import annotations
 
@@ -413,16 +414,47 @@ def type_errors(text: str, cwd, config: dict, *, session=None, source: str, ts: 
 
 
 LARGE_OUTPUT_THRESHOLD = 8_000
+_IDENTIFIER = re.compile(CONTRACT["redaction"]["identifier"]["pattern"], re.ASCII)
 _SUBCOMMAND_TOOLS = frozenset({
     "git", "gh", "lanefather", "slotfather", "junkfather",
     "bun", "npm", "pnpm", "yarn", "cargo", "docker", "kubectl", "repo-kit",
 })
+_SUBCOMMAND_VALUE_FLAGS = frozenset({
+    "-C", "--git-dir", "--work-tree", "-c", "-R", "-n", "--namespace", "--context",
+})
 _WRAPPER_TOOLS = frozenset({"env", "nohup", "nice", "time", "command"})
+_WRAPPER_VALUE_FLAGS = frozenset({"-u", "--unset", "-n", "--adjustment", "-C", "--chdir", "-P", "-S", "--split-string"})
+_TIMEOUT_VALUE_FLAGS = frozenset({"-k", "--kill-after", "-s", "--signal"})
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_AUTH_HEADER_RE = re.compile(r"(?i)(\bAuthorization\s*:\s*)(?:(?:Bearer|Basic|Token)\s+)?[^\s'\";]+")
+_BEARER_RE = re.compile(r"(?i)\b(Bearer\s+)[^\s'\";]+")
+_ENV_SECRET_RE = re.compile(r"(?<![A-Za-z0-9_.-])([A-Za-z_][A-Za-z0-9_]*=)(?:\"[^\"]*\"|'[^']*'|[^\s;&|]+)")
+_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]+|AKIA[0-9A-Z]{12,})"
+)
+
+
+def _safe_label(candidate: str, fallback: str = "bash") -> str:
+    """Validate and cap a command label against the contract's identifier regex."""
+    for value in (candidate, fallback):
+        if value:
+            capped = value[:80]
+            if _IDENTIFIER.fullmatch(capped):
+                return capped
+    return "bash"
+
+
+def _redact_command(cmd: str) -> str:
+    """Redact inline secrets (env assignments, Authorization/Bearer headers, known token prefixes)."""
+    text = _AUTH_HEADER_RE.sub(r"\1<redacted>", cmd)
+    text = _BEARER_RE.sub(r"\1<redacted>", text)
+    text = _ENV_SECRET_RE.sub(r"\1<redacted>", text)
+    text = _TOKEN_RE.sub("<redacted>", text)
+    return text
 
 
 def command_label(command: str | None) -> str:
-    """Short name of the command a Bash call ran (`git diff`, `sed`, `lanefather list`, ...)."""
+    """Short identifier of the command a Bash call ran (`git/diff`, `sed`, `lanefather/list`, ...)."""
     if not isinstance(command, str) or not command.strip():
         return "bash"
     # Skip leading `cd <dir> &&` / `;` prefix so the real command is named.
@@ -442,11 +474,31 @@ def command_label(command: str | None) -> str:
             base = os.path.basename(tok)
             if base in _WRAPPER_TOOLS:
                 i += 1
+                while i < len(tokens):
+                    if tokens[i] == "--":
+                        i += 1
+                        break
+                    if tokens[i] in _WRAPPER_VALUE_FLAGS:
+                        i += 2
+                        continue
+                    if tokens[i].startswith("-"):
+                        i += 1
+                        continue
+                    break
                 continue
             if base == "timeout":
                 i += 1
-                while i < len(tokens) and tokens[i].startswith("-"):
-                    i += 1
+                while i < len(tokens):
+                    if tokens[i] == "--":
+                        i += 1
+                        break
+                    if tokens[i] in _TIMEOUT_VALUE_FLAGS:
+                        i += 2
+                        continue
+                    if tokens[i].startswith("-"):
+                        i += 1
+                        continue
+                    break
                 if i < len(tokens):
                     i += 1  # duration
                 continue
@@ -457,25 +509,39 @@ def command_label(command: str | None) -> str:
         if tool == "cd" and len(segments) > 1:
             continue
         if tool in _SUBCOMMAND_TOOLS:
-            for arg in tokens[i + 1:]:
-                if not arg.startswith("-") and not _ENV_ASSIGN.match(arg):
-                    return f"{tool} {arg}"
-        return tool or "bash"
+            j = i + 1
+            while j < len(tokens):
+                arg = tokens[j]
+                if arg == "--":
+                    break
+                if arg in _SUBCOMMAND_VALUE_FLAGS:
+                    j += 2
+                    continue
+                if arg.startswith("-") or _ENV_ASSIGN.match(arg):
+                    j += 1
+                    continue
+                if "/" in arg or arg.startswith("."):
+                    break
+                return _safe_label(f"{tool}/{arg}", tool)
+        return _safe_label(tool)
     return "bash"
 
 
 def large_bash_output(text: str, command: str | None, cwd, *, session=None, source: str, ts: str | None = None,
-                      threshold: int = LARGE_OUTPUT_THRESHOLD) -> dict | None:
+                      threshold: int = LARGE_OUTPUT_THRESHOLD, size: int | None = None) -> dict | None:
     """A friction note when a Bash tool result exceeds `threshold` characters, naming the command."""
-    if not isinstance(text, str) or len(text) <= threshold:
+    if not isinstance(text, str):
         return None
-    size = len(text)
+    actual_size = len(text) if size is None else size
+    if actual_size <= threshold:
+        return None
     project = project_name(cwd)
     cmd = command.strip() if isinstance(command, str) else ""
     label = command_label(cmd)
-    snippet = " ".join(cmd.split())[:200]
-    detail = f"{size} chars: {snippet}" if snippet else f"{size} chars"
-    why = f"Bash tool output was {size} characters (over {threshold})"
+    redacted = _redact_command(cmd)
+    snippet = " ".join(redacted.split())[:200]
+    detail = f"{actual_size} chars: {snippet}" if snippet else f"{actual_size} chars"
+    why = f"Bash tool output was {actual_size} characters (over {threshold})"
     key = fingerprint(project, "large-bash-output", label, snippet)
     return event(package="mastack", kind="note", project=project, source=source, ts=ts, component=label,
                  rule="large-bash-output", detail=detail, session=session, why=why, fp=key)

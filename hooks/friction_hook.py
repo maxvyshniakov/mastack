@@ -13,7 +13,7 @@ When a Bash call's output exceeds 8,000 characters (`friction_journal.LARGE_OUTP
 `note` event (`rule="large-bash-output"`) naming the command so the worst offenders show up by name.
 
 It only observes: it prints nothing, never blocks and exits 0, also on unreadable input or a journal it cannot
-write. With FRICTION_JOURNAL=off it does nothing. `bin/install` registers it when friction.json exists.
+write. With FRICTION_JOURNAL=off it does nothing. `bin/install` registers it for Bash.
 """
 from __future__ import annotations
 
@@ -26,26 +26,31 @@ HOOK_TIMEOUT = 10  # seconds, as bin/install registers it; a run takes milliseco
 MAX_OUTPUT = 2_000_000
 
 
-def output_of(data: dict) -> str:
+def output_of(data: dict) -> tuple[str, int]:
     response = data.get("tool_response")
     if isinstance(response, str):
-        return response
+        return response, len(response)
     if isinstance(response, dict):
-        return "\n".join(str(response.get(key)) for key in ("stdout", "stderr", "output") if response.get(key))
-    return ""
+        parts = [str(response[key]) for key in ("stdout", "stderr") if response.get(key)]
+        if not parts and response.get("output"):
+            parts = [str(response["output"])]
+        return "\n".join(parts), sum(len(part) for part in parts)
+    return "", 0
 
 
 def main() -> int:
     try:
+        if not friction_journal.journal_path():
+            return 0
         data = json.loads(sys.stdin.read() or "{}")
         if not isinstance(data, dict) or data.get("tool_name") != "Bash":
             return 0
-        raw = output_of(data)
+        raw, raw_size = output_of(data)
         events = []
         tool_input = data.get("tool_input")
         command = tool_input.get("command") if isinstance(tool_input, dict) else None
         large = friction_journal.large_bash_output(raw, command, data.get("cwd"), session=data.get("session_id"),
-                                                   source="mastack-hook")
+                                                   source="mastack-hook", size=raw_size)
         if large:
             events.append(large)
         text = raw[-MAX_OUTPUT:]
