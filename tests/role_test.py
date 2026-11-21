@@ -197,7 +197,7 @@ class ResolveTests(RoleCase):
             ("scout", "flash", "medium"),
             ("routine", "flash", "medium"),
             ("research", "argon", "medium"),
-            ("audit", "neon", "high"),
+            ("audit", "carbon", "high"),
         ):
             with self.subTest(role=role):
                 answer = self.answer(role, "--family", "google")
@@ -219,12 +219,12 @@ class ResolveTests(RoleCase):
         ans_exhausted = self.answer("review", "--implementer-family", "google", used=100)
         self.assertEqual((ans_exhausted["model"], ans_exhausted["note"]), ("opus", None))
 
-        # Anthropic implementer -> Neon when Google is selected or Anthropic is excluded and Codex is exhausted.
+        # Anthropic implementer -> Carbon when Google is selected or Anthropic is excluded and Codex is exhausted.
         ans_google = self.answer("review", "--implementer-family", "anthropic", "--family", "google", used=100)
         self.assertEqual((ans_google["model"], ans_google["family"], ans_google["option"], ans_google["note"]),
-                         ("neon", "google", "thought_level", None))
+                         ("carbon", "google", "thought_level", None))
         ans_excl = self.answer("review", "--implementer-family", "anthropic", "--exclude-family", "anthropic", used=100)
-        self.assertEqual((ans_excl["model"], ans_excl["family"], ans_excl["note"]), ("neon", "google", None))
+        self.assertEqual((ans_excl["model"], ans_excl["family"], ans_excl["note"]), ("carbon", "google", None))
 
         # Google implementer cannot be reviewed by Google under not_family = true.
         proc = self.role("review", "--implementer-family", "google", "--family", "google", used=50)

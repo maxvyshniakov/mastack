@@ -47,6 +47,12 @@ family = "google"
 cli = "antigravity"
 tier = "strong"
 
+[models.carbon]
+id = "gemini-4-carbon"
+family = "google"
+cli = "antigravity"
+tier = "frontier"
+
 [models.flash]
 id = "gemini-3.8-flash"
 family = "google"
@@ -105,6 +111,7 @@ choices = [
   { model = "fable", effort = "high" },
   { model = "opus", effort = "high" },
   { model = "neon", effort = "high" },
+  { model = "carbon", effort = "high" },
 ]
 
 [roles.implement]
@@ -130,6 +137,7 @@ choices = [
   { model = "sol", effort = "medium", when = { not_family = true, limit = { codex_weekly = 15 } } },
   { model = "opus", effort = "medium", when = { not_family = true } },
   { model = "opus", effort = "medium", note = "same family as the implementer: fresh context only, say so in the report" },
+  { model = "carbon", effort = "medium", when = { not_family = true } },
   { model = "neon", effort = "medium", when = { not_family = true } },
 ]
 
@@ -163,6 +171,7 @@ purpose = "security and correctness audits; a strong model verifies every findin
 choices = [
   { model = "fable", effort = "high" },
   { model = "opus", effort = "high" },
+  { model = "carbon", effort = "high" },
   { model = "neon", effort = "high" },
 ]
 
@@ -232,6 +241,15 @@ cache_write_short = 1.0
 cache_write_long = 1.0
 cache_write_default = 1.0
 tier_multiplier = 0.5
+
+[pricing.carbon]
+input = 1.0
+output = 6.0
+cache_read = 0.1
+cache_write_short = 1.0
+cache_write_long = 1.0
+cache_write_default = 1.0
+tier_multiplier = 0.8
 
 [pricing.flash]
 input = 1.0
