@@ -16,8 +16,8 @@ placeholder owners `owner/` and `acme/` are allowed, and so is a commit-message
 line that only closes or names this repository's own issue (`Closes #N`).
 Without --history it also scans the messages of commits not yet on origin/main.
 
-Without --history it then runs the tests: tracked files named `*_test.sh` or
-`*_test.py`. Exit status 1 when anything is found or a test fails.
+Without --history it then runs the tests: tracked files named `*_test.sh`,
+`*_test.py` or `test_*.py`. Exit status 1 when anything is found or a test fails.
 """
 
 import argparse
@@ -102,7 +102,7 @@ def run_tests():
     # initialize their own repositories, not mutate the pushed checkout.
     local_names = set(git("rev-parse", "--local-env-vars").decode().splitlines())
     test_env = {key: value for key, value in os.environ.items() if key not in local_names}
-    for path in git("ls-files", "-z", "*_test.sh", "*_test.py").decode().split("\0"):
+    for path in git("ls-files", "-z", "*_test.sh", "*_test.py", "test_*.py", "*/test_*.py").decode().split("\0"):
         if not path:
             continue
         command = ["bash", path] if path.endswith(".sh") else [sys.executable, path]

@@ -27,6 +27,8 @@ import re
 import sys
 
 import hook_io
+import shell
+from shell import Word
 
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\+?=")
@@ -35,250 +37,19 @@ OPTION = re.compile(r"^--?[A-Za-z]")
 ZSH_ARRAYS = {"argv", "path", "fpath", "cdpath", "manpath", "mailpath", "module_path", "pipestatus", "match",
               "mbegin", "mend", "reply", "signals", "funcstack", "funcfiletrace", "funcsourcetrace", "functrace",
               "historywords", "precmd_functions", "preexec_functions", "chpwd_functions", "zsh_eval_context"}
-RESERVED = {"do", "then", "else", "elif", "if", "while", "until", "{", "}", "!", "done", "fi", "esac", "coproc"}
 WRAPPERS = {"env", "command", "builtin", "nohup", "time", "sudo", "noglob", "nocorrect", "exec"}
 DECLARERS = {"export", "local", "typeset", "declare", "readonly", "integer", "float"}
 # Commands for which one word and its split words come out the same, or that split again themselves.
 WHOLE_IS_FINE = {"echo", "print", "eval", "[", "[[", "test", "case", ":", "unset"}
-OPERATORS = (";;", ";&", ";|", "&&", "||", "|&", "&|", ";", "&", "|")
 
 
-class Unreadable(Exception):
-    pass
+def assignment_of(word: Word) -> str | None:
+    match = ASSIGNMENT.match(word.raw)
+    return match.group(1) if match else None
 
 
-class Word:
-    def __init__(self, start: int):
-        self.start = start
-        self.raw = ""
-        self.text = ""        # literal characters; each expansion is "\0"
-        self.parts: list[tuple[str, str | None]] = []  # ("lit", None) or ("param", name), unquoted ones only
-        self.quoted = False
-        self.array = False    # name=( ... )
-        self.subs: list[str] = []
-
-    @property
-    def param(self) -> str | None:
-        """The name when the whole word is one unquoted $name or ${name}."""
-        if len(self.parts) == 1 and self.parts[0][0] == "param" and not self.quoted:
-            return self.parts[0][1]
-        return None
-
-    @property
-    def literal(self) -> str | None:
-        return None if "\0" in self.text else self.text
-
-    @property
-    def assignment(self) -> str | None:
-        match = ASSIGNMENT.match(self.raw)
-        return match.group(1) if match else None
-
-    @property
-    def value(self) -> str:
-        return self.text.split("=", 1)[1] if "=" in self.text else ""
-
-
-def matching(s: str, i: int, close: str) -> int:
-    """Index just past the `close` that ends the construct whose body starts at i (quotes and nesting respected)."""
-    depth = 1
-    opener = {")": "(", "}": "{"}[close]
-    while i < len(s):
-        c = s[i]
-        if c == "\\":
-            i += 2
-            continue
-        if c == "'":
-            end = s.find("'", i + 1)
-            if end < 0:
-                raise Unreadable
-            i = end + 1
-            continue
-        if c == '"':
-            i = double_quoted(s, i, Word(i))
-            continue
-        if c == "`":
-            i = backtick(s, i, Word(i))
-            continue
-        if c == opener:
-            depth += 1
-        elif c == close:
-            depth -= 1
-            if depth == 0:
-                return i + 1
-        i += 1
-    raise Unreadable
-
-
-def backtick(s: str, i: int, word: Word) -> int:
-    j = i + 1
-    while j < len(s) and s[j] != "`":
-        j += 2 if s[j] == "\\" else 1
-    if j >= len(s):
-        raise Unreadable
-    word.subs.append(s[i + 1:j])
-    return j + 1
-
-
-def dollar(s: str, i: int, word: Word, quoted: bool) -> int:
-    """Read the expansion at s[i] == "$" into word; return the index after it."""
-    nxt = s[i + 1:i + 2]
-    if s.startswith("$((", i):
-        end = matching(s, i + 2, ")")
-        word.text += "\0"
-        return end
-    if nxt == "(":
-        end = matching(s, i + 2, ")")
-        word.subs.append(s[i + 2:end - 1])
-        word.text += "\0"
-        return end
-    if nxt == "{":
-        end = matching(s, i + 2, "}")
-        body = s[i + 2:end - 1]
-        word.text += "\0"
-        if not quoted:
-            word.parts.append(("param", body) if IDENTIFIER.match(body) else ("other", None))
-        return end
-    if nxt == "'" and not quoted:
-        end = s.find("'", i + 2)
-        while end > 0 and s[end - 1] == "\\":
-            end = s.find("'", end + 1)
-        if end < 0:
-            raise Unreadable
-        word.text += s[i + 2:end]
-        word.quoted = True
-        return end + 1
-    match = re.match(r"[A-Za-z_][A-Za-z0-9_]*", s[i + 1:])
-    if match:
-        word.text += "\0"
-        if not quoted:
-            word.parts.append(("param", match.group(0)))
-        return i + 1 + match.end()
-    if nxt and nxt in "0123456789@*#?$!-":
-        word.text += "\0"
-        if not quoted:
-            word.parts.append(("other", None))
-        return i + 2
-    word.text += "$"
-    if not quoted:
-        word.parts.append(("lit", None))
-    return i + 1
-
-
-def double_quoted(s: str, i: int, word: Word) -> int:
-    word.quoted = True
-    j = i + 1
-    while j < len(s):
-        c = s[j]
-        if c == '"':
-            return j + 1
-        if c == "\\" and j + 1 < len(s):
-            word.text += s[j + 1]
-            j += 2
-        elif c == "$":
-            j = dollar(s, j, word, quoted=True)
-        elif c == "`":
-            j = backtick(s, j, word)
-            word.text += "\0"
-        else:
-            word.text += c
-            j += 1
-    raise Unreadable
-
-
-def tokens(s: str) -> list:
-    """Words and operators of a zsh command line: Word, ("op", text) or ("redirect", text)."""
-    result: list = []
-    word: Word | None = None
-
-    def end_word():
-        nonlocal word
-        if word is not None:
-            word.raw = s[word.start:i]
-            result.append(word)
-            word = None
-
-    def current() -> Word:
-        nonlocal word
-        if word is None:
-            word = Word(i)
-        return word
-
-    i = 0
-    while i < len(s):
-        c = s[i]
-        if c in " \t":
-            end_word()
-            i += 1
-        elif c == "\n":
-            end_word()
-            result.append(("op", ";"))
-            i += 1
-        elif c == "\\":
-            if s[i + 1:i + 2] == "\n":
-                end_word()
-            else:
-                current().text += s[i + 1:i + 2]
-                current().quoted = True
-            i += 2
-        elif c == "#" and word is None:
-            end = s.find("\n", i)
-            i = len(s) if end < 0 else end
-        elif c == "'":
-            end = s.find("'", i + 1)
-            if end < 0:
-                raise Unreadable
-            current().text += s[i + 1:end]
-            current().quoted = True
-            i = end + 1
-        elif c == '"':
-            i = double_quoted(s, i, current())
-        elif c == "`":
-            w = current()
-            i = backtick(s, i, w)
-            w.text += "\0"
-            w.parts.append(("other", None))
-        elif c == "$":
-            i = dollar(s, i, current(), quoted=False)
-        elif c in "<>" and s[i + 1:i + 2] == "(":
-            w = current()
-            end = matching(s, i + 2, ")")
-            w.subs.append(s[i + 2:end - 1])
-            w.text += "\0"
-            w.parts.append(("other", None))
-            i = end
-        elif c in "<>" or (c == "&" and s[i + 1:i + 2] == ">"):
-            if word is not None and word.text.isdigit() and not word.quoted:
-                word = None  # the fd number of 2>&1
-            end_word()
-            j = i + 1
-            while j < len(s) and s[j] in "<>&|" and j - i < 3:
-                j += 1
-            result.append(("redirect", s[i:j]))
-            i = j
-        elif c in ";&|":
-            end_word()
-            op = next(o for o in OPERATORS if s.startswith(o, i))
-            result.append(("op", op))
-            i += len(op)
-        elif c == "(" and word is not None and s[word.start:i].endswith("="):
-            end = matching(s, i + 1, ")")
-            for inner in tokens(s[i + 1:end - 1]):
-                if isinstance(inner, Word):
-                    word.subs.extend(inner.subs)
-            word.array = True
-            word.text += "\0"
-            i = end
-        elif c in "()":
-            end_word()
-            result.append(("op", c))
-            i += 1
-        else:
-            current().text += c
-            if not word.parts or word.parts[-1][0] != "lit":
-                word.parts.append(("lit", None))
-            i += 1
-    end_word()
-    return result
+def value_of(word: Word) -> str:
+    return word.text.split("=", 1)[1] if "=" in word.text else ""
 
 
 class Guard:
@@ -297,8 +68,7 @@ class Guard:
     def deny(self, rule: str, name: str, words: list[Word], what: str):
         if self.split or any(f[0] == rule and f[1] == name for f in self.findings):
             return
-        shown = " ".join(w.raw for w in words)
-        shown = shown if len(shown) <= 80 else shown[:77] + "..."
+        shown = shell.show(words)
         self.findings.append((rule, name, f"[{rule}] `{shown}`: {what} Fix: `${{={name}}}` splits it, or keep the "
                                           f"words in an array (`{name}=(a b)`, then `${name}`); "
                                           f"write \"${name}\" when one word is meant."))
@@ -323,48 +93,65 @@ class Guard:
             self.arrays.add(name)
             self.values.pop(name, None)
         else:
-            self.note(name, [word.value])
+            self.note(name, [value_of(word)])
 
     def check(self, command: str):
-        """Check each simple command in order. $(...), `...`, <(...) and ( ... ) run in a subshell: what they
+        """Check each command in order. $(...), `...`, <(...) and ( ... ) run in a subshell: what they
         assign or set does not reach the commands after them."""
-        scopes, words, skip = [], [], False
-        for item in tokens(command) + [("op", ";")]:
-            if isinstance(item, Word):
-                if not skip:
-                    words.append(item)
-                skip = False
-                continue
-            if item[0] == "redirect":
-                skip = True
-                continue
-            if words:
-                for word in words:
-                    for sub in word.subs:
-                        saved = self.snapshot()
-                        self.check(sub)
-                        self.restore(saved)
-                self.simple(words)
-                words = []
-            if item[1] == "(":
-                scopes.append(self.snapshot())
-            elif item[1] == ")" and scopes:
-                self.restore(scopes.pop())
+        self.walk_list(shell.read(command))
+
+    def walk_subs(self, words: list[Word]):
+        for word in words:
+            for sub in word.subs:
+                saved = self.snapshot()
+                self.walk_list(shell.read(sub))
+                self.restore(saved)
+
+    def walk_list(self, lst: list):
+        for and_or, _ in lst:
+            for pipeline, _ in and_or:
+                for command in pipeline:
+                    self.walk_command(command)
+
+    def walk_command(self, command):
+        kind = command[0]
+        if kind == "simple":
+            self.walk_subs(command[1])
+            self.simple(command[1])
+        elif kind == "group":
+            self.walk_list(command[1])
+        elif kind in ("subshell", "function"):
+            saved = self.snapshot()
+            self.walk_list(command[1])
+            self.restore(saved)
+        elif kind == "if":
+            for condition, body in command[1]:
+                self.walk_list(condition)
+                self.walk_list(body)
+            if command[2]:
+                self.walk_list(command[2])
+        elif kind == "loop":
+            if len(command) > 3:
+                self.walk_subs(command[3])
+                self.loop(command[3])
+            self.walk_list(command[1])
+            self.walk_list(command[2])
+        elif kind == "case":
+            for body in command[1]:
+                self.walk_list(body)
 
     def simple(self, words: list[Word]):
-        while words and words[0].literal in RESERVED:
-            words = words[1:]
         prefix = 0
-        while prefix < len(words) and words[prefix].assignment:
+        while prefix < len(words) and assignment_of(words[prefix]):
             prefix += 1
         if prefix == len(words):
             for word in words:
-                self.assign(word.assignment, word)
+                self.assign(assignment_of(word), word)
             return
         words = words[prefix:]
         while words and words[0].literal in WRAPPERS:
             words = words[1:]
-            while words and (words[0].assignment or (words[0].literal or "").startswith("-")):
+            while words and (assignment_of(words[0]) or (words[0].literal or "").startswith("-")):
                 words = words[1:]
         if not words:
             return
@@ -372,8 +159,9 @@ class Guard:
         flags = "".join((w.literal or "")[1:] for w in words[1:] if (w.literal or "").startswith(("-", "+")))
         if name in DECLARERS:
             for word in words[1:]:
-                if word.assignment:
-                    self.assign(word.assignment, word, array="a" in flags or "A" in flags)
+                assigned = assignment_of(word)
+                if assigned:
+                    self.assign(assigned, word, array="a" in flags or "A" in flags)
                 elif ("a" in flags or "A" in flags) and IDENTIFIER.match(word.literal or ""):
                     self.arrays.add(word.literal)
         elif name == "read":
@@ -382,8 +170,6 @@ class Guard:
                 self.note(variable, ["x"] if index < len(names) - 1 else None)  # the last one takes the rest
             if "A" in flags:
                 self.arrays.update(names)
-        elif name == "for":
-            self.loop(words)
         elif name == "set":
             self.set(words)
         elif name in ("setopt", "unsetopt"):
@@ -445,8 +231,8 @@ def check(data: dict):
         return None
     guard = Guard()
     try:
-        guard.check(hook_io.strip_heredocs(command))
-    except (Unreadable, ValueError, IndexError, StopIteration, RecursionError):
+        guard.check(command)
+    except (shell.Unreadable, ValueError, IndexError, StopIteration, RecursionError):
         return None
     if guard.findings:
         return hook_io.deny("zsh word-split denied this command: the Bash tool runs zsh, which does not split an "

@@ -385,9 +385,9 @@ another language. See [evals/README.md](evals/README.md).
   e-mail addresses, issue references, tokens, plus your own patterns from
   `~/.config/mastack/private-patterns` (one regular expression per line, kept
   out of the repository). `bin/check --history` scans every commit. Without
-  `--history` it then runs the tests (`*_test.sh`, `*_test.py`), among them
-  `tests/hooks_test.py`, which replays `hooks/fixtures/` against each check
-  and through the dispatcher.
+  `--history` it then runs the tests (`*_test.sh`, `*_test.py`, `test_*.py`),
+  among them `tests/test_*.py`, which replay `hooks/fixtures/` against each
+  check and through the dispatcher.
   `.githooks/pre-push` runs it; enable with `git config core.hooksPath .githooks`.
   CI runs the same on every push and pull request.
 - After a new model ships: run the evals, then reread each skill and delete any

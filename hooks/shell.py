@@ -11,6 +11,7 @@ import re
 
 # A heredoc operator and its delimiter: <<EOF, <<-'EOF', << "EOF"; the caller rules out the here-string <<<.
 HEREDOC = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
+IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\[[^]]*\])?\+?=")
 WRAPPERS = {"env", "command", "builtin", "nohup", "time", "sudo", "exec", "noglob", "nocorrect", "nice"}
 OPERATORS = (";;", ";&", ";|", "&&", "||", "|&", "&|", "&!", ";", "&", "|")
@@ -22,14 +23,25 @@ class Unreadable(Exception):
 
 
 class Word:
-    def __init__(self, raw: str, text: str, subs: list[str]):
+    def __init__(self, raw: str, text: str, subs: list[str],
+                 parts: list[tuple[str, str | None]] = (), quoted: bool = False, array: bool = False):
         self.raw = raw      # as written
         self.text = text    # quotes removed; each expansion is "\0"
         self.subs = subs    # bodies of $(...), `...`, <(...)
+        self.parts = list(parts)  # ("lit", None), ("param", name) or ("other", None), unquoted ones only
+        self.quoted = quoted      # any quote, escape or $'...' in this word
+        self.array = array        # name=( ... )
 
     @property
     def literal(self) -> str | None:
         return None if "\0" in self.text else self.text
+
+    @property
+    def param(self) -> str | None:
+        """The name when the whole word is one unquoted $name or ${name}."""
+        if len(self.parts) == 1 and self.parts[0][0] == "param" and not self.quoted:
+            return self.parts[0][1]
+        return None
 
 
 def strip_heredocs(command: str) -> str:
@@ -142,18 +154,27 @@ def backtick(s: str, i: int, subs: list[str]) -> int:
     return j + 1
 
 
-def dollar(s: str, i: int, text: list[str], subs: list[str]) -> int:
+def dollar(s: str, i: int, text: list[str], subs: list[str],
+           parts: list[tuple[str, str | None]] | None = None) -> int:
     if s.startswith("$((", i):
         text.append("\0")
+        if parts is not None:
+            parts.append(("other", None))
         return closing(s, i + 3, "(", ")") + 1
     if s.startswith("$(", i):
         end = closing(s, i + 2, "(", ")")
         subs.append(s[i + 2:end - 1])
         text.append("\0")
+        if parts is not None:
+            parts.append(("other", None))
         return end
     if s.startswith("${", i):
+        end = closing(s, i + 2, "{", "}")
         text.append("\0")
-        return closing(s, i + 2, "{", "}")
+        if parts is not None:
+            body = s[i + 2:end - 1]
+            parts.append(("param", body) if IDENTIFIER.match(body) else ("other", None))
+        return end
     if s.startswith("$'", i):
         j = i + 2
         while j < len(s) and s[j] != "'":
@@ -161,12 +182,19 @@ def dollar(s: str, i: int, text: list[str], subs: list[str]) -> int:
         if j >= len(s):
             raise Unreadable
         text.append(s[i + 2:j])
+        if parts is not None:
+            parts.append(("other", None))
         return j + 1
     match = re.match(r"[A-Za-z_][A-Za-z0-9_]*|[0-9@*#?$!-]", s[i + 1:])
     if match:
         text.append("\0")
+        if parts is not None:
+            name = match.group(0)
+            parts.append(("param", name) if IDENTIFIER.match(name) else ("other", None))
         return i + 1 + match.end()
     text.append("$")
+    if parts is not None:
+        parts.append(("lit", None))
     return i + 1
 
 
@@ -193,13 +221,13 @@ def double(s: str, i: int, text: list[str], subs: list[str]) -> int:
 def tokens(s: str) -> list:
     """Words, ("op", text) and ("redirect", text) of a zsh command line; a newline is the op "\\n"."""
     result: list = []
-    start, text, subs = None, [], []
+    start, text, subs, parts, quoted, array = None, [], [], [], False, False
 
     def end_word(i):
-        nonlocal start, text, subs
+        nonlocal start, text, subs, parts, quoted, array
         if start is not None:
-            result.append(Word(s[start:i], "".join(text), subs))
-        start, text, subs = None, [], []
+            result.append(Word(s[start:i], "".join(text), subs, parts, quoted, array))
+        start, text, subs, parts, quoted, array = None, [], [], [], False, False
 
     i = 0
     while i < len(s):
@@ -218,6 +246,7 @@ def tokens(s: str) -> list:
             else:
                 start = i if at_start else start
                 text.append(s[i + 1:i + 2])
+                quoted = True
             i += 2
         elif c == "#" and at_start:
             end = s.find("\n", i)
@@ -236,26 +265,32 @@ def tokens(s: str) -> list:
             start = i if at_start else start
             end = single(s, i)
             text.append(s[i + 1:end - 1])
+            quoted = True
             i = end
         elif c == '"':
             start = i if at_start else start
+            quoted = True
             i = double(s, i, text, subs)
         elif c == "`":
             start = i if at_start else start
             i = backtick(s, i, subs)
             text.append("\0")
+            parts.append(("other", None))
         elif c == "$":
             start = i if at_start else start
-            i = dollar(s, i, text, subs)
+            if s.startswith("$'", i):
+                quoted = True
+            i = dollar(s, i, text, subs, parts)
         elif c in "<>" and s[i + 1:i + 2] == "(":
             start = i if at_start else start
             end = closing(s, i + 2, "(", ")")
             subs.append(s[i + 2:end - 1])
             text.append("\0")
+            parts.append(("other", None))
             i = end
         elif c in "<>" or (c == "&" and s[i + 1:i + 2] == ">"):
-            if start is not None and "".join(text).isdigit():
-                start, text, subs = None, [], []  # the fd number of 2>&1
+            if start is not None and not quoted and "".join(text).isdigit():
+                start, text, subs, parts, quoted, array = None, [], [], [], False, False  # the fd number of 2>&1
             end_word(i)
             j = i + 1
             while j < len(s) and s[j] in "<>&|-" and j - i < 3:
@@ -273,6 +308,7 @@ def tokens(s: str) -> list:
                 if isinstance(inner, Word):
                     subs.extend(inner.subs)
             text.append("\0")
+            array = True
             i = end
         elif c in "()":
             end_word(i)
@@ -281,6 +317,8 @@ def tokens(s: str) -> list:
         else:
             start = i if at_start else start
             text.append(c)
+            if not parts or parts[-1][0] != "lit":
+                parts.append(("lit", None))
             i += 1
     end_word(len(s))
     return result
@@ -465,19 +503,23 @@ class Parser:
             return ("if", clauses, otherwise)
 
     def parse_for(self):
-        self.at += 1
+        header = [self.take()]
         while not self.word("do") and not self.word("{"):
             item = self.take()
-            if isinstance(item, tuple) and item[0] == "op" and item[1] == "(":  # zsh: for x (a b)
+            if isinstance(item, Word):
+                header.append(item)
+            elif isinstance(item, tuple) and item[0] == "op" and item[1] == "(":  # zsh: for x (a b)
                 while not self.op(")"):
-                    self.take()
+                    inner = self.take()
+                    if isinstance(inner, Word):
+                        header.append(inner)
                 self.at += 1
         if self.word("{"):
-            return ("loop", [], self.parse_brace())
+            return ("loop", [], self.parse_brace(), header)
         self.expect_word("do")
         body = self.parse_list(words={"done"})
         self.expect_word("done")
-        return ("loop", [], body)
+        return ("loop", [], body, header)
 
     def parse_case(self):
         self.at += 1
