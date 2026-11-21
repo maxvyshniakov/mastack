@@ -32,31 +32,53 @@ repository, so `cleanup` finds them.
    when limits are low. Choose between reusing a warm agent and starting a
    fresh one instead of a fixed chain-per-agent rule: reuse an agent when it
    is still within the active provider's prompt-cache window, its context is
-   small enough to stay well under compaction (e.g. for Claude Code with 1h
-   subagent TTL: idle under ~50 minutes and context under ~150–200K), and the
-   next task works on the same code; otherwise start a fresh agent with a
-   brief (a WIP commit on its branch carries the state). Lanes whose claims
-   overlap run in sequence; land a prefactor that moves files before lanes
-   that edit around it.
+   small enough to stay well under compaction (look up `warm_idle_minutes` and
+   `warm_context_tokens` for the active family under `[providers.<family>]` in
+   the model table, e.g. Anthropic with 1h subagent TTL: idle under ~50 min
+   and context under ~200K; OpenAI: ~5 min / ~150K; Google/Antigravity: ~50 min
+   / ~250K), and the next task works on the same code; otherwise start a fresh
+   agent with a brief (a WIP commit on its branch carries the state). Lanes
+   whose claims overlap run in sequence; land a prefactor that moves files
+   before lanes that edit around it.
 
 **Scouting.** Before you hand off a read-only scouting task (map X, find where
 Y lives, list the callers of Z), run `<this skill's directory>/scripts/role
-scout`; it picks Sol while Codex has quota, so reading stops spending the
-Claude limit. Sol: its `run` command with `-s read-only -C <repo>
---output-last-message <file> "<task>" < /dev/null` in the background, then
-read the file; without `< /dev/null` `codex exec` waits on stdin. Sonnet: the
-Agent tool with the role's `model` and `effort`, and `Role: scout` in the
-prompt. A task that asks for judgment or a proposal (a design, what should
-replace X) goes to `scripts/role design` instead.
+scout` (with `--family` or `--exclude-family` when routing by live provider
+availability); it picks Sol while Codex has quota, then Sonnet or Flash.
+Launch by harness:
+- **Codex (`sol`)**: its `run` command with `-s read-only -C <repo>
+  --output-last-message <file> "<task>" < /dev/null` in the background, then
+  read the file; without `< /dev/null` `codex exec` waits on stdin.
+- **Claude Code (`sonnet`)**: the `Agent` tool with the role's `model` and
+  `effort`, and `Role: scout` in the prompt.
+- **T3 Code / Antigravity (`flash`, or cross-provider via T3 Code)**:
+  `delegate_task` with `target.model` set to the role's `id`,
+  `target.options.<option>` set to the role's `effort` (`thought_level` for
+  Google/Antigravity, `effort` for Claude, `model_reasoning_effort` for Codex),
+  and `Role: scout` in `task`.
+A task that asks for judgment or a proposal (a design, what should replace X)
+goes to `scripts/role design` instead.
 
 ## Run
 
-4. **Launch** each lane in the background with the model and effort
-   `<this skill's directory>/scripts/role implement` prints (it reads the
-   live quotas). Pass the role's model and effort on every agent launch,
-   including fix rounds and scouting, and name the role in the brief (`Role:
-   <role>`) so the PreToolUse Agent hook fills them in if omitted. Register
-   the lane with its ticket (`--ticket`) first, so the
+4. **Launch** each lane in the background with the model, effort and
+   provider-specific option `<this skill's directory>/scripts/role implement`
+   prints (it reads the live quotas; pass `--family` or `--exclude-family`
+   when routing around an exhausted provider). Pass the role's model and
+   effort on every agent launch, including fix rounds and scouting:
+   - **Claude Code (`Agent`)**: pass `model` and `effort`, and name the role
+     in the brief (`Role: <role>`) so the PreToolUse Agent hook fills them in
+     if omitted.
+   - **Codex (`codex exec`)**: use the command from `[cli.codex].run` (`model`
+     and `model_reasoning_effort`).
+   - **T3 Code / Antigravity (`delegate_task`)**: pass `target.model` and
+     `target.options.<option>` (e.g. `target.options.thought_level` for
+     `gemini-4-neon` / `gemini-4-argon` / `gemini-3.8-flash`), and name
+     `Role: <role>` in `task`. Claude Code hooks (`PreToolUse[Agent]`,
+     `PostToolUse[Bash]`) do not fire in T3 Code / Antigravity, so enforce
+     explicit model/option selection and bounded tool output directly through
+     the brief.
+   Register the lane with its ticket (`--ticket`) first, so the
    brief can name its worktree. Point at the spec and tickets; do not paste
    them. Fill every command with the lane's id and paths: implementers spent
    hundreds of turns on `lanefather --help` and polling `lanefather list`
@@ -108,8 +130,8 @@ replace X) goes to `scripts/role design` instead.
    --fix-of A,B,C` for the findings of several (fathers#174; until it ships,
    one `--fix-lane` per lane). For the fix round, resume the implementer when
    it is still within the active provider's prompt-cache window and its
-   context is small enough to stay well under compaction (e.g. for Claude Code
-   with 1h subagent TTL: idle under ~50 minutes and context under ~150–200K);
+   context is small enough to stay well under compaction (per
+   `[providers.<family>]` in the model table);
    otherwise start a fresh agent with the findings, the lane's diff, and the
    fix lane's commands. A plain `start` is an ordinary lane, which
    `land` reviews: batched fix lanes started that way chained six and seven

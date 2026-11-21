@@ -64,8 +64,8 @@ Questions and hand back.
 
 The coordinator resumes you for the fix round only when you are still within
 the active provider's prompt-cache window and your context is small enough to
-stay well under compaction (e.g. for Claude Code with 1h subagent TTL: idle
-under ~50 minutes and context under ~150–200K); otherwise a fresh agent gets
+stay well under compaction (per `[providers.<family>]` in the model table);
+otherwise a fresh agent gets
 the findings, the lane's diff, and the fix lane's commands. Fix
 each finding that holds, reject the others with a reason in the commit and
 report, check, hand back. There is no second review.

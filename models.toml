@@ -35,14 +35,64 @@ family = "openai"
 cli = "codex"
 tier = "strong"
 
-# How to run a model headless. {id} and {effort} are substituted.
+[models.neon]
+id = "gemini-4-neon"
+family = "google"
+cli = "antigravity"
+tier = "frontier"
+
+[models.argon]
+id = "gemini-4-argon"
+family = "google"
+cli = "antigravity"
+tier = "strong"
+
+[models.flash]
+id = "gemini-3.8-flash"
+family = "google"
+cli = "antigravity"
+tier = "routine"
+
+# How to run a model headless or via delegation. {id} and {effort} are substituted.
+# `option` is the provider-specific reasoning/effort parameter name.
 [cli.claude]
+option = "effort"
 run = ["claude", "-p", "--model", "{id}", "--effort", "{effort}"]
 review = ["claude", "-p", "--model", "{id}", "--effort", "{effort}"]
 
 [cli.codex]
+option = "model_reasoning_effort"
 run = ["codex", "exec", "-c", "model=\"{id}\"", "-c", "model_reasoning_effort=\"{effort}\""]
 review = ["codex", "review", "-c", "model=\"{id}\"", "-c", "model_reasoning_effort=\"{effort}\""]
+
+[cli.antigravity]
+option = "thought_level"
+delegate_tool = "delegate_task"
+
+# Provider-specific option names, prompt-cache windows and context budgets for warm-vs-fresh reuse.
+[providers.anthropic]
+option = "effort"
+cache_ttl_minutes = 60
+warm_idle_minutes = 50
+compact_window_tokens = 500000
+warm_context_tokens = 200000
+cache_note = "1h subagent TTL when CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL is set; 5m default otherwise"
+
+[providers.openai]
+option = "model_reasoning_effort"
+cache_ttl_minutes = 10
+warm_idle_minutes = 5
+compact_window_tokens = 272000
+warm_context_tokens = 150000
+cache_note = "automatic prompt caching (~5-10m window, no separate cache-write surcharge)"
+
+[providers.google]
+option = "thought_level"
+cache_ttl_minutes = 60
+warm_idle_minutes = 50
+compact_window_tokens = 1000000
+warm_context_tokens = 250000
+cache_note = "implicit prompt caching in Antigravity / T3 Code (no separate 5m/1h write tiers)"
 
 # Quotas the conditions refer to.
 [limits.codex_weekly]
@@ -54,6 +104,7 @@ purpose = "plans, interface design, final synthesis, judgment calls"
 choices = [
   { model = "fable", effort = "high" },
   { model = "opus", effort = "high" },
+  { model = "neon", effort = "high" },
 ]
 
 [roles.implement]
@@ -61,13 +112,16 @@ purpose = "writing code against a spec or brief"
 choices = [
   { model = "opus", effort = "medium" },
   { model = "sol", effort = "xhigh", when = { limit = { codex_weekly = 15 } } },
+  { model = "neon", effort = "medium" },
+  { model = "argon", effort = "medium" },
 ]
 
 [roles.visual]
 purpose = "UI, layout and anything judged by how it looks"
-only_families = ["anthropic"]
+only_families = ["anthropic", "google"]
 choices = [
   { model = "opus", effort = "high" },
+  { model = "neon", effort = "high" },
 ]
 
 [roles.review]
@@ -76,6 +130,7 @@ choices = [
   { model = "sol", effort = "medium", when = { not_family = true, limit = { codex_weekly = 15 } } },
   { model = "opus", effort = "medium", when = { not_family = true } },
   { model = "opus", effort = "medium", note = "same family as the implementer: fresh context only, say so in the report" },
+  { model = "neon", effort = "medium", when = { not_family = true } },
 ]
 
 [roles.routine]
@@ -83,6 +138,7 @@ purpose = "token-heavy, low-risk work: bulk edits, renames, running checks, doc 
 choices = [
   { model = "sol", effort = "medium", when = { limit = { codex_weekly = 15 } } },
   { model = "opus", effort = "medium" },
+  { model = "flash", effort = "medium" },
 ]
 
 [roles.scout]
@@ -90,6 +146,7 @@ purpose = "read-only scouting inside the repository: map code, find where someth
 choices = [
   { model = "sol", effort = "medium", when = { limit = { codex_weekly = 15 } } },
   { model = "sonnet", effort = "medium" },
+  { model = "flash", effort = "medium" },
 ]
 
 [roles.research]
@@ -97,6 +154,8 @@ purpose = "reading docs and sources, collecting facts, release notes"
 choices = [
   { model = "opus", effort = "medium" },
   { model = "sonnet", effort = "medium", note = "plain reading and grep only" },
+  { model = "argon", effort = "medium" },
+  { model = "flash", effort = "medium", note = "plain reading and grep only" },
 ]
 
 [roles.audit]
@@ -104,4 +163,5 @@ purpose = "security and correctness audits; a strong model verifies every findin
 choices = [
   { model = "fable", effort = "high" },
   { model = "opus", effort = "high" },
+  { model = "neon", effort = "high" },
 ]

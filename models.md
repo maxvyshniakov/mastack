@@ -6,45 +6,53 @@ evals, and update the reasons here if they changed.
 
 ## Roles
 
-| Role | First choice | Fallback | Why |
+| Role | First choice | Fallbacks | Why |
 |---|---|---|---|
-| design | Fable, high | Opus, high | Plans and interfaces decide what everything after them costs. The most expensive tokens go here, and to the final synthesis. |
-| implement | Opus, medium | Sol, xhigh | Implementation against a written contract is where most tokens go; a strong model with a clear brief is enough. |
-| visual | Opus, high | none | The author prefers to keep work judged by eye with the Anthropic family. |
-| review | Sol, medium | Opus, medium | The reviewer is of another family than the implementer, so it does not share the implementer's blind spots. |
-| routine | Sol, medium | Opus, medium | Bulk, low-risk work: renames, mirroring docs, running checks. |
-| scout | Sol, medium | Sonnet, medium | Read-only scouting in the repository (map code, find where something lives) needs no judgment, and it ran on Opus and spent the Claude limit while Codex had quota. Not part of research: Codex runs it in a read-only sandbox, which writes no file and reads no web. |
-| research | Opus, medium | Sonnet, medium | Collecting facts needs care, not frontier judgment. Sonnet only for plain reading and search. |
-| audit | Fable, high | Opus, high | A finding from a cheaper model is a lead until a strong model has verified it. |
+| design | Fable, high | Opus, high; Neon, high | Plans and interfaces decide what everything after them costs. The most expensive tokens go here, and to the final synthesis. |
+| implement | Opus, medium | Sol, xhigh; Neon, medium; Argon, medium | Implementation against a written contract is where most tokens go; a strong model with a clear brief is enough. |
+| visual | Opus, high | Neon, high | Visual work routes to Anthropic or Google (`only_families = ["anthropic", "google"]`). |
+| review | Sol, medium | Opus, medium; Neon, medium | The reviewer is of another family than the implementer, so it does not share the implementer's blind spots. |
+| routine | Sol, medium | Opus, medium; Flash, medium | Bulk, low-risk work: renames, mirroring docs, running checks. |
+| scout | Sol, medium | Sonnet, medium; Flash, medium | Read-only scouting in the repository (map code, find where something lives) needs no judgment, and it ran on Opus and spent the Claude limit while Codex had quota. Not part of research: Codex runs it in a read-only sandbox, which writes no file and reads no web. |
+| research | Opus, medium | Sonnet, medium; Argon, medium; Flash, medium | Collecting facts needs care, not frontier judgment. Routine models (Sonnet, Flash) only for plain reading and search. |
+| audit | Fable, high | Opus, high; Neon, high | A finding from a cheaper model is a lead until a strong model has verified it. |
 
 ## Rules behind the table
 
 - **Review crosses families.** Two models of one family miss the same things.
-  When the other family is out of quota, a same-family reviewer in a fresh
-  context is the fallback, and the report says so.
+  All three families (`anthropic`, `openai`, `google`) participate in cross-family
+  review (`not_family = true`). When no other family is available, a same-family
+  reviewer in a fresh context is the fallback, and the report says so.
 - **Review is bounded.** One review, one round of fixes, every finding marked
   fixed or rejected. A strong reviewer can find something forever; a second
   round rarely pays for itself.
 - **Both lenses for dangerous surfaces.** Migrations, auth, money and
-  deletion get reviewers from both families in parallel, on the author's view
-  that two families are likely to catch different defects.
+  deletion get reviewers from two different families in parallel, on the author's
+  view that different families are likely to catch different defects.
 - **Quota decides the order, not taste.** Codex leads review, routine and scouting while
   at least 15% of its weekly limit is left, because its tokens are cheaper; below
-  that, work moves to Claude so the last of the quota stays for review.
+  that, work moves to Claude or Google/Antigravity (`--family google` or
+  `--exclude-family anthropic`) so the last of the quota stays for review.
 - **Subagents name their model.** A subagent inherits the session's model unless
   told otherwise, so a dozen research agents on the frontier model is waste.
   Give every delegated task the role's model explicitly.
-- **Effort is part of the choice.** "Smart" Sol means `xhigh`; review runs at
-  `medium` because a blind second opinion matters more than depth.
+- **Effort is part of the choice.** Each provider names its reasoning option
+  differently (`effort` for Claude, `model_reasoning_effort` for Codex,
+  `thought_level` for Antigravity / Google). "Smart" Sol means `xhigh`; review
+  runs at `medium` because a blind second opinion matters more than depth.
+- **Cache windows and context budgets live in `[providers.<family>]`.** Skills
+  and coordinators look up warm-vs-fresh reuse thresholds per active provider
+  instead of assuming one provider's TTL or compaction window.
 
 ## Running a role
 
-`bin/role <role> [--implementer-family F] [--json]` decides, so nobody reads
-the table by eye: it takes the role's first choice whose conditions hold,
-reading each quota a condition names live (`codex_weekly`: `codex app-server`,
-`account/rateLimits/read`), and prints the model, id, family, effort, each
-command of its `[cli.*]` with `{id}` and `{effort}` filled, its note, and why
-every earlier choice was skipped:
+`bin/role <role> [--implementer-family F] [--family F] [--exclude-family F] [--json]`
+decides, so nobody reads the table by eye: it takes the role's first choice whose
+conditions hold, reading each quota a condition names live (`codex_weekly`:
+`codex app-server`, `account/rateLimits/read`), and prints the model, id, family,
+effort, each command of its `[cli.*]` with `{id}` and `{effort}` filled (or the
+`delegate_task` target and `thought_level` option for Antigravity), its note,
+and why every earlier choice was skipped:
 
 ```
 $ bin/role review --implementer-family anthropic

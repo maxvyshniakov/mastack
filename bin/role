@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Which model takes a role now, by models.toml and the live quotas its conditions name.
 
-    bin/role <role> [--implementer-family F] [--json]
+    bin/role <role> [--implementer-family F] [--family F] [--exclude-family F] [--json]
 
 Takes the role's first choice whose conditions hold (`when.limit`, `when.not_family`, the role's `only_families`)
-and prints its model, id, family and effort, each headless command of its `[cli.*]` with {id} and {effort} filled,
-its note, and why every earlier choice was skipped. A quota that cannot be read counts as not met and says why.
+and prints its model, id, family and effort, each headless command of its `[cli.*]` with {id} and {effort} filled
+(or its `delegate_task` target and option for Antigravity / T3 Code), its note, and why every earlier choice was
+skipped. A quota that cannot be read counts as not met and says why.
 `--implementer-family` is the family of the model whose work is reviewed; `not_family` is not met without it.
+`--family` restricts selection to one provider family (e.g. `google`, `anthropic`, `openai`); `--exclude-family`
+(repeatable) skips families whose quota is exhausted or unavailable.
 
 MASTACK_MODELS names another table; MASTACK_CODEX another Codex CLI than `codex` on PATH. The quota read is stored
 in the hook's state directory for the codex_credits check.
@@ -29,11 +32,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("role")
     parser.add_argument("--implementer-family", metavar="F", help="family of the implementer, e.g. anthropic")
+    parser.add_argument("--family", metavar="F", help="limit selection to one family, e.g. google")
+    parser.add_argument("--exclude-family", metavar="F", action="append", default=[],
+                        help="skip choices from family F (repeatable)")
     parser.add_argument("--json", action="store_true", help="print the answer as JSON")
     args = parser.parse_args()
     try:
         table = model_roles.load()
-        choice, skipped, quotas = model_roles.resolve(table, args.role, args.implementer_family)
+        choice, skipped, quotas = model_roles.resolve(table, args.role, args.implementer_family,
+                                                      family=args.family, exclude_families=args.exclude_family)
     except model_roles.TableError as error:
         print(f"role: {error}", file=sys.stderr)
         return 2

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `models.toml`, `bin/role`, `hooks/model_roles.py`, `orchestrate`: add the
+  `google` / `antigravity` family (`neon` / `gemini-4-neon`, `argon` /
+  `gemini-4-argon`, `flash` / `gemini-3.8-flash`), provider-specific reasoning
+  options (`effort`, `model_reasoning_effort`, `thought_level`), and
+  `[providers.<family>]` cache/context-budget metadata. Allow cross-family
+  review (`not_family = true`) and `visual`/`implement`/`scout` roles to route
+  across all three families (`bin/role` adds `--family` and `--exclude-family`,
+  preserving existing Claude/Codex defaults). Document T3 Code `delegate_task`
+  (`target.model` + `target.options.thought_level`) alongside Claude `Agent`
+  and `codex exec` in `orchestrate` (mastack#25).
 - `orchestrate` (`implementer.md`) and `hooks/friction_hook.py`: add
   range-reading and output-capping rules for tool calls, and journal Bash
   results over 8,000 characters to the friction journal (`kind="note"`,

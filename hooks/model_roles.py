@@ -61,6 +61,7 @@ class Choice:
     effort: str
     argv: dict
     note: str | None
+    option: str = "effort"
 
 
 # ---- the table ----------------------------------------------------------------------------------------------------
@@ -117,6 +118,23 @@ def commands(table: dict, model: dict, effort: str) -> dict:
             for name, argv in cli.items() if isinstance(argv, list)}
 
 
+def effort_option(table: dict, model: dict) -> str:
+    """Provider-specific option name for effort/reasoning (e.g. effort, model_reasoning_effort, thought_level)."""
+    cli = (table.get("cli") or {}).get(model["cli"]) or {}
+    if isinstance(cli.get("option"), str) and cli["option"]:
+        return cli["option"]
+    provider = (table.get("providers") or {}).get(model["family"]) or {}
+    if isinstance(provider.get("option"), str) and provider["option"]:
+        return provider["option"]
+    return "effort"
+
+
+def provider_metadata(table: dict, family: str) -> dict:
+    """Cache window and context-budget metadata for `family`, or an empty dict."""
+    entry = (table.get("providers") or {}).get(family)
+    return dict(entry) if isinstance(entry, dict) else {}
+
+
 def codex_threshold(table: dict, role: str = "review") -> int | float | None:
     """The `codex_weekly` share the role's first Codex choice needs, or None when it has none."""
     for choice in role_of(table, role)["choices"]:
@@ -140,13 +158,15 @@ def unmet(name: str, need, quota: Quota) -> str | None:
     return None
 
 
-def resolve(table: dict, role: str, implementer_family: str | None = None, read=None):
+def resolve(table: dict, role: str, implementer_family: str | None = None, read=None,
+            family: str | None = None, exclude_families: set[str] | list[str] | tuple[str, ...] | None = None):
     """(the winning Choice or None, [{model, reason}] for each choice skipped before it, {quota: Quota} read).
 
     `read(name) -> Quota` reads a quota; each is read at most once, and only when a choice still needs it."""
     read = read or read_quota
     entry = role_of(table, role)
     only = entry.get("only_families")
+    excluded = set(exclude_families or ())
     quotas: dict[str, Quota] = {}
     skipped = []
     for choice in entry["choices"]:
@@ -159,6 +179,10 @@ def resolve(table: dict, role: str, implementer_family: str | None = None, read=
         reason = None
         if isinstance(only, list) and model["family"] not in only:
             reason = f"the {role} role takes only {', '.join(only)}"
+        elif family is not None and model["family"] != family:
+            reason = f"family is {model['family']}, requested {family}"
+        elif model["family"] in excluded:
+            reason = f"family {model['family']} excluded"
         elif when.get("not_family") and implementer_family is None:
             reason = UNKNOWN_FAMILY
         elif when.get("not_family") and model["family"] == implementer_family:
@@ -174,7 +198,7 @@ def resolve(table: dict, role: str, implementer_family: str | None = None, read=
             skipped.append({"model": name, "reason": f"{name}: {reason}"})
             continue
         return (Choice(name, model["id"], model["family"], model["cli"], effort, commands(table, model, effort),
-                       choice.get("note")), skipped, quotas)
+                       choice.get("note"), effort_option(table, model)), skipped, quotas)
     return None, skipped, quotas
 
 
@@ -192,6 +216,10 @@ def describe(role: str, choice: Choice | None, skipped: list) -> str:
     if choice:
         lines.append(f"{role}: {choice.model} ({choice.id}, {choice.family}), effort {choice.effort}")
         lines += [f"  {name}: {shlex.join(argv)}" for name, argv in choice.argv.items()]
+        if choice.cli == "antigravity":
+            lines.append(f'  delegate_task: target.model="{choice.id}", target.options.{choice.option}="{choice.effort}"')
+        elif not choice.argv and choice.option:
+            lines.append(f"  option: {choice.option}={choice.effort}")
         if choice.note:
             lines.append(f"  note: {choice.note}")
         if caution(skipped):

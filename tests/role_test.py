@@ -189,6 +189,74 @@ class ResolveTests(RoleCase):
         stored = json.loads((self.tmp / "state" / "codex-limit.json").read_text())
         self.assertEqual(stored["left"], 10)
 
+    def test_antigravity_models_resolve_with_thought_level_and_delegate_task(self):
+        for role, expected_model, expected_effort in (
+            ("design", "neon", "high"),
+            ("implement", "neon", "medium"),
+            ("visual", "neon", "high"),
+            ("scout", "flash", "medium"),
+            ("routine", "flash", "medium"),
+            ("research", "argon", "medium"),
+            ("audit", "neon", "high"),
+        ):
+            with self.subTest(role=role):
+                answer = self.answer(role, "--family", "google")
+                self.assertEqual((answer["model"], answer["id"], answer["family"], answer["cli"], answer["effort"],
+                                  answer["option"]),
+                                 (expected_model, model_id(expected_model), "google", "antigravity", expected_effort,
+                                  "thought_level"))
+                proc = self.role(role, "--family", "google")
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertIn(
+                    f'delegate_task: target.model="{model_id(expected_model)}", '
+                    f'target.options.thought_level="{expected_effort}"',
+                    proc.stdout,
+                )
+
+    def test_cross_family_review_routes_across_all_three_families(self):
+        # Google implementer -> Sol when Codex has quota, Opus when Codex is exhausted.
+        self.assertEqual(self.answer("review", "--implementer-family", "google", used=50)["model"], "sol")
+        ans_exhausted = self.answer("review", "--implementer-family", "google", used=100)
+        self.assertEqual((ans_exhausted["model"], ans_exhausted["note"]), ("opus", None))
+
+        # Anthropic implementer -> Neon when Google is selected or Anthropic is excluded and Codex is exhausted.
+        ans_google = self.answer("review", "--implementer-family", "anthropic", "--family", "google", used=100)
+        self.assertEqual((ans_google["model"], ans_google["family"], ans_google["option"], ans_google["note"]),
+                         ("neon", "google", "thought_level", None))
+        ans_excl = self.answer("review", "--implementer-family", "anthropic", "--exclude-family", "anthropic", used=100)
+        self.assertEqual((ans_excl["model"], ans_excl["family"], ans_excl["note"]), ("neon", "google", None))
+
+        # Google implementer cannot be reviewed by Google under not_family = true.
+        proc = self.role("review", "--implementer-family", "google", "--family", "google", used=50)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("same family as the implementer (google)", proc.stdout)
+
+    def test_visual_allows_anthropic_and_google_but_rejects_openai(self):
+        self.assertEqual(self.answer("visual")["model"], "opus")
+        self.assertEqual(self.answer("visual", "--family", "google")["model"], "neon")
+        self.assertEqual(self.answer("visual", "--exclude-family", "anthropic")["model"], "neon")
+        proc = self.role("visual", "--family", "openai")
+        self.assertEqual(proc.returncode, 1)
+
+    def test_implement_and_scout_fall_back_to_google_when_other_families_unavailable(self):
+        impl = self.answer("implement", "--exclude-family", "anthropic", used=100)
+        self.assertEqual((impl["model"], impl["family"], impl["option"]), ("neon", "google", "thought_level"))
+        scout = self.answer("scout", "--exclude-family", "anthropic", used=100)
+        self.assertEqual((scout["model"], scout["family"], scout["option"]), ("flash", "google", "thought_level"))
+
+    def test_provider_options_and_cache_metadata_are_defined_for_all_three_families(self):
+        self.assertEqual(self.answer("implement")["option"], "effort")
+        self.assertEqual(self.answer("scout", used=50)["option"], "model_reasoning_effort")
+        self.assertEqual(self.answer("scout", "--family", "google")["option"], "thought_level")
+        table = model_roles.load()
+        for family, expected_opt in (("anthropic", "effort"), ("openai", "model_reasoning_effort"),
+                                     ("google", "thought_level")):
+            meta = model_roles.provider_metadata(table, family)
+            self.assertEqual(meta.get("option"), expected_opt)
+            for key in ("cache_ttl_minutes", "warm_idle_minutes", "compact_window_tokens", "warm_context_tokens"):
+                self.assertIsInstance(meta.get(key), int, f"{family}.{key}")
+                self.assertGreater(meta[key], 0)
+
 
 class QuotaReadTests(RoleCase):
     """The quota read in process, as the hook calls it."""
