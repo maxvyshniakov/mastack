@@ -10,6 +10,8 @@ Denies the git shapes behind incidents of parallel agents sharing one machine (a
   shared-checkout  reset --hard, checkout -- <paths>, restore, clean -f in a
                    shared main checkout (its .claude/worktrees lanes are fine)
   stash            bare stash, a stash without -m <tag>, implicit pop/apply/drop, clear
+  worktree-location git worktree add whose target path is outside
+                   <repo>/.claude/worktrees/ and the session scratchpad (/tmp, $TMPDIR)
 
 push-by-name applies in the shared checkouts and in every worktree of their repositories, found through
 `git rev-parse --git-common-dir`; shared-checkout applies to the checkouts themselves, not to their
@@ -25,6 +27,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 
 import hook_io
 import vocabulary
@@ -36,6 +39,7 @@ FILTERS = {"tail", "head", "grep", "sed", "awk"}
 WRAPPERS = vocabulary.WRAPPERS - {"noglob", "nocorrect", "nice"}
 PUNCTUATION = set("();<>|&")
 PUSH_OPTIONS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
+WORKTREE_ADD_OPTIONS_WITH_VALUE = {"-b", "-B", "--orphan", "--reason"}
 SHA = re.compile(r"^[0-9a-f]{7,40}$")
 
 SAFE = {
@@ -46,6 +50,9 @@ SAFE = {
     "shared-checkout": "run it in your own worktree under {repo}/.claude/worktrees/, or set work aside with a WIP commit.",
     "stash": "make a WIP commit, or `git stash push -u -m <unique-tag>`, then `git stash apply <sha>` and drop "
              "your entry by its tag.",
+    "worktree-location": "put the worktree under {repo}/.claude/worktrees/<name> (or in the session scratchpad / "
+                         "$TMPDIR), and wrap it with `junkfather own --kind worktree -- git worktree add ...` so it "
+                         "has an owner.",
 }
 
 
@@ -98,6 +105,8 @@ def unwrap(words):
 def resolve(current: str | None, path: str) -> str | None:
     home = os.path.expanduser("~")
     path = re.sub(r"^\$\{?HOME\}?", home, path)
+    tmpdir = os.environ.get("TMPDIR") or tempfile.gettempdir()
+    path = re.sub(r"^\$\{?TMPDIR\}?", tmpdir, path)
     path = os.path.expanduser(path)
     if "$" in path or "`" in path:
         return None
@@ -106,6 +115,38 @@ def resolve(current: str | None, path: str) -> str | None:
             return None
         path = os.path.join(current, path)
     return os.path.realpath(path)
+
+
+def repo_root(directory: str | None) -> str | None:
+    """The main repository checkout for `directory` (following linked worktrees), or `directory` itself."""
+    if directory is None:
+        return None
+    root = hook_io.worktree_root(directory)
+    if root is not None:
+        if os.path.isfile(os.path.join(root, ".git")):
+            return hook_io.main_checkout(root) or root
+        return root
+    for configured in hook_io.repos():
+        if directory == configured or directory.startswith(configured + "/"):
+            return configured
+    return directory
+
+
+def scratch_roots() -> tuple[str, ...]:
+    roots = ["/tmp", "/private/tmp", "/var/folders", "/private/var/folders", tempfile.gettempdir()]
+    tmpdir = os.environ.get("TMPDIR")
+    if tmpdir:
+        roots.append(tmpdir)
+    return tuple(dict.fromkeys(os.path.realpath(r).rstrip("/") for r in roots if r))
+
+
+def allowed_worktree_target(target: str, repo: str | None) -> bool:
+    if repo is not None and target.startswith(repo.rstrip("/") + "/.claude/worktrees/"):
+        return True
+    home = os.path.realpath(os.path.expanduser("~")).rstrip("/")
+    if target == home or target.startswith(home + "/"):
+        return False
+    return any(target.startswith(root + "/") for root in scratch_roots())
 
 
 def shared_checkout(directory: str | None) -> str | None:
@@ -261,6 +302,39 @@ class Guard:
                                "session's.")
         elif sub == "clear":
             self.deny("stash", f"`{shown}` deletes every session's stash entries.")
+
+    def verb_worktree(self, rest, directory):
+        if not rest or rest[0] != "add":
+            return
+        args = rest[1:]
+        target_raw, position = None, 0
+        while position < len(args):
+            word = args[position]
+            if word in ("-h", "--help"):
+                return
+            if word == "--":
+                if position + 1 < len(args):
+                    target_raw = args[position + 1]
+                break
+            if word in WORKTREE_ADD_OPTIONS_WITH_VALUE:
+                position += 2
+                continue
+            if word.startswith("-"):
+                position += 1
+                continue
+            target_raw = word
+            break
+        if not target_raw:
+            return
+        target = resolve(directory, target_raw)
+        if target is None:
+            return
+        repo = repo_root(directory)
+        if not allowed_worktree_target(target, repo):
+            self.deny("worktree-location",
+                      f"`git worktree add {target_raw}` places a worktree at `{target}`, outside "
+                      f"`{repo or '<repo>'}/.claude/worktrees/` and the session scratchpad.",
+                      repo=repo or "<repo>")
 
 
 def check(data: dict):

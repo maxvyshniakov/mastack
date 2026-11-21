@@ -46,6 +46,9 @@ class GitGuardTests(HookCase):
         self.assertIsNone(self.bash("git_guard.py", "git reset --hard a780eb7b", "{home}/app"))
         self.assertIsNone(self.bash("git_guard.py", "git push origin main", "{home}/app"))
         self.assertIn("[stash]", self.denied(self.bash("git_guard.py", "git stash", "{home}/app")))
+        reason = self.denied(self.bash("git_guard.py", "git worktree add ../app-outside", "{home}/app"))
+        self.assertIn("[worktree-location]", reason)
+        self.assertIn("junkfather own --kind worktree", reason)
 
     def test_env_replaces_the_configured_checkouts(self):
         self.env["MASTACK_HOOK_REPOS"] = str(self.tmp / "other")

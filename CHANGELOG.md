@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Worktrees now default to `<repo>/.claude/worktrees/<name>` in `orchestrate`
+  (unless `docs/agents/publishing.md` names another place), `cleanup` also
+  inventories `<repo>/.claude/worktrees/` and temp-dir worktrees listed by git,
+  and `git_guard` (`bash_guard`) refuses `git worktree add` targets outside
+  `<repo>/.claude/worktrees/` and the session scratchpad (`/tmp`, `$TMPDIR`),
+  pointing at `junkfather own --kind worktree` (mastack#13).
 - New Bash check `release_guard` (`hooks/release_guard.py`) and `release` skill:
   `bash_guard` refuses `npm`/`bun`/`pnpm`/`yarn npm publish`,
   `bun run release:publish`, `repo-kit release`, `gh release create`, pushing a

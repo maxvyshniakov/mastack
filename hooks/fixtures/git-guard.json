@@ -38,7 +38,13 @@
     {"name": "stash push without -m", "cwd": "{home}/kit", "command": "git stash push -u", "rules": ["stash"]},
     {"name": "stash pop of the shared top entry", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git stash pop", "rules": ["stash"]},
     {"name": "stash clear", "cwd": "/tmp/elsewhere", "command": "git stash clear", "rules": ["stash"]},
-    {"name": "bare stash inside bash -c", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "bash -c 'git stash'", "rules": ["stash"]}
+    {"name": "bare stash inside bash -c", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "bash -c 'git stash'", "rules": ["stash"]},
+    {"name": "worktree add next to the repository", "cwd": "{home}/app", "command": "git worktree add -b feat/x ../app-feat main", "rules": ["worktree-location"]},
+    {"name": "worktree add inside repo outside .claude/worktrees", "cwd": "{home}/app", "command": "git worktree add ./wt-feat HEAD", "rules": ["worktree-location"]},
+    {"name": "worktree add outside repo in a chain with &&", "cwd": "{home}/app", "command": "git fetch origin && git worktree add {home}/outside-wt origin/main", "rules": ["worktree-location"]},
+    {"name": "worktree add outside repo after ;", "cwd": "{home}/app", "command": "echo start; git worktree add --detach ../app-detached HEAD", "rules": ["worktree-location"]},
+    {"name": "worktree add outside repo in a subshell", "cwd": "{home}/app", "command": "(cd {home}/kit && git worktree add ../kit-lane)", "rules": ["worktree-location"]},
+    {"name": "worktree add outside repo via git -C", "cwd": "/tmp", "command": "git -C {home}/app worktree add -B lane/x ../app-x", "rules": ["worktree-location"]}
   ],
   "allow": [
     {"name": "audit neighbour: pipefail and a SHA refspec", "cwd": "{home}/app", "command": "set -o pipefail; git merge --ff-only d52ab67d | tail -1 && git push origin d52ab67d:refs/heads/main"},
@@ -60,6 +66,12 @@
     {"name": "stash apply by SHA", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git stash apply 0123456789abcdef0123456789abcdef01234567"},
     {"name": "logged override", "cwd": "{home}/app", "command": "GIT_GUARD_OK=\"owner asked to reset main\" git reset --hard origin/main"},
     {"name": "git words inside a grep pattern", "cwd": "{home}/app", "command": "grep -n 'git push origin main' docs/development.md | head -3 && echo ok"},
-    {"name": "branch switch in a lane worktree", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git checkout -B lane/404-agent-hooks integrate/queue-347 && git log -1"}
+    {"name": "branch switch in a lane worktree", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git checkout -B lane/404-agent-hooks integrate/queue-347 && git log -1"},
+    {"name": "worktree add inside .claude/worktrees (relative)", "cwd": "{home}/app", "command": "git worktree add -b feat/x .claude/worktrees/feat-x main"},
+    {"name": "worktree add inside .claude/worktrees (absolute)", "cwd": "{home}/app", "command": "git worktree add {home}/app/.claude/worktrees/feat-x HEAD"},
+    {"name": "worktree add inside .claude/worktrees from a linked worktree", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git worktree add ../lane-b HEAD"},
+    {"name": "worktree add in /tmp scratchpad", "cwd": "{home}/app", "command": "git worktree add --detach /tmp/mastack-scratch-wt HEAD"},
+    {"name": "worktree add in $TMPDIR scratchpad", "cwd": "{home}/app", "command": "git worktree add -b test/x $TMPDIR/scratch-wt main"},
+    {"name": "worktree list and remove pass", "cwd": "{home}/app", "command": "git worktree list && git worktree remove ../old-lane"}
   ]
 }

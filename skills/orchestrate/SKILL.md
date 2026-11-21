@@ -17,8 +17,9 @@ available instructions; do not guess a project's tool or publishing policy.
 Defaults apply to omitted sections. With a lane tool, drive every step through
 it. When the project has none, use worktrees, branches
 and `gh`, and keep the bookkeeping in a notes file. Put lane worktrees where
-`docs/agents/publishing.md` says, else as `<repo>-<lane>` next to the
-repository, so `cleanup` finds them.
+`docs/agents/publishing.md` says, else inside the repository at
+`<repo>/.claude/worktrees/<name>` (ignored and contained, so `cleanup` finds
+them and nothing clutters the parent directory).
 
 ## Plan
 
