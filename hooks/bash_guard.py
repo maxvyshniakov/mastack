@@ -39,6 +39,7 @@ CHECKS = (
     ("codex_credits", "codex-credits", ("codex",)),
     ("docker_desktop", "docker-desktop", ("docker", "Dock")),
     ("simctl_boot", "simctl-boot", ("simctl",)),
+    ("release_guard", "release-guard", ("publish", "release", "promote", "push")),
     ("lease_guard", "lease-guard", ("kill",)),
 )
 ONLY_WITHOUT_DENY = {"lease_guard"}

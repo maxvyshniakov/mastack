@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- New Bash check `release_guard` (`hooks/release_guard.py`) and `release` skill:
+  `bash_guard` refuses `npm`/`bun`/`pnpm`/`yarn npm publish`,
+  `bun run release:publish`, `repo-kit release`, `gh release create`, pushing a
+  `v*` tag, and `lanefather promote --ship` (also in chains and `sh -c`) unless
+  the environment carries an explicit owner go-ahead in `MASTACK_RELEASE_OK`
+  (not set in the command itself).
+- `hooks/register.py` reads `HOOK_TIMEOUT` and `EVENTS` directly from
+  `bash_guard`, `lifecycle`, `agent_role` and `friction_hook`, and shares
+  `hook_io.config_dir()` across the hooks and installer.
+- Extract `hooks/shell.py` (`read`, `Word`, `unwrap`, `program`, `show`,
+  `strip_heredocs`) out of `hooks/unguarded_sequence.py` so the checks that
+  parse depend on a shared shell reader instead of on another check.
 - New skill `usage-audit` and `[pricing.*]` price weights in `models.toml`:
   defines per-model weights (`input`, `output`, `cache_read`,
   `cache_write_short`, `cache_write_long`, `cache_write_default`,

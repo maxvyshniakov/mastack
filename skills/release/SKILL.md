@@ -20,6 +20,13 @@ conflict.
 3. On a changelog conflict, put your entries under `Unreleased` above the newest
    release. Never edit a released section.
 4. Cut the version with the project's command, then push at once (`push` skill).
+   `bash_guard` refuses `repo-kit release`, `npm`/`bun`/`pnpm`/`yarn npm publish`,
+   `bun run release:publish`, `gh release create`, pushing a `v*` tag, and
+   `lanefather promote --ship` unless the environment carries
+   `MASTACK_RELEASE_OK=<package>@<version>` (or `<version>` for a tag/GitHub
+   release, `ship` for `lanefather promote --ship`). Only the owner can grant it:
+   never set `MASTACK_RELEASE_OK` in a command yourself; stop with the release
+   ready and tell the owner what value to set.
 5. Push refused because a peer landed during the gate: drop your release commit,
    rebase, move your entries back under `Unreleased`, cut again.
 
