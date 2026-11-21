@@ -327,8 +327,10 @@ class SkillTests(unittest.TestCase):
     def test_every_skill_that_picks_a_model_runs_role_through_its_own_link(self):
         """`<this skill's directory>/scripts/role` works whether the path is resolved physically or by text, as an
         agent normalising `..` would, since the link sits inside the installed skill directory."""
+        # `usage-audit` references `models.toml` for `[pricing.*]` / `[providers.*]` weights, not to pick a model.
         named = [path.parent for path in (ROOT / "skills").glob("*/SKILL.md")
-                 if any(text in path.read_text() for text in ("bin/role", "scripts/role", "models.toml"))]
+                 if path.parent.name != "usage-audit"
+                 and any(text in path.read_text() for text in ("bin/role", "scripts/role", "models.toml"))]
         self.assertGreaterEqual({p.name for p in named}, {"cross-review", "orchestrate", "research", "rate"})
         for skill in named:
             with self.subTest(skill.name):
@@ -336,6 +338,23 @@ class SkillTests(unittest.TestCase):
                 self.assertIn("<this skill's directory>/scripts/role", text)
                 self.assertNotIn("../../bin/role", text)
                 self.assertEqual((skill / "scripts" / "role").resolve(), ROLE.resolve())
+
+    def test_every_model_has_tokenfather_pricing_weights(self):
+        """`tokenfather/pricing.py` reads `[pricing.default]` and `[pricing.<alias>]` for every model."""
+        required_keys = ("input", "output", "cache_read", "cache_write_short", "cache_write_long",
+                         "cache_write_default", "tier_multiplier")
+        pricing = TABLE.get("pricing")
+        self.assertIsInstance(pricing, dict)
+        self.assertIn("default", pricing)
+        for alias in ("default", *TABLE["models"].keys()):
+            with self.subTest(alias=alias):
+                entry = pricing.get(alias)
+                self.assertIsInstance(entry, dict, f"missing [pricing.{alias}] in models.toml")
+                for key in required_keys:
+                    val = entry.get(key)
+                    self.assertIsInstance(val, (int, float), f"[pricing.{alias}].{key}")
+                    self.assertNotIsInstance(val, bool)
+                    self.assertGreater(val, 0, f"[pricing.{alias}].{key}")
 
 
 def time_now() -> float:

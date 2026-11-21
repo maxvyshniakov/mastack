@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- New skill `usage-audit` and `[pricing.*]` price weights in `models.toml`:
+  defines per-model weights (`input`, `output`, `cache_read`,
+  `cache_write_short`, `cache_write_long`, `cache_write_default`,
+  `tier_multiplier`) across Anthropic, OpenAI/Codex, and Google/Antigravity
+  models for `tokenfather`, and adds `skills/usage-audit/SKILL.md` to run
+  `tokenfather report` and `lanefather stats`, answer the multi-provider
+  usage-audit questions, and route findings to harness settings, orchestrate
+  skill/model policy, project checks, or tools/hooks (mastack#20).
 - `models.toml`, `bin/role`, `hooks/model_roles.py`, `orchestrate`: add the
   `google` / `antigravity` family (`neon` / `gemini-4-neon`, `argon` /
   `gemini-4-argon`, `flash` / `gemini-3.8-flash`), provider-specific reasoning
