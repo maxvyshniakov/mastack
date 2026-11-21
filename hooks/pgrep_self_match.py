@@ -24,10 +24,10 @@ import sys
 
 import hook_io
 import shell
+from vocabulary import SIGNAL
 
 PROGRAMS = {"pgrep", "pkill"}
 WITH_VALUE = {"-F", "-G", "-g", "-P", "-t", "-U", "-u", "-s", "-J", "-d", "--signal"}
-SIGNAL = re.compile(r"-(\d+|[A-Z][A-Z0-9+-]*|SIG[A-Za-z0-9+-]+)")
 SHELL = "/bin/zsh -c "
 
 

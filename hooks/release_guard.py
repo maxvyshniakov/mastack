@@ -29,9 +29,9 @@ import sys
 
 import hook_io
 import shell
+from vocabulary import GIT_OPTIONS_WITH_VALUE, SHELLS
 
 ENV_VAR = "MASTACK_RELEASE_OK"
-SHELLS = {"sh", "bash", "zsh"}
 DISPLAY = {"-h", "--help", "-V", "--version"}
 DRY_RUN = {"--dry-run", "-n"}
 # Valid go-ahead token: <package>@<version> (scoped or unscoped), v<version>, <semver>, or "ship".
@@ -55,7 +55,6 @@ EXEC_RUNNERS = {"bunx", "npx", "pnpx"}
 EXEC_VALUE = {"-p", "--package"}
 GH_VALUE = {"-R", "--repo", "-F", "--notes-file", "-n", "--notes", "-t", "--title", "--target",
             "--discussion-category", "--notes-from-tag", "--notes-start-tag"}
-GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
 PUSH_OPTIONS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
 TIMEOUT_VALUES = {"-s", "--signal", "-k", "--kill-after"}
 XARGS_VALUES = {"-n", "-L", "-P", "-I", "-J", "-E", "-d", "-s", "-a", "-R", "-S"}

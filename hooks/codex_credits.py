@@ -32,6 +32,7 @@ import time
 
 import hook_io
 import shell
+from vocabulary import SHELLS
 
 CACHE_SECONDS = 300
 READ_SECONDS = 5.0  # at most; the hook's budget may leave less
@@ -51,7 +52,6 @@ NPX = {"npx", "bunx", "pnpx"}
 NPX_VALUES = {"-p", "--package", "-c", "--call"}
 CODEX_PACKAGES = {"codex", "@openai/codex"}
 LEASED = {"slotfather": "run", "junkfather": "own"}
-SHELLS = {"sh", "bash", "zsh"}
 
 
 def _walk(lst):

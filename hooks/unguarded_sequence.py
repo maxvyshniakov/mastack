@@ -38,12 +38,12 @@ import sys
 import hook_io
 import shell
 from shell import Unreadable, Word, program, read, show, unwrap
+from vocabulary import GIT_OPTIONS_WITH_VALUE, SHELLS
 
 MUTATING_GIT = {"merge", "push", "reset", "checkout", "switch", "rebase", "commit", "cherry-pick", "revert"}
 MUTATING_GH = {("pr", "merge"), ("issue", "close")}
 
-GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
-INTERPRETERS = {"python3", "python", "bash", "sh", "zsh"}
+INTERPRETERS = {"python3", "python"} | SHELLS
 # Steps whose failure leaves nothing for a later step to trip over: they only read and print, or set options.
 SHOWS = {"echo", "print", "printf", "true", ":", "sleep", "pwd", "ls", "cat", "head", "tail", "wc", "grep",
          "egrep", "fgrep", "rg", "awk", "sort", "uniq", "cut", "tr", "column", "jq", "diff", "comm", "stat", "du",

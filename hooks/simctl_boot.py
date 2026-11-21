@@ -25,8 +25,8 @@ import sys
 
 import hook_io
 import shell
+from vocabulary import SHELLS
 
-SHELLS = {"sh", "bash", "zsh"}
 XCRUN_VALUE = {"--sdk", "-sdk", "--toolchain", "-toolchain"}
 XCRUN_LOOKS = {"-f", "--find", "-h", "--help", "--version", "--show-sdk-path", "--show-sdk-version",
                "--show-sdk-platform-path", "--show-sdk-platform-version", "--show-sdk-build-version"}

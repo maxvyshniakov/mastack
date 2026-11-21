@@ -38,11 +38,11 @@ import sys
 
 import hook_io
 import shell
+from vocabulary import SIGNAL
 
 KILLERS = {"kill", "pkill", "killall"}
 # Read-only commands whose output names the pids a kill gets.
 PRODUCERS = {"pgrep", "lsof", "cat"}
-SIGNAL = re.compile(r"-(\d+|[A-Z][A-Z0-9+-]*|SIG[A-Za-z0-9+-]+)")
 XARGS_WITH_VALUE = {"-n", "-I", "-J", "-L", "-P", "-s", "-E", "-R", "-S"}
 KILLALL_WITH_VALUE = {"-u", "-t", "-c"}
 PKILL_WITH_VALUE = {"-F", "-G", "-g", "-P", "-t", "-U", "-u", "-s"}

@@ -28,6 +28,7 @@ import sys
 
 import hook_io
 import shell
+import vocabulary
 from shell import Word
 
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -37,7 +38,8 @@ OPTION = re.compile(r"^--?[A-Za-z]")
 ZSH_ARRAYS = {"argv", "path", "fpath", "cdpath", "manpath", "mailpath", "module_path", "pipestatus", "match",
               "mbegin", "mend", "reply", "signals", "funcstack", "funcfiletrace", "funcsourcetrace", "functrace",
               "historywords", "precmd_functions", "preexec_functions", "chpwd_functions", "zsh_eval_context"}
-WRAPPERS = {"env", "command", "builtin", "nohup", "time", "sudo", "noglob", "nocorrect", "exec"}
+# Historically omits nice; kept explicit until the owner decides whether to align.
+WRAPPERS = vocabulary.WRAPPERS - {"nice"}
 DECLARERS = {"export", "local", "typeset", "declare", "readonly", "integer", "float"}
 # Commands for which one word and its split words come out the same, or that split again themselves.
 WHOLE_IS_FINE = {"echo", "print", "eval", "[", "[[", "test", "case", ":", "unset"}

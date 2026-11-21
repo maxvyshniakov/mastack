@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import re
 
+from vocabulary import WRAPPERS
+
 # A heredoc operator and its delimiter: <<EOF, <<-'EOF', << "EOF"; the caller rules out the here-string <<<.
 HEREDOC = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\[[^]]*\])?\+?=")
-WRAPPERS = {"env", "command", "builtin", "nohup", "time", "sudo", "exec", "noglob", "nocorrect", "nice"}
 OPERATORS = (";;", ";&", ";|", "&&", "||", "|&", "&|", "&!", ";", "&", "|")
 CASE_ENDS = {";;", ";&", ";|"}
 

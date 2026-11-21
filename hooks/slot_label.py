@@ -23,11 +23,11 @@ import sys
 
 import hook_io
 import shell
+from vocabulary import SHELLS
 
 GENERIC = {"scratchpad", "scratch", "tmp", "temp", "test", "tests", "testing", "run", "runs", "check", "checks",
            "build", "builds", "job", "task", "work", "wip", "misc", "stuff", "foo", "bar", "x", "it", "cmd",
            "command", "slotfather", "lease", "slot", "verify", "gate", "suite", "all", "measure", "bench"}
-SHELLS = {"sh", "bash", "zsh"}
 # Programs and verbs that only start the real work: `uv run pytest` is pytest, `python3 tools/check.py` is check.
 RUNNERS = {"python", "python3", "node", "bun", "bunx", "npm", "npx", "pnpm", "yarn", "uv", "uvx", "deno",
            "sh", "bash", "zsh"}

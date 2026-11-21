@@ -29,8 +29,8 @@ import sys
 
 import hook_io
 import shell
+from vocabulary import SHELLS, SIGNAL
 
-SHELLS = {"sh", "bash", "zsh"}
 # Docker Desktop's process names, and the command lines `pgrep -f` and `ps ax` see for them.
 NAMES = ("Docker", "Docker Desktop", "com.docker.backend", "com.docker.build", "com.docker.virtualization",
          "com.docker.vmnetd", "com.docker.hyperkit", "com.docker.dev-envs")
@@ -41,7 +41,6 @@ LINES = (APP + "Docker Desktop.app/Contents/MacOS/Docker Desktop", APP + "com.do
 BUNDLE = "com.docker.docker"
 APP_NAMES = {"docker", "docker desktop"}
 
-SIGNAL = re.compile(r"-(\d+|[A-Z][A-Z0-9+-]*|SIG[A-Za-z0-9+-]+)")
 PGREP_VALUE = {"-F", "-G", "-g", "-P", "-t", "-U", "-u", "-s", "-J", "-d", "-M", "-N", "--signal"}
 KILLALL_VALUE = {"-u", "-t", "-c"}
 GREP_VALUE = {"-A", "-B", "-C", "-m", "-f", "--context", "--max-count", "--file", "--label", "--color",

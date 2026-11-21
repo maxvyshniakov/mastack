@@ -27,13 +27,14 @@ import subprocess
 import sys
 
 import hook_io
+import vocabulary
+from vocabulary import GIT_OPTIONS_WITH_VALUE, SHELLS
 
 MUTATING = {"merge", "push", "pull", "rebase", "cherry-pick", "commit", "am", "worktree"}
 FILTERS = {"tail", "head", "grep", "sed", "awk"}
-WRAPPERS = {"env", "command", "nohup", "time", "builtin", "exec", "sudo"}
-SHELLS = {"bash", "sh", "zsh"}
+# Historically omits zsh-only wrappers and nice; kept explicit until the owner decides whether to align.
+WRAPPERS = vocabulary.WRAPPERS - {"noglob", "nocorrect", "nice"}
 PUNCTUATION = set("();<>|&")
-GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
 PUSH_OPTIONS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
 SHA = re.compile(r"^[0-9a-f]{7,40}$")
 
