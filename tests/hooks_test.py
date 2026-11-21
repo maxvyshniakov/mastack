@@ -668,9 +668,12 @@ class BashGuardTests(HookCase):
 
     def test_the_budget_fits_the_registered_timeout(self):
         import bash_guard
+        import lifecycle
         import register
-        self.assertEqual(register.TIMEOUT, bash_guard.HOOK_TIMEOUT)
+        self.assertEqual(register.handler()["timeout"], bash_guard.HOOK_TIMEOUT)
         self.assertLess(bash_guard.BUDGET + 1.5, bash_guard.HOOK_TIMEOUT)
+        self.assertEqual(register.lifecycle_handler("Stop")["timeout"], lifecycle.HOOK_TIMEOUT)
+        self.assertLess(lifecycle.BUDGET + 1.5, lifecycle.HOOK_TIMEOUT)
 
     def test_unreadable_or_empty_input_passes(self):
         self.assertFailsOpen("bash_guard.py")

@@ -44,17 +44,20 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "hooks") if (ROOT / "hooks" / "hook_io.py").is_file() else str(Path(__file__).resolve().parent))
+
+import agent_role
+import bash_guard
+import friction_hook
+import hook_io
+import lifecycle
+
 GUARD = ROOT / "hooks" / "bash_guard.py"
 AGENT_ROLE = ROOT / "hooks" / "agent_role.py"
-AGENT_ROLE_TIMEOUT = 10  # agent_role.HOOK_TIMEOUT
 LIFECYCLE = ROOT / "hooks" / "lifecycle.py"
 FRICTION = ROOT / "hooks" / "friction_hook.py"
-FRICTION_TIMEOUT = 10  # friction_hook.HOOK_TIMEOUT
-LIFECYCLE_EVENTS = ("SubagentStart", "SubagentStop", "Stop", "SessionStart", "SessionEnd")  # lifecycle.EVENTS
-LIFECYCLE_TIMEOUT = 30  # lifecycle.HOOK_TIMEOUT
 REPLACED = re.compile(r"agent-hooks/(git-guard|zsh-word-split|unguarded-sequence|lease-guard)\.py[\"']?\s*$"
                       r"|\.claude/hooks/macos-shell-pitfalls\.sh[\"']?\s*$")
-TIMEOUT = 10  # bash_guard.HOOK_TIMEOUT: its checks answer within bash_guard.BUDGET
 RECORD = "hooks-installed.json"
 ATTEMPTS = 3
 
@@ -74,7 +77,7 @@ def command() -> str:
 
 
 def handler() -> dict:
-    return {"type": "command", "command": command(), "timeout": TIMEOUT}
+    return {"type": "command", "command": command(), "timeout": bash_guard.HOOK_TIMEOUT}
 
 
 def agent_role_command() -> str:
@@ -83,7 +86,7 @@ def agent_role_command() -> str:
 
 
 def agent_role_handler() -> dict:
-    return {"type": "command", "command": agent_role_command(), "timeout": AGENT_ROLE_TIMEOUT}
+    return {"type": "command", "command": agent_role_command(), "timeout": agent_role.HOOK_TIMEOUT}
 
 
 def friction_command() -> str:
@@ -92,7 +95,7 @@ def friction_command() -> str:
 
 
 def friction_handler() -> dict:
-    return {"type": "command", "command": friction_command(), "timeout": FRICTION_TIMEOUT}
+    return {"type": "command", "command": friction_command(), "timeout": friction_hook.HOOK_TIMEOUT}
 
 
 def friction_groups(hooks: dict, want: bool, ours: set[str], report: list[str]) -> None:
@@ -132,19 +135,16 @@ def lifecycle_command(event: str) -> str:
 
 
 def lifecycle_handler(event: str) -> dict:
-    return {"type": "command", "command": lifecycle_command(event), "timeout": LIFECYCLE_TIMEOUT}
+    return {"type": "command", "command": lifecycle_command(event), "timeout": lifecycle.HOOK_TIMEOUT}
 
 
 def lifecycle_events(config: Path) -> list[str]:
     """The lifecycle events the machine settings list commands for."""
-    try:
-        data = json.loads((config / "hooks.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    data = hook_io.read_json(str(config / "hooks.json"))
+    configured = data.get("lifecycle") if isinstance(data, dict) else None
+    if not isinstance(configured, dict):
         return []
-    lifecycle = data.get("lifecycle") if isinstance(data, dict) else None
-    if not isinstance(lifecycle, dict):
-        return []
-    return [event for event in LIFECYCLE_EVENTS if isinstance(lifecycle.get(event), list) and lifecycle[event]]
+    return [event for event in lifecycle.EVENTS if isinstance(configured.get(event), list) and configured[event]]
 
 
 def lifecycle_groups(hooks: dict, event: str, want: bool, ours: set[str], report: list[str]) -> None:
@@ -200,12 +200,9 @@ def recorded_allow(config: Path) -> list[str]:
 
 def lifecycle_allow(config: Path) -> list[str]:
     """The permission rules the machine settings' `lifecycle.PreToolUse` entries ask for, in order, once each."""
-    try:
-        data = json.loads((config / "hooks.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
-    lifecycle = data.get("lifecycle") if isinstance(data, dict) else None
-    listed = lifecycle.get("PreToolUse") if isinstance(lifecycle, dict) else None
+    data = hook_io.read_json(str(config / "hooks.json"))
+    configured = data.get("lifecycle") if isinstance(data, dict) else None
+    listed = configured.get("PreToolUse") if isinstance(configured, dict) else None
     rules: list[str] = []
     for entry in listed if isinstance(listed, list) else []:
         asked = entry.get("allow") if isinstance(entry, dict) else None
@@ -217,12 +214,9 @@ def lifecycle_allow(config: Path) -> list[str]:
 
 def lifecycle_replaces(config: Path) -> set[str]:
     """The Bash PreToolUse handler commands the machine settings' `lifecycle.PreToolUse` entries replace."""
-    try:
-        data = json.loads((config / "hooks.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return set()
-    lifecycle = data.get("lifecycle") if isinstance(data, dict) else None
-    listed = lifecycle.get("PreToolUse") if isinstance(lifecycle, dict) else None
+    data = hook_io.read_json(str(config / "hooks.json"))
+    configured = data.get("lifecycle") if isinstance(data, dict) else None
+    listed = configured.get("PreToolUse") if isinstance(configured, dict) else None
     found: set[str] = set()
     for entry in listed if isinstance(listed, list) else []:
         replaced = entry.get("replaces") if isinstance(entry, dict) else None
@@ -328,7 +322,7 @@ def updated(settings: dict, uninstall: bool, ours: set[str], report: list[str], 
             agent_at = len(kept) if agent_position is None else (agent_position + (1 if insert_at <= agent_position else 0))
             kept.insert(agent_at, mine_agent)
             report.append(f"add    PreToolUse Agent: {tilde(agent_role_command())}")
-    for event in LIFECYCLE_EVENTS:
+    for event in lifecycle.EVENTS:
         if event in hooks or event in events:
             lifecycle_groups(hooks, event, not uninstall and event in events, ours, report)
     if "PostToolUse" in hooks or friction:
@@ -374,8 +368,7 @@ def preflight(args) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--settings", required=True, type=Path, help="the Claude Code settings file")
-    parser.add_argument("--config", type=Path, default=Path(os.environ.get("MASTACK_CONFIG") or
-                                                            Path.home() / ".config" / "mastack"))
+    parser.add_argument("--config", type=Path, default=hook_io.config_dir())
     parser.add_argument("--dry-run", action="store_true", help="print the diff, change nothing")
     parser.add_argument("--uninstall", action="store_true", help="remove mastack's handlers only")
     parser.add_argument("--from-worktree", action="store_true", help="register a linked worktree's path")
@@ -387,7 +380,7 @@ def main() -> int:
     target = path.resolve()  # a symlinked settings file stays a symlink
     events = lifecycle_events(args.config)
     ours = (set(recorded(args.config)) | {command(), agent_role_command(), friction_command()}
-            | {lifecycle_command(event) for event in LIFECYCLE_EVENTS})
+            | {lifecycle_command(event) for event in lifecycle.EVENTS})
     allow, ours_allow, claimed = lifecycle_allow(args.config), set(recorded_allow(args.config)), []
     backup = None
     try:

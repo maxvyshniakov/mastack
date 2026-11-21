@@ -50,12 +50,17 @@ def read_json(path: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def config_dir(env=None) -> Path:
+    """The machine settings directory: `$MASTACK_CONFIG`, else `~/.config/mastack`."""
+    env = os.environ if env is None else env
+    return Path(env.get("MASTACK_CONFIG") or Path.home() / ".config" / "mastack").expanduser()
+
+
 def config() -> dict:
     """The machine settings, read once; {} when the file is missing or unreadable."""
     global _config
     if _config is None:
-        directory = os.environ.get("MASTACK_CONFIG") or os.path.join(Path.home(), ".config", "mastack")
-        _config = read_json(os.path.join(os.path.expanduser(directory), "hooks.json"))
+        _config = read_json(str(config_dir() / "hooks.json"))
     return _config
 
 

@@ -83,8 +83,8 @@ def journal_path(env=None) -> Path | None:
 
 
 def config_dir(env=None) -> Path:
-    env = os.environ if env is None else env
-    return Path(env.get("MASTACK_CONFIG") or Path.home() / ".config" / "mastack").expanduser()
+    import hook_io
+    return hook_io.config_dir(env)
 
 
 def load_config(env=None) -> dict:

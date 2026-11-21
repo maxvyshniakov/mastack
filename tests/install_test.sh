@@ -215,7 +215,7 @@ check "the refusal says what to do" said "hooks.example.json"
 check "a refused install changes nothing" cmp -s "$sf" "$scratch/settings.uninstalled"
 mv "$scratch/hooks.json.aside" "$MASTACK_CONFIG/hooks.json"
 fake=$scratch/worktree-checkout
-mkdir -p "$fake/hooks" && cp "$root/hooks/register.py" "$fake/hooks/" && echo "gitdir: /elsewhere" > "$fake/.git"
+mkdir -p "$fake/hooks" && cp "$root"/hooks/*.py "$root/hooks/friction-contract.json" "$fake/hooks/" && echo "gitdir: /elsewhere" > "$fake/.git"
 check "a linked worktree is refused" sh -c "! python3 '$fake/hooks/register.py' --settings '$sf' --config '$MASTACK_CONFIG' >'$scratch/out' 2>&1"
 check "the worktree refusal names the main checkout" said "install from the main checkout"
 check "a refused worktree changes nothing" cmp -s "$sf" "$scratch/settings.uninstalled"
