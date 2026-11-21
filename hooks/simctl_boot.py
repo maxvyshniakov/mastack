@@ -24,7 +24,9 @@ import shutil
 import sys
 
 import hook_io
+import shell
 
+SHELLS = {"sh", "bash", "zsh"}
 XCRUN_VALUE = {"--sdk", "-sdk", "--toolchain", "-toolchain"}
 XCRUN_LOOKS = {"-f", "--find", "-h", "--help", "--version", "--show-sdk-path", "--show-sdk-version",
                "--show-sdk-platform-path", "--show-sdk-platform-version", "--show-sdk-build-version"}
@@ -111,15 +113,53 @@ def own_parts(words):
     return kind, words[index:]
 
 
-def wrapped(shell, words) -> list:
+def _walk(lst):
+    for and_or, _ in lst:
+        for pipeline, _ in and_or:
+            for command in pipeline:
+                yield from _inner(command)
+
+
+def _inner(command):
+    kind = command[0]
+    if kind == "simple":
+        yield command[1]
+        for word in command[1]:
+            for sub in word.subs:
+                yield from _walk(shell.read(sub))
+    elif kind in ("group", "subshell", "function"):
+        yield from _walk(command[1])
+    elif kind == "if":
+        for condition, body in command[1]:
+            yield from _walk(condition)
+            yield from _walk(body)
+        yield from _walk(command[2] or [])
+    elif kind == "loop":
+        yield from _walk(command[1])
+        yield from _walk(command[2])
+    elif kind == "case":
+        for body in command[1]:
+            yield from _walk(body)
+
+
+def simple_commands(command: str):
+    for words in _walk(shell.read(command)):
+        own = shell.unwrap(words)
+        script = _script(own) if name_of(own) in SHELLS else None
+        if script is not None:
+            yield from simple_commands(script)
+        else:
+            yield own
+
+
+def wrapped(words) -> list:
     """The boots a command holds: itself, or behind `sh -c`."""
-    import slot_label
     if boots(words):
         return [words]
-    script = _script(words) if name_of(words) in slot_label.SHELLS else None
+    script = _script(words) if name_of(words) in SHELLS else None
     if script is None:
         return []
-    return [boot for inner in slot_label.simple_commands(shell, script) for boot in wrapped(shell, inner)]
+    return [boot for inner in simple_commands(script) for boot in wrapped(inner)]
 
 
 def _script(words) -> str | None:
@@ -131,16 +171,15 @@ def _script(words) -> str | None:
     return script.literal if script is not None else None
 
 
-def findings(shell, command: str):
-    import slot_label
-    for words in slot_label.simple_commands(shell, command):
+def findings(command: str):
+    for words in simple_commands(command):
         if boots(words):
             yield shell.show(words), "boots a simulator nothing shuts down", words
             continue
         parts = own_parts(words)
         if parts is None or parts[0] == "simulator":
             continue
-        for boot in wrapped(shell, parts[1]):
+        for boot in wrapped(parts[1]):
             yield (shell.show(words), f"runs the boot under `junkfather own` without `--kind simulator`, so it owns "
                    "only the boot command, which exits at once and leaves the simulator running", boot)
 
@@ -149,9 +188,8 @@ def check(data: dict):
     command = hook_io.command_of(data)
     if command is None or "simctl" not in command or junkfather() is None:
         return None
-    import unguarded_sequence as shell
     try:
-        found = list(findings(shell, command))
+        found = list(findings(command))
     except (shell.Unreadable, ValueError, IndexError, StopIteration, RecursionError):
         return None
     if not found:

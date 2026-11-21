@@ -607,8 +607,8 @@ class BashGuardTests(HookCase):
     def test_a_plain_command_loads_no_parser(self):
         probe = ("import json, sys; sys.path.insert(0, sys.argv[1]); import bash_guard; "
                  "bash_guard.decide({'tool_input': {'command': sys.argv[2]}}); "
-                 "print(json.dumps(sorted(m for m in sys.modules if m.endswith(('_guard', '_sequence', '_split', "
-                 "'_match', '_pitfalls')))))")
+                 "print(json.dumps(sorted(m for m in sys.modules if m == 'shell' or m.endswith(('_guard', "
+                 "'_sequence', '_split', '_match', '_pitfalls')))))")
         loaded = lambda command: json.loads(subprocess.run([sys.executable, "-c", probe, str(HOOKS), command],
                                                            capture_output=True, text=True, env=self.env).stdout)
         self.assertEqual(loaded("ls -la"), ["bash_guard", "shell_pitfalls"])

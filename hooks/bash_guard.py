@@ -2,7 +2,8 @@
 """Every Bash check in one process: the hook `bin/install` registers for PreToolUse[Bash].
 
 One process instead of one per check saves the interpreter start of each. A check is imported only when the
-command holds the text it looks for, so `ls` pays for none of the parsers. A deny from any check wins and names
+command holds the text it looks for, so `ls` pays for none of the parsers (neither `shell` nor a check's own). A deny
+from any check wins and names
 every check that denied; otherwise an ask (the lease guard's owner override) is passed on. A check that fails is
 logged to guard.log and skipped, so one broken check never blocks a command or silences the others.
 

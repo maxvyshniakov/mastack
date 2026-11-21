@@ -26,73 +26,14 @@ import time
 from pathlib import Path
 from typing import NamedTuple
 
-# A heredoc operator and its delimiter: <<EOF, <<-'EOF', << "EOF"; the caller rules out the here-string <<<.
-HEREDOC = re.compile(r"<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
-PROJECT_FILE = os.path.join("docs", "agents", "hooks.json")
-
-
 def strip_heredocs(command: str) -> str:
-    """The command without heredoc bodies: their text is data for the receiving command, not shell.
+    """Re-exported from `shell` while `git_guard` and `zsh_word_split` still call `hook_io.strip_heredocs`."""
+    if "<<" not in command:
+        return command
+    import shell
+    return shell.strip_heredocs(command)
 
-    Only an unquoted, uncommented `<<` starts a heredoc, so `echo "<<EOF"` cannot hide the lines after it; inside
-    `"$( ... )"` the text is unquoted again, as in `git commit -m "$(cat <<'EOF' ...)"`."""
-    out: list[str] = []
-    pending: list[tuple[bool, str]] = []
-    stack: list[str] = []  # open contexts: ' and " quote, $( and ( do not
-    i, n = 0, len(command)
-    while i < n:
-        c = command[i]
-        context = stack[-1] if stack else ""
-        if context == "'":
-            if c == "'":
-                stack.pop()
-            out.append(c)
-            i += 1
-        elif c == "\\":
-            out.append(command[i:i + 2])
-            i += 2
-        elif command.startswith("$(", i) and context in ('"', "", "$(", "("):
-            stack.append("$(")
-            out.append("$(")
-            i += 2
-        elif context == '"':
-            if c == '"':
-                stack.pop()
-            out.append(c)
-            i += 1
-        elif c in "'\"(":
-            stack.append(c)
-            out.append(c)
-            i += 1
-        elif c == ")":
-            if stack:
-                stack.pop()
-            out.append(c)
-            i += 1
-        elif c == "#" and (i == 0 or command[i - 1] in " \t\n;&|("):
-            end = command.find("\n", i)
-            end = n if end < 0 else end
-            out.append(command[i:end])
-            i = end
-        elif command.startswith("<<", i) and not command.startswith("<<<", i) and command[i - 1:i] != "<" \
-                and (match := HEREDOC.match(command, i)):
-            pending.append((match.group(1) == "-", match.group(3)))
-            out.append(match.group(0))
-            i = match.end()
-        elif c == "\n" and pending:
-            out.append(c)
-            i += 1
-            while pending and i < n:  # skip each body through its delimiter line
-                end = command.find("\n", i)
-                line = command[i:n if end < 0 else end]
-                i = n if end < 0 else end + 1
-                dash, tag = pending[0]
-                if (line.lstrip("\t") if dash else line) == tag:
-                    pending.pop(0)
-        else:
-            out.append(c)
-            i += 1
-    return "".join(out)
+PROJECT_FILE = os.path.join("docs", "agents", "hooks.json")
 
 
 # ---- configuration ------------------------------------------------------------------------------------------------

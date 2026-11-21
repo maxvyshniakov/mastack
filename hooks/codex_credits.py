@@ -31,6 +31,7 @@ import sys
 import time
 
 import hook_io
+import shell
 
 CACHE_SECONDS = 300
 READ_SECONDS = 5.0  # at most; the hook's budget may leave less
@@ -50,6 +51,54 @@ NPX = {"npx", "bunx", "pnpx"}
 NPX_VALUES = {"-p", "--package", "-c", "--call"}
 CODEX_PACKAGES = {"codex", "@openai/codex"}
 LEASED = {"slotfather": "run", "junkfather": "own"}
+SHELLS = {"sh", "bash", "zsh"}
+
+
+def _walk(lst):
+    for and_or, _ in lst:
+        for pipeline, _ in and_or:
+            for command in pipeline:
+                yield from _inner(command)
+
+
+def _inner(command):
+    kind = command[0]
+    if kind == "simple":
+        yield command[1]
+        for word in command[1]:
+            for sub in word.subs:
+                yield from _walk(shell.read(sub))
+    elif kind in ("group", "subshell", "function"):
+        yield from _walk(command[1])
+    elif kind == "if":
+        for condition, body in command[1]:
+            yield from _walk(condition)
+            yield from _walk(body)
+        yield from _walk(command[2] or [])
+    elif kind == "loop":
+        yield from _walk(command[1])
+        yield from _walk(command[2])
+    elif kind == "case":
+        for body in command[1]:
+            yield from _walk(body)
+
+
+def simple_commands(command: str):
+    """Every simple command's words (with leading assignments and wrappers), through compound commands,
+    substitutions and `sh -c`."""
+    import re
+    for words in _walk(shell.read(command)):
+        own = shell.unwrap(words)
+        name = (own[0].literal or "").rsplit("/", 1)[-1] if own else ""
+        if name in SHELLS:
+            literals = [w.literal or "" for w in own[1:]]
+            at = next((i for i, w in enumerate(literals) if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", w)), None)
+            script = next((own[1 + i] for i in range(at + 1, len(literals)) if not literals[i].startswith("-")),
+                          None) if at is not None else None
+            if script is not None and script.literal is not None:
+                yield from simple_commands(script.literal)
+                continue
+        yield words
 
 
 def name_of(word) -> str:
@@ -115,9 +164,7 @@ def codex_word(shell, own):
 
 def headless_runs(command: str, depth: int = 0):
     """(program and subcommand, shown command, overridden) for each headless Codex run in the command."""
-    import slot_label
-    import unguarded_sequence as shell
-    for words in slot_label.simple_commands(shell, command, whole=True):
+    for words in simple_commands(command):
         own = shell.unwrap(words)
         if own and name_of(own[0]) == "eval":
             if depth < 3:
@@ -138,7 +185,6 @@ def check(data: dict):
     command = hook_io.command_of(data)
     if command is None or "codex" not in command:
         return None
-    import unguarded_sequence as shell
     try:
         runs = list(headless_runs(command))
     except (shell.Unreadable, ValueError, IndexError, StopIteration, RecursionError):

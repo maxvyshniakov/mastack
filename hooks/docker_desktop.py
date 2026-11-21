@@ -28,6 +28,7 @@ import re
 import sys
 
 import hook_io
+import shell
 
 SHELLS = {"sh", "bash", "zsh"}
 # Docker Desktop's process names, and the command lines `pgrep -f` and `ps ax` see for them.
@@ -76,7 +77,7 @@ def pipelines(shell, text: str, depth: int = 0):
     pipelines instead), through compound commands, command substitutions and `sh -c` scripts."""
     if depth > 8:
         return
-    yield from walk(shell, shell.parse(hook_io.strip_heredocs(text)), depth)
+    yield from walk(shell, shell.read(text), depth)
 
 
 def walk(shell, lst, depth):
@@ -322,7 +323,6 @@ def check(data: dict):
     command = hook_io.command_of(data)
     if command is None or ("docker" not in command and "Dock" not in command):
         return None
-    import unguarded_sequence as shell
     try:
         found = list(dict.fromkeys(findings(shell, command)))
     except (shell.Unreadable, ValueError, IndexError, StopIteration, RecursionError):

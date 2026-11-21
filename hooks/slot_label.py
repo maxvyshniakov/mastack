@@ -22,6 +22,7 @@ import re
 import sys
 
 import hook_io
+import shell
 
 GENERIC = {"scratchpad", "scratch", "tmp", "temp", "test", "tests", "testing", "run", "runs", "check", "checks",
            "build", "builds", "job", "task", "work", "wip", "misc", "stuff", "foo", "bar", "x", "it", "cmd",
@@ -34,11 +35,39 @@ RUN_VERBS = {"run", "exec", "x"}
 RUN_VALUE_OPTIONS = {"-n", "--slots", "-l", "--label", "--meta", "--priority", "--ticket", "--wait"}
 
 
-def simple_commands(shell, command: str, whole: bool = False):
+def _walk(lst):
+    for and_or, _ in lst:
+        for pipeline, _ in and_or:
+            for command in pipeline:
+                yield from _inner(command)
+
+
+def _inner(command):
+    kind = command[0]
+    if kind == "simple":
+        yield command[1]
+        for word in command[1]:
+            for sub in word.subs:
+                yield from _walk(shell.read(sub))
+    elif kind in ("group", "subshell", "function"):
+        yield from _walk(command[1])
+    elif kind == "if":
+        for condition, body in command[1]:
+            yield from _walk(condition)
+            yield from _walk(body)
+        yield from _walk(command[2] or [])
+    elif kind == "loop":
+        yield from _walk(command[1])
+        yield from _walk(command[2])
+    elif kind == "case":
+        for body in command[1]:
+            yield from _walk(body)
+
+
+def simple_commands(command: str, whole: bool = False):
     """The words of every simple command, in order, through compound commands, substitutions and `sh -c`: the
     command's own words, or with `whole` also its leading assignments and wrappers (`FOO=1 env nohup ...`)."""
-    import pgrep_self_match
-    for words, _ in pgrep_self_match.walk(shell, shell.parse(hook_io.strip_heredocs(command))):
+    for words in _walk(shell.read(command)):
         own = shell.unwrap(words)
         name = (own[0].literal or "").rsplit("/", 1)[-1] if own else ""
         if name in SHELLS:
@@ -48,7 +77,7 @@ def simple_commands(shell, command: str, whole: bool = False):
             script = next((own[1 + i] for i in range(at + 1, len(literals)) if not literals[i].startswith("-")),
                           None) if at is not None else None
             if script is not None and script.literal is not None:
-                yield from simple_commands(shell, script.literal, whole)
+                yield from simple_commands(script.literal, whole)
                 continue
         yield words if whole else own
 
@@ -128,11 +157,10 @@ def check(data: dict):
     command = hook_io.command_of(data)
     if command is None or "slotfather" not in command:
         return None
-    import unguarded_sequence as shell
     cwd = data.get("cwd") if isinstance(data.get("cwd"), str) else None
     found = []
     try:
-        for words in simple_commands(shell, command):
+        for words in simple_commands(command):
             name = (words[0].literal or "").rsplit("/", 1)[-1] if words else ""
             if name == "cd" and len(words) > 1 and words[1].literal and cwd is not None:
                 cwd = os.path.normpath(os.path.join(cwd, os.path.expanduser(words[1].literal)))

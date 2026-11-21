@@ -37,6 +37,7 @@ import subprocess
 import sys
 
 import hook_io
+import shell
 
 KILLERS = {"kill", "pkill", "killall"}
 # Read-only commands whose output names the pids a kill gets.
@@ -46,9 +47,6 @@ XARGS_WITH_VALUE = {"-n", "-I", "-J", "-L", "-P", "-s", "-E", "-R", "-S"}
 KILLALL_WITH_VALUE = {"-u", "-t", "-c"}
 PKILL_WITH_VALUE = {"-F", "-G", "-g", "-P", "-t", "-U", "-u", "-s"}
 PER_PID_LIMIT = 48  # pids asked one by one; above it, only those in a lease's tree
-
-
-shell = None  # unguarded_sequence's shell reader, loaded once a command mentions kill
 
 
 class Unresolved(Exception):
@@ -103,7 +101,7 @@ def substitution(word) -> set[int]:
     """The pids a `$(producer ...)` word expands to."""
     if len(word.subs) != 1 or word.text.strip("\0").strip():
         raise Unresolved(word.raw)
-    parsed = shell.parse(hook_io.strip_heredocs(word.subs[0]))
+    parsed = shell.read(word.subs[0])
     if len(parsed) != 1 or len(parsed[0][0]) != 1 or len(parsed[0][0][0][0]) != 1:
         raise Unresolved(word.raw)
     command = parsed[0][0][0][0][0]
@@ -226,7 +224,7 @@ def inner(command):
     if kind == "simple":
         for word in command[1]:
             for sub in word.subs:
-                yield from pipelines(shell.parse(hook_io.strip_heredocs(sub)))
+                yield from pipelines(shell.read(sub))
     elif kind in ("group", "subshell", "function"):
         yield from pipelines(command[1])
     elif kind == "if":
@@ -245,7 +243,7 @@ def inner(command):
 def kills(command: str) -> list[tuple[str, Targets]]:
     """Each kill in the command, as written, with what it signals; unresolvable ones are left out."""
     found = []
-    for pipeline in pipelines(shell.parse(hook_io.strip_heredocs(command))):
+    for pipeline in pipelines(shell.read(command)):
         for index, element in enumerate(pipeline):
             if element[0] != "simple":
                 continue
@@ -477,11 +475,8 @@ def check(data: dict):
     command = hook_io.command_of(data)
     if command is None or "kill" not in command:
         return None
-    global shell
-    import unguarded_sequence
-    shell = unguarded_sequence
     try:
-        parsed = shell.parse(hook_io.strip_heredocs(command))
+        parsed = shell.read(command)
         # The override is a leading assignment of the first command.
         words = parsed[0][0][0][0][0][1] if parsed and parsed[0][0][0][0][0][0] == "simple" else []
     except (shell.Unreadable, ValueError, IndexError, RecursionError):

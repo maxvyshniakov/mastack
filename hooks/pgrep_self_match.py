@@ -23,6 +23,7 @@ import re
 import sys
 
 import hook_io
+import shell
 
 PROGRAMS = {"pgrep", "pkill"}
 WITH_VALUE = {"-F", "-G", "-g", "-P", "-t", "-U", "-u", "-s", "-J", "-d", "--signal"}
@@ -30,35 +31,35 @@ SIGNAL = re.compile(r"-(\d+|[A-Z][A-Z0-9+-]*|SIG[A-Za-z0-9+-]+)")
 SHELL = "/bin/zsh -c "
 
 
-def walk(shell, lst, waits=False):
+def walk(lst, waits=False):
     """(words, waits) for every simple command of a parsed list, in compound commands and substitutions too;
     waits: it runs in an if, while or until condition or in a loop's body."""
     for and_or, _ in lst:
         for pipeline, _ in and_or:
             for command in pipeline:
-                yield from inner(shell, command, waits)
+                yield from inner(command, waits)
 
 
-def inner(shell, command, waits):
+def inner(command, waits):
     kind = command[0]
     if kind == "simple":
         yield command[1], waits
         for word in command[1]:
             for sub in word.subs:
-                yield from walk(shell, shell.parse(hook_io.strip_heredocs(sub)), waits)
+                yield from walk(shell.read(sub), waits)
     elif kind in ("group", "subshell", "function"):
-        yield from walk(shell, command[1], waits)
+        yield from walk(command[1], waits)
     elif kind == "if":
         for condition, body in command[1]:
-            yield from walk(shell, condition, True)
-            yield from walk(shell, body, waits)
-        yield from walk(shell, command[2] or [], waits)
+            yield from walk(condition, True)
+            yield from walk(body, waits)
+        yield from walk(command[2] or [], waits)
     elif kind == "loop":
-        yield from walk(shell, command[1], True)
-        yield from walk(shell, command[2], True)
+        yield from walk(command[1], True)
+        yield from walk(command[2], True)
     elif kind == "case":
         for body in command[1]:
-            yield from walk(shell, body, waits)
+            yield from walk(body, waits)
 
 
 def patterns(words) -> list[str]:
@@ -93,11 +94,10 @@ def check(data: dict):
     command = hook_io.command_of(data)
     if command is None or ("pgrep" not in command and "pkill" not in command):
         return None
-    import unguarded_sequence as shell
     try:
-        parsed = shell.parse(hook_io.strip_heredocs(command))
+        parsed = shell.read(command)
         found = []
-        for words, waits in walk(shell, parsed):
+        for words, waits in walk(parsed):
             own = shell.unwrap(words)
             program = (own[0].literal or "").rsplit("/", 1)[-1] if own else ""
             if program not in PROGRAMS or (program == "pgrep" and not waits):
