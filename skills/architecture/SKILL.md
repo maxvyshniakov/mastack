@@ -52,6 +52,18 @@ Use these words exactly; do not drift into component, service, API or boundary.
    The usual fix is one enum carrying data per state, plus one transition
    function or a table-driven reducer, with the transitions tested as a table.
    Not every flag is a machine: a single field with one writer is fine.
+6. **Single-owner writes and leaked seams.** Check for two modules writing the
+   same external sink without a single owner or lease (DOM attributes/styles,
+   `window.history` vs `CloseWatcher`, focus, scroll offset, CSS custom
+   properties, storage), and for modules reaching across a seam via another
+   module's private DOM slots, `data-*` attributes, or CSS variables instead of
+   an explicit interface or context.
+7. **Resource symmetry and hot-path cost.** Every acquired resource (listener,
+   observer, timer, rAF, animation, watcher, `AbortController`) must tear down
+   symmetrically on unmount, re-entry, and mid-flight interruption. On scroll,
+   resize, pointer, or animation hot paths, flag layout reads
+   (`getBoundingClientRect`, `offsetHeight`), per-frame layout transitions
+   (`height`, `width`), or O(N) scans hidden behind a cheap-looking interface.
 
 Present candidates: files, problem, proposed change, benefit in locality,
 leverage and tests, strength (strong, worth exploring, speculative). Do not
