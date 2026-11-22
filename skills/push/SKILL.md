@@ -45,8 +45,15 @@ else (a release branch, a deploy, CI you cannot see). Never guess a destination.
 Follow every workflow the contract lists to a final result on the pushed SHA.
 A run queued for minutes with no runner means the runner is offline; say so.
 On failure read the failed log, name the step, fix it in a new commit. A
-failure on one OS only is still a failure. Never skip or relax a check to go
-green. Rerun only an infrastructure failure, such as a download timeout.
+failure on one OS only is still a failure — never treat a local macOS gate pass
+as proof that Linux CI passed. Never skip or relax a check to go green. Rerun
+only an infrastructure failure, such as a download timeout.
+
+Even when a push starts no workflow (nightly/schedule-only repos), inspect the
+destination branch's latest completed workflow runs (`gh run list --branch
+<dest> --limit 5`). If the latest nightly or automated-update workflow is red,
+surface the failing step and root cause in the report instead of leaving it
+silently broken.
 
 ## Report
 
