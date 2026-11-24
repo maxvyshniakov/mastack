@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `cross-review` Depth: an owner-decided look with a guard, tooling outside
+  the shipped package and a few-line CI or config change need no review; the
+  depth is chosen when the lane starts, and one exempt lane in five is
+  reviewed after the fact.
 - `retro`: a review finding that recurred across tasks in the session moves
   from a reviewer rule to a mechanical check; a check that runs on one OS only
   gets its OS-specific code tested against fake inputs locally; the report

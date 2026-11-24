@@ -35,12 +35,25 @@ description: Use when asked for a review, or before shipping a large change. A m
    by the diff. State the depth you chose and why in the report.
    - Mechanical (docs, a rename or move, regenerated files with no code
      change): no review.
+   - Owner-decided look with a guard (a colour, spacing or wording the owner
+     chose after seeing it, plus a check or test that fails without the
+     change), tooling outside the shipped package, a CI or config change of a
+     few lines: no review. Write the owner's words with their date, or the
+     guard's name, where the lane tool records exemptions.
    - Ordinary change: the spec pass only.
    - Behaviour change in the core, or a refactor declared "behaviour
      identical": both passes.
    - Risky surface (migrations, auth, money, deletion, signals to processes,
      releasing what another process holds): both passes, and both families in
      parallel where `role` offers a reviewer of another family.
+
+   Choose the depth when the lane starts and tell the lane tool then (a fix
+   round as a fix of its parent, an exempt lane with its reason). A gate that
+   first asks for the review at the push buys a review nobody needs: ten
+   lanes were refused at one push, six of them fix rounds, a background
+   colour the owner had picked and a CI line. One exempt lane in five gets a
+   review after the fact, which blocks nothing; a serious finding there
+   tightens the list above.
 
 6. **Unit.** One review covers one contract: one subsystem, up to about 20
    files or 1,500 changed lines. Split a larger diff by subsystem into
