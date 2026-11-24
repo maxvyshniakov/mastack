@@ -56,14 +56,15 @@ and why every earlier choice was skipped:
 
 ```
 $ bin/role review --implementer-family anthropic
-review: opus (claude-opus-5-5, anthropic), effort medium
-  run: claude -p --model claude-opus-5-5 --effort medium
-  review: claude -p --model claude-opus-5-5 --effort medium
-  note: same family as the implementer: fresh context only, say so in the report
+review: carbon (gemini-4-carbon, google), effort medium
+  delegate_tool: delegate_task (option thought_level)
 skipped:
   sol: codex_weekly 0% left, needs 15%
   opus: same family as the implementer (anthropic)
 ```
+
+With `--exclude-family google` as well, it falls back to same-family `opus`
+with the fresh-context note.
 
 A quota it cannot read (no `codex`, no answer) counts as not met and is named.
 `not_family` is not met without `--implementer-family`, and the answer then

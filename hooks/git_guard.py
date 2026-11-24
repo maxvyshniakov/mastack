@@ -196,6 +196,16 @@ class Guard:
             return
         current, pipefail = cwd, False
         for index, (raw, separator) in enumerate(parts):
+            raw_text = " ".join(raw)
+            if "$(" in raw_text or "`" in raw_text or "<(" in raw_text:
+                import shell
+                try:
+                    for tok in shell.tokens(shell.strip_heredocs(raw_text)):
+                        if isinstance(tok, shell.Word):
+                            for sub in tok.subs:
+                                self.check(sub, current)
+                except (shell.Unreadable, ValueError, RecursionError):
+                    pass
             _, words = unwrap(raw)
             if not words:
                 continue
@@ -205,21 +215,16 @@ class Guard:
             elif name == "cd":
                 current = resolve(current, words[1]) if len(words) > 1 else os.path.expanduser("~")
             elif name in SHELLS:
-                c_idx = next((i for i in range(1, len(words) - 1) if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", words[i])),
+                c_idx = next((i for i in range(1, len(words) - 1)
+                              if words[i] not in ("-norc", "-rcfile", "-noprofile")
+                              and re.fullmatch(r"-[abefhiklmnptuvx]*c[abefhiklmnptuvx]*", words[i])),
                              None)
                 if c_idx is not None:
-                    self.check(words[c_idx + 1], current)
+                    script_idx = c_idx + 2 if (c_idx + 2 < len(words) and words[c_idx + 1] == "--") else c_idx + 1
+                    if script_idx < len(words):
+                        self.check(words[script_idx], current)
             elif name == "git":
                 self.git(words[1:], current, parts, index, separator, pipefail)
-        if "$(" in command or "`" in command or "<(" in command:
-            import shell
-            try:
-                for tok in shell.tokens(shell.strip_heredocs(command)):
-                    if isinstance(tok, shell.Word):
-                        for sub in tok.subs:
-                            self.check(sub, current)
-            except (shell.Unreadable, ValueError, RecursionError):
-                pass
 
     def git(self, args, directory, parts, index, separator, pipefail):
         position = 0

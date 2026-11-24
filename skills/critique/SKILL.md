@@ -33,7 +33,9 @@ asks for second opinions from other models):
 
 1. Launch two read-only frontier models from **different families** in parallel,
    resolved via `<this skill's directory>/scripts/role design --family <family>`
-   (or `audit` for security/correctness).
+   (today `anthropic` and `google`, or `audit` for security/correctness).
+   Outside T3 Code where `delegate_task` is unavailable for Google models, fall
+   back to a single fresh-context cross-family `review` role or solo critique.
 2. Keep each reviewer **blind**: give only the settled decisions, open
    questions, and the repository path — never your own justifications, scout
    summaries, or the other reviewer's output. Ask them to verify facts

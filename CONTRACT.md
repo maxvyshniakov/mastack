@@ -33,8 +33,7 @@ them.
   branch (e.g. `dev`); on a single-branch `main` repo, state whether batches
   auto-push or wait for an explicit push.
 - Worktrees: where they live and who owns them, e.g. `.claude/worktrees/`,
-  created and removed by `<lane tool>`; or `<repo>-<slug>` next to the
-  repository, removed with `git worktree remove`.
+  created and removed by `<lane tool>` or `git worktree remove`.
 
 ## Gate
 - What runs before a push and who runs it, e.g. "the pre-push hook runs

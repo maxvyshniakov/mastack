@@ -29,7 +29,7 @@ Ask several at once only when the user asks for a batch.
 ## Facts are yours, decisions are theirs
 
 Look up anything the code, docs, tracker or tools can answer, using parallel
-`scout` subagents when starting on an existing repository (code, open issues,
+read-only subagents when starting on an existing repository (code, open issues,
 recent history). Never ask the user a fact you could find. Put every real
 choice to them, with your recommendation. Do not reopen what they settled, and
 do not turn technical details they delegated to you into approval gates.

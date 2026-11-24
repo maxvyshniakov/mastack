@@ -85,9 +85,10 @@ judgment or design proposals to `scripts/role design`.
      into the integration branch. Route a red smoke to the breaking lane;
      resolve trivial conflicts yourself, real ones in the lane.
    - End the merge message with `Fixes #N` so the ticket closes when it reaches
-     the default branch. After green smoke, label the ticket `integrated` and
-     comment merge SHA, branch, push status (never link an unpushed SHA), checks
-     passed, and preview (or read Lanefather `[tickets]` output).
+     the default branch. After green smoke, label the ticket `integrated`
+     (create it if missing) and comment merge SHA, branch, push status (never
+     link an unpushed SHA), checks passed, and preview (or read Lanefather
+     `[tickets]` output).
    - Project tracker bookkeeping (evidence comments, follow-up tickets) needs no
      permission; another project's tracker, pushes to release branches,
      releases, and premature closes follow `publishing.md`.

@@ -113,9 +113,6 @@ PLAIN_FORMS = ("`bun run release -- [<package>:]<patch|minor>`, `bun run release
 # A command the shell reader cannot parse is refused when it holds one of these (quotes and backslashes removed).
 RELEASE_WORDS_RE = re.compile(r"(?i)publish|release|--ship|visibility|--public|/pages|\baccess\b|--tags|follow-?tags"
                               r"|refs/tags/")
-# Where a hook's `ask` was shown to reach a person or be refused, never auto-approved (see the module docstring).
-CARD_ENTRYPOINTS = {"t3-code"}
-CARD_MODES = {"default", "acceptEdits", "bypassPermissions"}
 OWNER_ONLY = "owner-only"
 
 

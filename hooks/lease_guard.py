@@ -502,6 +502,7 @@ def check(data: dict):
             hook_io.log("guard.log", f"lease-guard override denied (no owner card) reason={override!r} "
                                      f"agent={data.get('agent_id')} mode={data.get('permission_mode')!r} "
                                      f"cwd={data.get('cwd')} command={command!r}")
+            return hook_io.deny(message(found) + "\n(LEASE_GUARD_OK requires an interactive owner permission card.)")
         return hook_io.deny(message(found))
     return None
 
