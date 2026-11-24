@@ -163,7 +163,9 @@ goes to `scripts/role design` instead.
    five lanes: a batch of 37 merges hid which lanes broke each other and
    left a CI fix unpushed through a week of red nightly runs. The release
    branch, a release, a publication and anything the project's guard refuses
-   stay the owner's command, each time.
+   stay the owner's command, each time, unless the project's publishing doc
+   gives a standing permission for the version level; then release it the way
+   the `release` skill says.
    Cross-cutting migrations and legacy removals use the
    [collect-all verification record](references/batch-verification.md#cross-cutting-verification)
    before fixes are distributed.

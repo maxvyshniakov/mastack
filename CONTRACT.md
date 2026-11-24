@@ -157,9 +157,17 @@ main checkout.
 ```json
 {
   "lanefather_commands": ["tools/lane"],
-  "mutating_steps": ["deploy/deploy.sh"]
+  "mutating_steps": ["deploy/deploy.sh"],
+  "release_standing": {"packages": ["@scope/pkg"], "levels": ["patch", "minor"]}
 }
 ```
+
+`release_standing` is the owner's standing permission for routine releases,
+read by the release guard from the file as committed on `origin/main` (an
+unlanded edit does not count). It names the packages, by their `package.json`
+name, that agents may release and publish without asking, and the levels
+(`patch`, `minor`; both when left out). Declare a package only after its first
+publication. Say the same in `publishing.md` under Release.
 
 `lanefather` has shared mutation semantics, including its global `--config PATH`
 and `--config=PATH` forms. `lanefather_commands` names project wrappers with that

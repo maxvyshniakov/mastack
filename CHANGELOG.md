@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- `release_guard`: a standing permission for routine releases. A project that
+  declares `release_standing` (packages, optionally levels) in
+  `docs/agents/hooks.json` on `origin/main` gets releases, publishes, `v*` tag
+  pushes, release workflow dispatches and `promote --ship` through without a
+  go-ahead when local facts show a patch or minor of an already-tagged package
+  with no Breaking CHANGELOG entry and no access change. Majors, breaking
+  changes, first publications and access changes stay the owner's; the guard
+  now also refuses `gh repo edit --visibility`, `gh repo create --public`,
+  `npm access` changes and Pages writes through `gh api`, and release or
+  publish `gh workflow run`. What it refuses it asks on a permission card only
+  where the card reaches a person (T3 Code Claude sessions in default,
+  accept-edits or full-access mode); elsewhere, Codex included, it denies and
+  names the missing fact. `MASTACK_RELEASE_OK` keeps working. `release` and
+  `orchestrate` follow the standing permission.
 - `orchestrate` Finish: every `Least sure`, `Nearby`, `Friction` and `Upstream`
   line and every review lead is routed before the batch report, and the report
   names the last `usage-audit` and `test-audit` and runs the one that is due.
