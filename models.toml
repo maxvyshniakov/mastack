@@ -12,7 +12,7 @@
 schema = 1
 
 [models.fable]
-id = "claude-fable-5-1"
+id = "claude-fable-5-2"
 family = "anthropic"
 cli = "claude"
 tier = "frontier"
@@ -30,7 +30,7 @@ cli = "claude"
 tier = "routine"
 
 [models.sol]
-id = "gpt-6.1-sol"
+id = "gpt-6.2-sol"
 family = "openai"
 cli = "codex"
 tier = "strong"
@@ -136,9 +136,9 @@ purpose = "independent review of finished work"
 choices = [
   { model = "sol", effort = "medium", when = { not_family = true, limit = { codex_weekly = 15 } } },
   { model = "opus", effort = "medium", when = { not_family = true } },
-  { model = "opus", effort = "medium", note = "same family as the implementer: fresh context only, say so in the report" },
   { model = "carbon", effort = "medium", when = { not_family = true } },
   { model = "neon", effort = "medium", when = { not_family = true } },
+  { model = "opus", effort = "medium", note = "same family as the implementer: fresh context only, say so in the report" },
 ]
 
 [roles.routine]

@@ -85,7 +85,7 @@ layer that fixes it:
 | Harness settings | Cache TTL, compaction threshold, provider runtime or T3 Code / Antigravity session defaults | Enabling 1h subagent TTL in Claude Code, raising/tuning compaction window, default delegation options |
 | Orchestrate skill & model policy | Agent reuse, scouting, fix-round policy, brief discipline, role/model/effort routing | Tightening warm-vs-fresh rules in `orchestrate`, shifting `scout`/`routine` to cheaper models or another provider in `models.toml`, updating `[pricing.*]` or `[providers.*]` |
 | Project checks | Slow or noisy check chains, low-yield browser runs on every edit | Splitting focused checks from the full lane check in `docs/agents/checks.md`, running `test-audit` |
-| Tools & hooks | Polling, `--help` loops, oversized tool output, missing model/option guards | Adding `lanefather wait`, improving CLI errors, output capping in `hooks/friction_hook.py`, `hooks/agent_role.py` coverage, `tokenfather` attribution gaps |
+| Tools & hooks | Polling, `--help` loops, oversized tool output, missing model/option guards | Adding `lanefather wait`, improving CLI errors, journaling oversized Bash output (>8K) in `hooks/friction_hook.py`, `hooks/agent_role.py` coverage, `tokenfather` attribution gaps |
 
 ## Report
 

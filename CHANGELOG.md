@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `lease_guard`: `LEASE_GUARD_OK` now uses the shared `hook_io.card_reaches_owner`
+  check so overrides in `auto` mode or subagent sessions are denied rather than
+  auto-approved.
+- `models.toml`: move cross-family `carbon`/`neon` choices above the same-family
+  `opus` fallback in `[roles.review]`; update `fable` (`claude-fable-5-2`) and
+  `sol` (`gpt-6.2-sol`); sync `README.md`, `CONTRACT.md`, `models.md`,
+  `orchestrate`/`push`/`commit` everyday-branch auto-push wording, and add
+  missing `agents/openai.yaml` for `babysit-pr` and `usage-audit`.
 - `release_guard`: a standing permission for routine releases. A project that
   declares `release_standing` (its package, optionally levels) in
   `docs/agents/hooks.json` on the remote's `main` gets a patch or minor of its

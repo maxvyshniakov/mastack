@@ -1,0 +1,3 @@
+interface:
+  display_name: "Babysit PR"
+  short_description: "Verify PR checks and review threads, fix with tests, answer every thread"

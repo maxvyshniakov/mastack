@@ -27,9 +27,11 @@ description: Use when asked for a review, or before shipping a large change. A m
    the same rule.
 4. **Reviewer.** The model the Review section of `docs/agents/checks.md` names,
    else what `<this skill's directory>/scripts/role review
-   --implementer-family <family>` prints: model, effort and command, and its
-   note and caution in the report. Use its answer, not your reading of
-   `models.toml`: only it reads the live quotas.
+   --implementer-family <family>` prints: model, effort and command (or
+   `delegate_task` target for Antigravity / T3 Code; for `codex exec` pass
+   `-s read-only` and `< /dev/null`), and its note and caution in the report.
+   Use its answer, not your reading of `models.toml`: only it reads the live
+   quotas.
 5. **Depth.** Match the review to what the change can break; the Review
    section of `docs/agents/checks.md` says which paths fall where, else judge
    by the diff. State the depth you chose and why in the report.
@@ -92,8 +94,8 @@ pass writes the leads and the table.
 ## One round of fixes
 
 Triage findings when the review finishes or the lane list/stop hook reports
-them, while the diff is fresh; the [Lanefather gate](https://github.com/maxvyshniakov/fathers/issues/177)
-enforces this before further lands. Every finding is marked fixed or rejected
+them, while the diff is fresh; the lane tool's gate enforces this before
+further lands. Every finding is marked fixed or rejected
 before promotion or release. The implementer answers every finding once:
 
 - `fixed: <commit>`
@@ -138,9 +140,10 @@ Then:
   later reverses it): apply the decision and report it in one line with the
   quote and its date. If what they chose breaks something they could not have
   seen, ask about that breakage only, with the quote.
-- **An agent decided it**, or nothing is found: settle it yourself when
-  `orchestrate` step 9 lets you; otherwise ask, with the options, what each
-  breaks, your recommendation, and what the search found.
+- **An agent decided it**, or nothing is found: settle it yourself when the
+  default is clearly right, stays inside approved scope, and is cheap to
+  reverse (reporting it in one line); otherwise ask, with the options, what
+  each breaks, your recommendation, and what the search found.
 
 History never authorizes a push, release, publish, deletion or spending:
 approval given in one context does not carry to the next.

@@ -118,12 +118,27 @@ class LeaseGuardTests(HookCase):
         self.assertNotIn("{", text, "every placeholder is filled")
         return text
 
-    def decide(self, template, cwd=None, agent=None, script="lease_guard.py"):
+    def decide(self, template, cwd=None, agent=None, script="lease_guard.py", permission_mode="default",
+               entrypoint="t3-code"):
         """The hook's answer for the session's main thread, or with `agent` for a subagent of it."""
-        return self.run_hook(script, {"hook_event_name": "PreToolUse", "tool_name": "Bash",
-                                      "cwd": cwd or str(self.worktree / "desktop"),
-                                      "session_id": "session-mine", **({"agent_id": agent} if agent else {}),
-                                      "tool_input": {"command": self.command(template)}})
+        saved = self.env.get("CLAUDE_CODE_ENTRYPOINT")
+        if entrypoint is None:
+            self.env.pop("CLAUDE_CODE_ENTRYPOINT", None)
+        else:
+            self.env["CLAUDE_CODE_ENTRYPOINT"] = entrypoint
+        try:
+            payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                       "cwd": cwd or str(self.worktree / "desktop"),
+                       "session_id": "session-mine", **({"agent_id": agent} if agent else {}),
+                       "tool_input": {"command": self.command(template)}}
+            if permission_mode is not None:
+                payload["permission_mode"] = permission_mode
+            return self.run_hook(script, payload)
+        finally:
+            if saved is None:
+                self.env.pop("CLAUDE_CODE_ENTRYPOINT", None)
+            else:
+                self.env["CLAUDE_CODE_ENTRYPOINT"] = saved
 
     def assertRefused(self, output, case, decision="deny"):
         self.assertIsNotNone(output, "allowed")
@@ -174,6 +189,12 @@ class LeaseGuardTests(HookCase):
         self.assertIn("lease-guard override asked", log)
         self.assertIn("stuck 641 gate", log)
         self.assertIsNone(self.decide('LEASE_GUARD_OK="mine" kill {mine}'), "an override reaching no lease passes")
+
+    def test_an_override_is_denied_when_no_card_reaches_the_owner(self):
+        case = self.cases["asked"][0]
+        self.assertRefused(self.decide(case["command"], permission_mode="auto"), case, "deny")
+        self.assertRefused(self.decide(case["command"], entrypoint=None), case, "deny")
+        self.assertRefused(self.decide(case["command"], agent="a1"), case, "deny")
 
     def test_the_dispatcher_passes_the_ask_on_and_a_deny_beats_it(self):
         case = self.cases["asked"][0]

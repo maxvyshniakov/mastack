@@ -1,6 +1,6 @@
 ---
 name: push
-description: Use only for an explicit request to push. Publishes the way docs/agents/publishing.md says and follows CI to a result. Commit-only and skill-authoring requests are not push requests.
+description: Use for an explicit request to push, or when an orchestrator pushes a green batch to the everyday branch. Publishes the way docs/agents/publishing.md says and follows CI to a result. Commit-only and skill-authoring requests are not push requests.
 ---
 
 # Push

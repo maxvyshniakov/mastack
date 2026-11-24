@@ -1,6 +1,6 @@
 # mastack
 
-A small skill pack for coding agents (Claude Code, Codex) that already know how
+A small skill pack for coding agents (Claude Code, Codex, Antigravity / T3 Code) that already know how
 to code. Each skill is a process with a trigger: when to use it, what matters,
 what comes out. Nothing a strong model does unprompted; every rule that is here
 earned its place, many of them through an incident.
@@ -75,7 +75,8 @@ flowchart LR
 - **Keep the environment good**: `retro` after a session that went wrong,
   `agent-docs` for what agents read, `friction-audit` for what keeps confusing
   agents in a package, `test-audit` for what the tests cost and prove,
-  `deps-update` to update pins and retire workarounds.
+  `usage-audit` for token/quota burn and lane cost, `deps-update` to update
+  pins and retire workarounds.
 - **Between sessions**: `status` shows what runs and what waits for you;
   `handoff` pauses cleanly for the next agent.
 
@@ -109,6 +110,7 @@ flowchart LR
 | [agent-docs](skills/agent-docs/SKILL.md) | Writing and auditing what agents read |
 | [friction-audit](skills/friction-audit/SKILL.md) | What confuses agents in a package, and the layer that fixes it |
 | [test-audit](skills/test-audit/SKILL.md) | Tests that cost time or confidence, and the change for each |
+| [usage-audit](skills/usage-audit/SKILL.md) | Token usage, quota burn and lane cost across providers |
 | [friction](skills/friction/SKILL.md) | `/friction <text>`: log the owner's correction of package usage (user-invoked) |
 | [video-feedback](skills/video-feedback/SKILL.md) | Recorded feedback to timestamped, verified requirements |
 | [reprompt](skills/reprompt/SKILL.md) | Deepening a task, then rewriting the prompt (user-invoked) |
@@ -124,7 +126,7 @@ skill, in English: the model matches requests against it, so keep it short.
 - macOS or Linux with Git, Bash and Python 3.11 or newer. The hooks and the
   installer are developed and tested on macOS.
 - `gh`, signed in, for the skills that read or write GitHub issues, pull
-  requests and CI (`push`, `status`, `orchestrate`, `cross-review`).
+  requests and CI (`push`, `status`, `orchestrate`, `cross-review`, `babysit-pr`).
 - Optional: [Slotfather](https://github.com/maxvyshniakov/fathers/tree/main/slotfather) for the
   lease guard and machine slots; a lane tool for `orchestrate` (the author uses
   Lanefather, not public yet; without one the skill uses worktrees, branches
@@ -209,8 +211,8 @@ routine, scout, research, audit) to an ordered list of models with effort and
 conditions, for example "a reviewer of another family than the implementer,
 while at least 15% of the weekly Codex quota is left". `bin/role <role>`
 evaluates it with the live quotas and prints the model, effort and headless
-command (from `[cli.*]`); skills that start another model (`cross-review`,
-`orchestrate`, `research`) run it. [models.md](models.md) gives the
+command (from `[cli.*]` or T3 Code `delegate_task`); skills that start another
+model (`cross-review`, `orchestrate`, `research`, `rate`) run it. [models.md](models.md) gives the
 reasons. The model ids are the author's; edit the table, not the skills, to
 use yours.
 
@@ -236,12 +238,18 @@ hook too; its docstring defines exactly what it denies.
 | `lease_guard` | a `kill`, `pkill` or `killall` that reaches a process inside another holder's `slotfather` lease; passes when slotfather is absent |
 | `shell_pitfalls` | GNU-only forms that fail on macOS: GNU `timeout`, GNU cat's show-all flag |
 
-A deny from any check wins and names each check that denied. Every check
-fails open: unreadable input, configuration or project files let the command
-run, and a check that crashes is logged to `guard.log` and skipped. The
-parsers run first; the lease guard runs last and only while nothing is
-denied, and all of them share a time budget below the hook's timeout, so a
-slow `slotfather` cannot let the timeout drop a deny already found.
+A deny from any check wins and names each check that denied. Every check except
+`release_guard` fails open: unreadable input, configuration or project files
+let the command run, and a check that crashes is logged to `guard.log` and
+skipped (`release_guard` fails closed on commands that name a release or
+publish). The parsers run first; the lease guard runs last and only while
+nothing is denied, and all of them share a time budget below the hook's
+timeout, so a slow `slotfather` cannot let the timeout drop a deny already
+found.
+
+- **Agent role hook**: `bin/install` also registers `hooks/agent_role.py` as a
+  `PreToolUse` hook for the `Agent` tool so a subagent launch naming `Role: <role>`
+  fills in the role's model and effort from `models.toml` when omitted.
 
 - **Lifecycle hooks**: commands that other tools want to run when a subagent
   or session stops, or before a Bash call that names them, go under

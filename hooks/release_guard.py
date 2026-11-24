@@ -982,10 +982,7 @@ FOOTER = (f"Only the owner can grant it: set `{ENV_VAR}=<package>@<version>` in 
 
 def card_reaches_owner(data: dict) -> bool:
     """Whether a PreToolUse `ask` reaches a person here, never an automatic approval or a subagent no one watches."""
-    if "turn_id" in data or data.get("agent_id"):  # Codex rejects `ask`; a subagent's card is not the owner's
-        return False
-    return (os.environ.get("CLAUDE_CODE_ENTRYPOINT") in CARD_ENTRYPOINTS
-            and data.get("permission_mode") in CARD_MODES)
+    return hook_io.card_reaches_owner(data)
 
 
 def unreadable(command: str):

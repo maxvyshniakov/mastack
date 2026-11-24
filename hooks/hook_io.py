@@ -196,6 +196,19 @@ class Answer(NamedTuple):
     updated_input: dict
 
 
+# Where a hook's `ask` was shown to reach a person or be refused, never auto-approved.
+CARD_ENTRYPOINTS = {"t3-code"}
+CARD_MODES = {"default", "acceptEdits", "bypassPermissions"}
+
+
+def card_reaches_owner(data: dict) -> bool:
+    """Whether a PreToolUse `ask` reaches a person here, never an automatic approval or a subagent no one watches."""
+    if "turn_id" in data or data.get("agent_id"):  # Codex rejects `ask`; a subagent's card is not the owner's
+        return False
+    return (os.environ.get("CLAUDE_CODE_ENTRYPOINT") in CARD_ENTRYPOINTS
+            and data.get("permission_mode") in CARD_MODES)
+
+
 def emit(decision: tuple[str, str] | Answer | None) -> None:
     if isinstance(decision, Answer):
         output: dict = {"hookEventName": "PreToolUse", "updatedInput": decision.updated_input}

@@ -8,10 +8,10 @@ longer docs it summarises instead of copying them.
 
 | File | Read by |
 |---|---|
-| `docs/agents/publishing.md` | `push`, `release`, `finish`, `cleanup`, `orchestrate` |
-| `docs/agents/checks.md` | `commit`, `tdd`, `debug`, `push`, `cross-review`, `browser-verify`, `test-audit` |
-| `docs/agents/domain.md` | `grill-me`, `architecture`, `tdd`, `debug`, `research` |
-| `docs/agents/issue-tracker.md` | `status`, `cross-review`, `commit`, `orchestrate` |
+| `docs/agents/publishing.md` | `push`, `release`, `finish`, `cleanup`, `orchestrate`, `babysit-pr` |
+| `docs/agents/checks.md` | `commit`, `tdd`, `cross-review`, `browser-verify`, `test-audit`, `deps-update`, `usage-audit` |
+| `docs/agents/domain.md` | `grill-me`, `to-spec`, `architecture`, `research` |
+| `docs/agents/issue-tracker.md` | `status`, `roadmap`, `to-spec`, `cross-review`, `orchestrate` |
 | `docs/agents/orchestration.md` | `orchestrate` |
 | `docs/agents/hooks.json` | the Bash hook's `unguarded_sequence` and `release_guard` checks |
 
@@ -29,6 +29,9 @@ them.
 - Base branch for cleanup: `dev`.
 - Words that authorize the release branch, e.g. "ship". Without one of them in
   the request, a push goes to the everyday branch only.
+- Auto-push of green `orchestrate` batches: allowed on a separate everyday
+  branch (e.g. `dev`); on a single-branch `main` repo, state whether batches
+  auto-push or wait for an explicit push.
 - Worktrees: where they live and who owns them, e.g. `.claude/worktrees/`,
   created and removed by `<lane tool>`; or `<repo>-<slug>` next to the
   repository, removed with `git worktree remove`.

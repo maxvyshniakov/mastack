@@ -8,14 +8,14 @@ evals, and update the reasons here if they changed.
 
 | Role | First choice | Fallbacks | Why |
 |---|---|---|---|
-| design | Fable, high | Opus, high; Neon, high | Plans and interfaces decide what everything after them costs. The most expensive tokens go here, and to the final synthesis. |
+| design | Fable, high | Opus, high; Neon, high; Carbon, high | Plans and interfaces decide what everything after them costs. The most expensive tokens go here, and to the final synthesis. |
 | implement | Opus, medium | Sol, xhigh; Neon, medium; Argon, medium | Implementation against a written contract is where most tokens go; a strong model with a clear brief is enough. |
 | visual | Opus, high | Neon, high | Visual work routes to Anthropic or Google (`only_families = ["anthropic", "google"]`). |
-| review | Sol, medium | Opus, medium; Neon, medium | The reviewer is of another family than the implementer, so it does not share the implementer's blind spots. |
+| review | Sol, medium | Opus, medium; Carbon, medium; Neon, medium | The reviewer is of another family than the implementer, so it does not share the implementer's blind spots. |
 | routine | Sol, medium | Opus, medium; Flash, medium | Bulk, low-risk work: renames, mirroring docs, running checks. |
 | scout | Sol, medium | Sonnet, medium; Flash, medium | Read-only scouting in the repository (map code, find where something lives) needs no judgment, and it ran on Opus and spent the Claude limit while Codex had quota. Not part of research: Codex runs it in a read-only sandbox, which writes no file and reads no web. |
 | research | Opus, medium | Sonnet, medium; Argon, medium; Flash, medium | Collecting facts needs care, not frontier judgment. Routine models (Sonnet, Flash) only for plain reading and search. |
-| audit | Fable, high | Opus, high; Neon, high | A finding from a cheaper model is a lead until a strong model has verified it. |
+| audit | Fable, high | Opus, high; Carbon, high; Neon, high | A finding from a cheaper model is a lead until a strong model has verified it. |
 
 ## Rules behind the table
 

@@ -75,10 +75,10 @@ goes to `scripts/role design` instead.
    - **T3 Code / Antigravity (`delegate_task`)**: pass `target.model` and
      `target.options.<option>` (e.g. `target.options.thought_level` for
      `gemini-4-neon` / `gemini-4-argon` / `gemini-3.8-flash`), and name
-     `Role: <role>` in `task`. Claude Code hooks (`PreToolUse[Agent]`,
-     `PostToolUse[Bash]`) do not fire in T3 Code / Antigravity, so enforce
-     explicit model/option selection and bounded tool output directly through
-     the brief.
+     `Role: <role>` in `task`. Claude Code hooks only fire for Claude-backed
+     sessions (including Claude inside T3 Code), not Antigravity or Codex, so
+     enforce explicit model/option selection and bounded tool output directly
+     through the brief.
    Register the lane with its ticket (`--ticket`) first, so the
    brief can name its worktree. Point at the spec and tickets; do not paste
    them. Fill every command with the lane's id and paths: implementers spent
@@ -114,10 +114,6 @@ goes to `scripts/role design` instead.
    Reviews after the land found defects in nearly every lane, and each then
    cost a fix lane queued behind the lane cap and claims, a cold agent, a
    second check and a second land, while other lanes built on the defect.
-   Until the lane tool reviews before the land
-   ([fathers#242](https://github.com/maxvyshniakov/fathers/issues/242)), land
-   with `LANEFATHER_REVIEW_START=manual` and keep the review's findings and
-   marks in its report file.
 6. **Land** a lane when its check is green and every finding is marked fixed
    or rejected. The lane merges the integration tip before its last check, so
    the receipt covers the merge tree and the post-merge smoke has nothing new
@@ -187,8 +183,8 @@ goes to `scripts/role design` instead.
 
 Reconcile every ticket and accepted requirement with commits and checks,
 [read back tracker changes](references/batch-verification.md#tracker-readback),
-publish only on an explicit push (`push`), and clean up lanes and
-worktrees (`cleanup`).
+keep release-branch pushes and publishes to explicit owner requests (`push`,
+`release`), and clean up lanes and worktrees (`cleanup`).
 
 Route what the reports carried besides the work, before the batch report;
 a line nobody routes is lost when the session ends:

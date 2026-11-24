@@ -67,8 +67,13 @@ class RoleCase(unittest.TestCase):
 
 
 class ResolveTests(RoleCase):
-    def test_an_exhausted_weekly_limit_moves_review_to_the_same_family_fallback_with_its_note(self):
-        proc = self.role("review", "--implementer-family", "anthropic", used=100)
+    def test_an_exhausted_weekly_limit_moves_review_to_another_family_then_same_family_fallback(self):
+        cross = self.answer("review", "--implementer-family", "anthropic", used=100)
+        self.assertEqual((cross["model"], cross["family"], cross["note"]), ("carbon", "google", None))
+        self.assertIn("sol: codex_weekly 0% left, needs 15%", cross["skipped"][0]["reason"])
+        self.assertIn("opus: same family as the implementer (anthropic)", cross["skipped"][1]["reason"])
+
+        proc = self.role("review", "--implementer-family", "anthropic", "--exclude-family", "google", used=100)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         out = proc.stdout
         self.assertIn(model_id("opus"), out)

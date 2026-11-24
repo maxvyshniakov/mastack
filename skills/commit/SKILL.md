@@ -5,7 +5,7 @@ description: Use when asked to commit, or when an authorized push needs commits 
 
 # Commit
 
-A commit request is local only; publishing needs a push request.
+A commit request is local only; publishing needs a push request (or an orchestrator pushing a green batch to the everyday branch).
 
 ## Scope
 

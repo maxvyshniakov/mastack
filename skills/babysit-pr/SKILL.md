@@ -30,7 +30,7 @@ theirs: report it as waiting, do not add or ask for it in a comment.
 
 ## Collect
 
-One table of what needs action, from [queries.md](queries.md):
+One table of what needs action, from [references/queries.md](references/queries.md):
 
 - each failing check with the failing step, and each pending one;
 - each unresolved review thread with author, file and line (only GraphQL says

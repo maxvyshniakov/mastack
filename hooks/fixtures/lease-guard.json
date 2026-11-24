@@ -54,7 +54,7 @@
     {"name": "a sibling lane's lease of the same session", "command": "kill {orch_land}", "leases": ["land-641-review"]},
     {"name": "a lease without a lane of the same session in another worktree", "command": "kill {session_mine}", "leases": ["scripts-mine"]},
     {"name": "a lease started under the session's process", "command": "kill {descendant}", "leases": ["measure-all"]},
-    {"name": "an override from a subagent is asked too, never passed", "command": "LEASE_GUARD_OK=\"cleanup\" kill {other}", "leases": ["lane-641-desktop-shared-host"], "asked": true}
+    {"name": "an override from a subagent is denied, never asked or passed", "command": "LEASE_GUARD_OK=\"cleanup\" kill {other}", "leases": ["lane-641-desktop-shared-host"]}
   ],
   "subagent_allow": [
     {"name": "its own lane", "command": "kill -9 {mine} {mine_holder}"},

@@ -60,8 +60,7 @@ landing and cleanup are the orchestrator's steps; it gets your report as your
 completion notice. Wait for none of them and poll no
 lane state (`lanefather list` in a loop). In the rare case a step of yours
 really needs a lane state, `lanefather wait <id> --for <state>` blocks until
-it (Lanefather with fathers#175); without that command, put the need under
-Questions and hand back.
+it; without that command, put the need under Questions and hand back.
 
 ## Review fixes
 
@@ -71,7 +70,8 @@ lane, while your context is warm. Each finding carries a falsifier: run it
 first as a failing test; if it passes on your tree, reject the finding with
 that test as the reason. Fix what holds at its cause, not with the reviewer's
 proposed patch, one finding or root per commit. Merge the integration tip,
-run the lane check on the final tree, hand back. There is no second review.
+run the focused checks (and the lane check if the brief said `Check: yours`),
+then hand back. There is no second review.
 
 A fresh agent gets the same findings with the lane's diff when you are past
 the provider's prompt-cache window or near compaction (per

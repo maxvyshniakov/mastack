@@ -492,12 +492,16 @@ def check(data: dict):
         found = findings(kills(command), Caller(data))
     except (shell.Unreadable, ValueError, IndexError, RecursionError):
         return None
-    if found and override:
+    if found and override and hook_io.card_reaches_owner(data):
         # The prefix is the agent's words; the approval is the owner's, on the permission card.
         hook_io.log("guard.log", f"lease-guard override asked reason={override!r} agent={data.get('agent_id')} "
                                  f"cwd={data.get('cwd')} command={command!r}")
         return hook_io.ask(message(found, override))
     if found:
+        if override:
+            hook_io.log("guard.log", f"lease-guard override denied (no owner card) reason={override!r} "
+                                     f"agent={data.get('agent_id')} mode={data.get('permission_mode')!r} "
+                                     f"cwd={data.get('cwd')} command={command!r}")
         return hook_io.deny(message(found))
     return None
 
