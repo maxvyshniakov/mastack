@@ -10,7 +10,8 @@
   step: before a question reaches the owner, the session histories, tracker
   and blame are searched for the answer they already gave; `orchestrate`
   step 9 routes questions through it. The implementer report gains a `Nearby`
-  line with the same kind of leads.
+  line with the same kind of leads, and `Least sure`, `Decisions`, `Friction`
+  and `Upstream` lines.
 - Worktrees now default to `<repo>/.claude/worktrees/<name>` in `orchestrate`
   (unless `docs/agents/publishing.md` names another place), `cleanup` also
   inventories `<repo>/.claude/worktrees/` and temp-dir worktrees listed by git,

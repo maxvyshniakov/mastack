@@ -91,6 +91,10 @@ Outside claims: none | <paths>
 Owner-visible defaults changed: none | <each one>
 Questions: none | <numbered, each with the default you implemented>
 Nearby: none | <at most five, each with a size>
+Least sure: none | <at most three: the place, why, the check that would settle it>
+Decisions: none | <each choice the ticket did not dictate: what, over what, why>
+Friction: none | <what the brief, docs or tools got wrong or left out, and the fix>
+Upstream: none | <a defect in a dependency you worked around: file, lines, the ask>
 Screenshots: <paths, light and dark> | n/a: <reason>
 ```
 
@@ -103,6 +107,16 @@ places (pattern, number of hits, two examples), a fix that belongs in another
 layer, a decision the ticket took silently. Leads, not work: size each as
 small (about N lines), a lane, or owner's decision. You were deeper in this
 code than the reviewer will be, and the orchestrator cannot ask you later.
+
+`Least sure` is where you made a judgment call or could not verify (an effect
+order, a browser you did not run, a path with no test). The reviewer samples a
+large diff and may never open that file; the orchestrator runs your check or
+points the reviewer there. `Decisions` also go in the commit body: a later
+search for "who decided this" must find that an agent did, and why, or the
+question returns to the owner. `Friction` is one line per obstacle that cost
+you more than a few turns (a wrong command, a rule only a failing gate taught
+you, a flaky check); a gotcha about the code itself goes into the project's
+own doc in your lane, not here.
 
 Then the project's own labels, if the orchestrator gave any, one per line.
 
