@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `retro`: a review finding that recurred across tasks in the session moves
+  from a reviewer rule to a mechanical check; a check that runs on one OS only
+  gets its OS-specific code tested against fake inputs locally; the report
+  drops "what went well", and every finding names the artifact to change.
 - `orchestrate` reviews a lane before it lands: the lane check and the review
   run together on the committed tree, findings go to the same implementer in
   the same lane, and the lane lands once (was: review after the land, then a

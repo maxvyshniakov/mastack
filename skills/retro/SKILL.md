@@ -24,7 +24,9 @@ believed at that moment.
   is itself a finding.
 - **Judgment** (the wrong trade-off, a misread spec): a rule for the reviewer,
   in the project's standards. The reviewer has the least context pressure, so
-  standards are enforced in review, not loaded on the implementer.
+  standards are enforced in review, not loaded on the implementer. If the same
+  kind of review finding recurred across tasks in this session, promote it from
+  Judgment (reviewer rule) to Mechanical (lint, hygiene, or test check).
 - **Navigation**: the agent searched long for something. Add a pointer where it
   looked first.
 - **Information access**: the agent could not see something it needed (a log,
@@ -34,7 +36,10 @@ believed at that moment.
 - **Test** (a flake, a slow gate, a bug a test should have caught): run
   `test-audit` on that suite; its findings become tickets, and the ratchet it
   proposes is the check that must bite. One bad test is usually a pattern
-  repeated across the suite, and fixing only the instance leaves the rest.
+  repeated across the suite, and fixing only the instance leaves the rest. A
+  check that only runs on one OS/environment (e.g. macOS locally vs Linux in
+  CI) leaves the other branch untested; test OS-specific code against fake
+  inputs locally so the local gate catches it before push.
 - **Instructions**: an instruction that was ignored or misled. Fix it with
   `agent-docs`.
 
@@ -46,7 +51,9 @@ reporting it as done.
 
 ## Report
 
-Findings in order of how likely they are to recur, each with the evidence from
-the session, the layer, the change, and whether it is done and proven or
-proposed. Propose; change shared configuration or global rules only with the
-user's go-ahead.
+Omit accomplishments and "what went well". Every bullet must name a concrete
+artifact to change — hook, check, test, reviewer rule, doc, or skill; an
+unowned "be more careful next time" is not a finding. List findings in order of
+how likely they are to recur, each with the evidence from the session, the
+layer, the change, and whether it is done and proven or proposed. Propose;
+change shared configuration or global rules only with the user's go-ahead.
