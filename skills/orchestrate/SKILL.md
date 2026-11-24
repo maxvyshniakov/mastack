@@ -120,7 +120,9 @@ goes to `scripts/role design` instead.
    owner's yes first.
 6. **Review** each landed lane once (`cross-review`), when and how the project's
    review policy says, else right after the land: the
-   reviewer sees the diff, ticket and standards, never the lane's report. It
+   reviewer sees the diff, ticket, standards and the
+   [reviewer brief](../cross-review/references/reviewer-brief.md), never the
+   lane's report. It
    runs beside implementation. Triage findings as soon as the review finishes
    (or the lane list/stop hook reports them), while the diff is fresh; the
    [Lanefather gate](https://github.com/maxvyshniakov/fathers/issues/177) enforces
@@ -153,7 +155,10 @@ goes to `scripts/role design` instead.
    Cross-cutting migrations and legacy removals use the
    [collect-all verification record](references/batch-verification.md#cross-cutting-verification)
    before fixes are distributed.
-9. **Questions** from lane reports go to the owner queue the project names,
+9. **Questions** from lane reports and reviews first go through
+   `cross-review`'s "Owner's decisions": search the session histories, tracker
+   and blame for the answer the owner already gave, and ask only what is left.
+   Those go to the owner queue the project names,
    else to the owner in one message: numbered, each with the default the lane
    already implemented. Record answers on the
    spec issue, not in session notes. Settle a question yourself when the

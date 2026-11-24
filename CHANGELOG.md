@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- `cross-review` reviewers now answer a fixed brief
+  (`references/reviewer-brief.md`): per finding a confidence, a falsifier, the
+  guard that should have caught it and a fix direction; up to five leads wider
+  than the diff (class, symmetry, wrong level, unasked); and a triage table.
+  A fix starts from the falsifier as a failing test. New "Owner's decisions"
+  step: before a question reaches the owner, the session histories, tracker
+  and blame are searched for the answer they already gave; `orchestrate`
+  step 9 routes questions through it. The implementer report gains a `Nearby`
+  line with the same kind of leads.
 - Worktrees now default to `<repo>/.claude/worktrees/<name>` in `orchestrate`
   (unless `docs/agents/publishing.md` names another place), `cleanup` also
   inventories `<repo>/.claude/worktrees/` and temp-dir worktrees listed by git,

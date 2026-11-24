@@ -90,11 +90,19 @@ New tests: none | <file: count, layer (model, render, browser, process), seconds
 Outside claims: none | <paths>
 Owner-visible defaults changed: none | <each one>
 Questions: none | <numbered, each with the default you implemented>
+Nearby: none | <at most five, each with a size>
 Screenshots: <paths, light and dark> | n/a: <reason>
 ```
 
 The `New tests` line is how gate time growth is traced to the lane that added
 it.
+
+`Nearby` is what you saw while inside the code and did not do, from what you
+already read plus one grep per item: the same defect or untidiness in sibling
+places (pattern, number of hits, two examples), a fix that belongs in another
+layer, a decision the ticket took silently. Leads, not work: size each as
+small (about N lines), a lane, or owner's decision. You were deeper in this
+code than the reviewer will be, and the orchestrator cannot ask you later.
 
 Then the project's own labels, if the orchestrator gave any, one per line.
 

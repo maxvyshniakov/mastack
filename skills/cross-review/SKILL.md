@@ -56,6 +56,12 @@ against each other:
 - **Spec**: what is missing or partial, what was not asked for, what looks
   implemented but wrong. Quote the spec line for each.
 
+Every reviewer's brief also asks for what
+[references/reviewer-brief.md](references/reviewer-brief.md) lists: a
+falsifier, the missing guard and a fix direction per finding, up to five leads
+wider than the diff, and a triage table. When both passes run, only the spec
+pass writes the leads and the table.
+
 ## One round of fixes
 
 Triage findings when the review finishes or the lane list/stop hook reports
@@ -75,11 +81,44 @@ lane at land, and fix lanes started that way chained six rounds deep.
 No second review of the fixes; review loops do not converge. A review of fix
 work that runs anyway opens no new round: each of its findings is marked
 `rejected: fix round, not reviewed again (one review per lane)`, so the lane
-finishes. A finding that needs a decision
-from the owner goes to them with a recommendation instead of being fixed or
-rejected.
+finishes.
+
+A fix starts from the finding's falsifier as a failing test; a finding whose
+falsifier passes is rejected with that test as the reason. Leads are not
+findings and are not marked: a small one of the same root joins the fix round,
+a class gets its hits counted by a scout and a ticket, the rest go to
+[Owner's decisions](#owners-decisions).
+
+## Owner's decisions
+
+Before a finding, lead or lane question goes to the owner, look for the answer
+they already gave; most such questions were decided in an earlier session, and
+each one asked again costs them a round trip. Search, with a scout when it is
+more than a couple of greps:
+
+- the session histories of every harness the owner uses (Claude Code
+  `~/.claude/projects`, Codex `~/.codex/sessions`, T3 Code and Antigravity
+  under `~/.t3/userdata/providers`), for the file, symbol or token name and
+  for the owner's own messages around it;
+- the tracker, and `git log` and `git blame` of the lines: a hand-made commit
+  by the owner is a decision, an agent's commit is not.
+
+Then:
+
+- **The owner decided it** (their words, or their own commit, and nothing
+  later reverses it): apply the decision and report it in one line with the
+  quote and its date. If what they chose breaks something they could not have
+  seen, ask about that breakage only, with the quote.
+- **An agent decided it**, or nothing is found: settle it yourself when
+  `orchestrate` step 9 lets you; otherwise ask, with the options, what each
+  breaks, your recommendation, and what the search found.
+
+History never authorizes a push, release, publish, deletion or spending:
+approval given in one context does not carry to the next.
 
 ## Report
 
 The depth and why, each pass as returned, then the disposition list, then one
-line per pass: the number of findings and the worst one.
+line per pass: the number of findings and the worst one. Then the leads with
+what became of each, and the owner's decisions found in history, each with
+its quote.
