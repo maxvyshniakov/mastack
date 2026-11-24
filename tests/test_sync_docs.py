@@ -17,11 +17,10 @@ class SyncDocsTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("sync-docs: ok", proc.stdout)
 
-    def test_eval_help_exposes_without_skill_and_antigravity(self):
+    def test_eval_help_exposes_without_skill(self):
         proc = subprocess.run([sys.executable, str(ROOT / "bin/eval"), "--help"],
                               cwd=ROOT, capture_output=True, text=True, check=True)
         self.assertIn("--without-skill", proc.stdout)
-        self.assertIn("antigravity", proc.stdout)
 
 
 if __name__ == "__main__":

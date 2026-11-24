@@ -4,8 +4,9 @@
     bin/quiet-cap [--max-chars 8000] -- <command...>
 
 When combined stdout+stderr stays within --max-chars, prints it verbatim.
-Otherwise writes the full output to a temp log file and prints head (40 lines),
-lines matching error/FAIL, tail (60 lines), and the log path, preserving exit code.
+Otherwise writes the full output to a temp log file and prints a strictly
+bounded summary (<= --max-chars plus the log footer) with head, error/FAIL
+lines, and tail, preserving the command's exit code.
 """
 from __future__ import annotations
 
@@ -16,23 +17,29 @@ import subprocess
 import sys
 import tempfile
 
-ERROR_RE = re.compile(r"(?i)\b(?:error|fail(?:ed|ure)?|traceback|exception|panic)\b")
+ERROR_RE = re.compile(r"(?i)(?:error|fail(?:ed|ure)?|traceback|exception|panic|assert)")
 
 
-def summarize(text: str, log_path: str, head_n: int = 40, tail_n: int = 60) -> str:
+def summarize(text: str, log_path: str, max_chars: int) -> str:
+    footer = f"\n... [capped at {max_chars} chars from {len(text)}; full output: {log_path}] ...\n"
+    budget = max(200, max_chars - len(footer))
     lines = text.splitlines()
-    if len(lines) <= head_n + tail_n:
-        return f"{text[:3000]}\n... [truncated {len(text)} chars; full output: {log_path}] ...\n{text[-3000:]}\n"
-    head = lines[:head_n]
-    tail = lines[-tail_n:]
-    middle = lines[head_n:-tail_n]
-    errors = [line for line in middle if ERROR_RE.search(line)][:30]
-    parts = [*head, f"... [{len(middle)} lines omitted; full output: {log_path}] ..."]
-    if errors:
-        parts.append("... [matching error/FAIL lines from omitted section] ...")
-        parts.extend(errors)
-    parts.extend(tail)
-    return "\n".join(parts) + "\n"
+    if len(lines) > 100:
+        head_text = "\n".join(l[:200] for l in lines[:40])
+        tail_text = "\n".join(l[:200] for l in lines[-60:])
+        errors = [line[:200] for line in lines[40:-60] if ERROR_RE.search(line)][:20]
+        err_block = ("\n... [matching error/FAIL lines] ...\n" + "\n".join(errors) + "\n") if errors else "\n...\n"
+        if len(err_block) > budget // 2:
+            err_block = err_block[:budget // 2] + "\n"
+        rem = max(0, budget - len(err_block))
+        half = rem // 2
+        candidate = head_text[:half] + err_block + tail_text[-half:]
+    elif len(text) > budget:
+        half = budget // 2
+        candidate = text[:half] + "\n...\n" + text[-half:]
+    else:
+        candidate = text
+    return candidate + footer
 
 
 def main() -> int:
@@ -43,15 +50,20 @@ def main() -> int:
     cmd = args.cmd[1:] if args.cmd and args.cmd[0] == "--" else args.cmd
     if not cmd:
         parser.error("missing command after --")
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    out = proc.stdout or ""
+    try:
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    except FileNotFoundError:
+        sys.stderr.write(f"quiet-cap: {cmd[0]}: command not found\n")
+        return 127
+    raw = proc.stdout or b""
+    out = raw.decode("utf-8", "replace")
     if len(out) <= args.max_chars:
         sys.stdout.write(out)
     else:
         fd, log_path = tempfile.mkstemp(prefix=f"mastack-out-{os.getpid()}-", suffix=".log")
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(out)
-        sys.stdout.write(summarize(out, log_path))
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(raw)
+        sys.stdout.write(summarize(out, log_path, args.max_chars))
     return proc.returncode
 
 

@@ -13,8 +13,8 @@
   `owner-turns.jsonl` decision index (referenced from `cross-review`).
 - `bin/lane-receipt` and `bin/quiet-cap`: machine-generated mechanical lane
   report fields and >8K Bash output capping with temp log path.
-- `bin/sync-docs --check` and `bin/eval --agent antigravity` (+ `CODEX_HOME`
-  isolation for Codex eval runs).
+- `bin/sync-docs --check`: verifies `README.md` and `models.md` tables against
+  `skills/` and `models.toml`.
 - Repository simplified to `main`-only with annotated release tags (removed `dev`
   branch, `bin/promote`, and `.github/workflows/promote.yml`); added
   `docs/agents/issue-tracker.md`.

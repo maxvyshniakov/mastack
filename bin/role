@@ -44,8 +44,9 @@ def main() -> int:
     if args.cooldown:
         fam, dur = args.cooldown
         try:
-            until = model_roles.set_cooldown(fam, dur)
-        except ValueError as error:
+            table = model_roles.load()
+            until = model_roles.set_cooldown(fam, dur, table=table)
+        except (ValueError, model_roles.TableError) as error:
             print(f"role: {error}", file=sys.stderr)
             return 2
         if until is None:

@@ -179,8 +179,12 @@ def load_cooldowns(now: float | None = None) -> dict[str, float]:
             if isinstance(until, (int, float)) and float(until) > now}
 
 
-def set_cooldown(family: str, duration: str, now: float | None = None) -> float | None:
+def set_cooldown(family: str, duration: str, now: float | None = None, table: dict | None = None) -> float | None:
     now = time.time() if now is None else now
+    if table is not None:
+        known = {m.get("family") for m in table.get("models", {}).values() if isinstance(m, dict)}
+        if family not in known:
+            raise ValueError(f"unknown family {family!r} (known: {', '.join(sorted(k for k in known if k))})")
     seconds = parse_duration(duration)
     path = hook_io.state_dir() / HEALTH_FILE
     data = hook_io.read_json(str(path))
@@ -192,7 +196,9 @@ def set_cooldown(family: str, duration: str, now: float | None = None) -> float 
         until = now + seconds
         cooldowns[family] = until
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"cooldowns": cooldowns}, indent=2) + "\n")
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"cooldowns": cooldowns}, indent=2) + "\n")
+    os.replace(tmp, path)
     return until
 
 
@@ -256,13 +262,21 @@ def caution(skipped: list) -> str | None:
     return None
 
 
+T3_DRIVER = {"claude": "claudeAgent", "codex": "codex", "antigravity": "antigravity"}
+T3_OPTION = {"claude": "effort", "codex": "reasoningEffort", "antigravity": "thought_level"}
+
+
 def launch_payload(choice: Choice, harness: str) -> dict | None:
     if harness == "t3" or (harness == "auto" and choice.cli == "antigravity"):
-        opts = {choice.option: choice.effort} if choice.option else {}
-        return {"tool": "delegate_task", "target": {"model": choice.id, "options": opts}}
+        opt = T3_OPTION.get(choice.cli, choice.option)
+        opts = {opt: choice.effort} if opt else {}
+        target: dict = {"model": choice.id, "options": opts}
+        if choice.cli in T3_DRIVER:
+            target["driverKind"] = T3_DRIVER[choice.cli]
+        return {"tool": "delegate_task", "target": target}
     if harness == "claude" and choice.cli == "claude":
-        return {"tool": "Agent", "model": choice.id, "effort": choice.effort}
-    if harness == "codex" and "run" in choice.argv:
+        return {"tool": "Agent", "model": choice.model, "effort": choice.effort}
+    if harness in ("claude", "codex") and "run" in choice.argv:
         return {"tool": "exec", "argv": choice.argv["run"]}
     return None
 

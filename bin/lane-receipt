@@ -17,9 +17,22 @@ def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], text=True, stderr=subprocess.DEVNULL).strip()
 
 
+def default_base() -> str:
+    for ref in ("origin/main", "main"):
+        try:
+            return git("merge-base", ref, "HEAD")
+        except subprocess.CalledProcessError:
+            continue
+    return "HEAD~1"
+
+
 def matches_any(path: str, globs: list[str]) -> bool:
     for pattern in globs:
-        if fnmatch.fnmatch(path, pattern) or (pattern.endswith("/**") and path.startswith(pattern[:-2])):
+        if fnmatch.fnmatch(path, pattern):
+            return True
+        if pattern.endswith("/**") and path.startswith(pattern[:-2]):
+            return True
+        if pattern.endswith("/") and path.startswith(pattern):
             return True
     return False
 
@@ -30,21 +43,36 @@ def is_test_file(path: str) -> bool:
             or path.startswith("tests/"))
 
 
+def diff_paths(base: str, extra: list[str] = ()) -> list[str]:
+    out = subprocess.check_output(
+        ["git", "-c", "core.quotePath=false", "diff", "-z", "--name-only", *extra, f"{base}...HEAD"],
+        stderr=subprocess.PIPE,
+    )
+    return [p.decode("utf-8", "replace") for p in out.split(b"\0") if p]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--base", default="HEAD~1", help="base ref for diffing changed files (default: HEAD~1)")
+    parser.add_argument("--base", help="base ref for diffing changed files (default: merge-base with origin/main or main)")
     parser.add_argument("--claims", nargs="*", default=[], help="claimed path globs")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    branch = git("rev-parse", "--abbrev-ref", "HEAD")
-    sha = git("rev-parse", "--short=7", "HEAD")
-    worktree = os.path.realpath(git("rev-parse", "--show-toplevel"))
     try:
-        changed = [p for p in git("diff", "--name-only", f"{args.base}...HEAD").splitlines() if p]
-        added = [p for p in git("diff", "--name-only", "--diff-filter=A", f"{args.base}...HEAD").splitlines() if p]
+        branch = git("rev-parse", "--abbrev-ref", "HEAD")
+        sha = git("rev-parse", "--short=7", "HEAD")
+        worktree = os.path.realpath(git("rev-parse", "--show-toplevel"))
     except subprocess.CalledProcessError:
-        changed, added = [], []
+        sys.stderr.write("lane-receipt: not inside a git worktree\n")
+        return 2
+
+    base = args.base or default_base()
+    try:
+        changed = diff_paths(base)
+        added = diff_paths(base, ["--diff-filter=A"])
+    except subprocess.CalledProcessError as error:
+        sys.stderr.write(f"lane-receipt: cannot diff against {base!r}: {error.stderr.decode('utf-8', 'replace').strip()}\n")
+        return 2
 
     outside = [p for p in changed if args.claims and not matches_any(p, args.claims)]
     new_tests = [p for p in added if is_test_file(p)]
@@ -52,6 +80,7 @@ def main() -> int:
     data = {
         "branch": branch,
         "sha": sha,
+        "base": base,
         "worktree": worktree,
         "changed": changed,
         "outside_claims": outside,

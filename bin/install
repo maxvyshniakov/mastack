@@ -52,14 +52,16 @@ while (($#)); do
   esac
   shift
 done
+live_root=$root
 if [[ -n $pin ]]; then
-  git -C "$root" rev-parse --verify -q "$pin^{commit}" >/dev/null || { echo "install: unknown ref $pin" >&2; exit 2; }
+  git -C "$live_root" rev-parse --verify -q "$pin^{commit}" >/dev/null || { echo "install: unknown ref $pin" >&2; exit 2; }
   if ((!dry)); then
     mkdir -p "$(dirname "$pin_dir")"
     if [[ -e $pin_dir/.git ]]; then
-      git -C "$pin_dir" checkout --detach -q "$pin"
+      git -C "$pin_dir" checkout --detach --force -q "$pin"
+      git -C "$pin_dir" clean -fdq
     else
-      git -C "$root" worktree add --detach -q "$pin_dir" "$pin"
+      git -C "$live_root" worktree add --detach -q "$pin_dir" "$pin"
     fi
     root=$(cd "$pin_dir" && pwd -P)
   fi
@@ -139,7 +141,16 @@ if ((!uninstall)); then
 fi
 
 run() { ((dry)) || "$@"; }
-ours() { [[ -L $1 && $(readlink "$1") == "$root/skills/"* ]]; }
+pin_real=''
+[[ -d $pin_dir ]] && pin_real=$(cd "$pin_dir" && pwd -P)
+ours() {
+  [[ -L $1 ]] || return 1
+  local target_link
+  target_link=$(readlink "$1")
+  [[ $target_link == "$root/skills/"* || $target_link == "$live_root/skills/"* ]] && return 0
+  [[ -n $pin_real && $target_link == "$pin_real/skills/"* ]] && return 0
+  return 1
+}
 
 ((dry)) && echo "dry run: nothing below is changed"
 conflicts=0 held=''
@@ -165,7 +176,7 @@ for target in "${targets[@]}"; do
     elif has "$shadowed" "$name" && ((!force)); then
       echo "  hold   $name: shadows a project skill"
       has "$held" "$name" || held+=,$name
-    elif [[ -L $dest ]] && ((force)); then
+    elif [[ -L $dest ]] && { ((force)) || ours "$dest"; }; then
       echo "  relink $name (was $(readlink "$dest"))"
       run ln -sfn "$dir" "$dest"
     elif [[ -e $dest || -L $dest ]]; then

@@ -267,13 +267,22 @@ check "uninstall removes the lifecycle dispatchers" test "$(life SubagentStop)" 
 check "uninstall keeps the other SubagentStop hook" py "s['hooks']['SubagentStop'][0]['hooks'][0]['command'].endswith('lane-stop.py')"
 mv "$scratch/hooks.json.plain" "$MASTACK_CONFIG/hooks.json"
 
-# Pinned install (--pin / --update) checks out a dedicated tag/commit worktree.
+# Pinned install (--pin / --update) checks out a dedicated tag/commit worktree in a scratch repo.
 fresh
+pin_repo=$scratch/pin-repo
 pin_dir=$scratch/pinned-install
-install --pin HEAD --pin-dir "$pin_dir" --only rate
+git clone -q "$root" "$pin_repo"
+cp "$root/bin/install" "$pin_repo/bin/install"
+git -C "$pin_repo" -c user.name=t -c user.email=t@example.com commit -qm "test pin" bin/install || true
+"$pin_repo/bin/install" --target "$t" --only rate >/dev/null 2>&1
+"$pin_repo/bin/install" --target "$t" --pin HEAD --pin-dir "$pin_dir" --only rate > "$scratch/out" 2>&1
+check "--pin migrates existing live symlink without conflict" test "$(readlink "$t/rate")" = "$pin_dir/skills/rate"
 check "--pin creates a detached worktree at --pin-dir" test -e "$pin_dir/.git"
-check "--pin symlinks skills into --pin-dir instead of the live checkout" test "$(readlink "$t/rate")" = "$pin_dir/skills/rate"
-git -C "$root" worktree remove --force "$pin_dir" 2>/dev/null || rm -rf "$pin_dir"
+echo "dirty" >> "$pin_dir/README.md"
+"$pin_repo/bin/install" --target "$t" --update HEAD --pin-dir "$pin_dir" --only rate >/dev/null 2>&1
+check "--update resets dirty edits in --pin-dir" test -z "$(git -C "$pin_dir" status --porcelain)"
+"$pin_repo/bin/install" --target "$t" --pin-dir "$pin_dir" --uninstall --only rate >/dev/null 2>&1
+check "--uninstall removes pinned skill link" absent rate
 
 if ((failures)); then
   echo "install_test: $failures failure(s)" >&2

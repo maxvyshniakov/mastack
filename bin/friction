@@ -366,7 +366,7 @@ class Scanner:
     def t3(self, path: Path) -> None:
         session = path.parent.parent.parent.name
         ctx = self.context(path, session)
-        cwd = None
+        cwd = ctx.get("cwd")
         for line in self.lines(path):
             try:
                 item = json.loads(line)
@@ -379,10 +379,38 @@ class Scanner:
             content = item.get("content") or ""
             if not isinstance(content, str):
                 continue
+            if not cwd:
+                m_cwd = re.search(r"Command Working Directory:\s*(\S+)", content)
+                if m_cwd:
+                    cwd = m_cwd.group(1)
+                    ctx["cwd"] = cwd
             if kind == "USER_INPUT" and item.get("source") == "USER_EXPLICIT":
-                self.human(ctx, content, cwd, ts)
-            elif kind == "PLANNER_RESPONSE":
+                text = unwrap_t3_user(content)
+                if text:
+                    self.human(ctx, text, cwd, ts)
+            elif kind == "PLANNER_RESPONSE" and content:
                 self.agent_text(ctx, content, cwd, ts)
+
+
+T3_SKIP_PREFIXES = ("[T3 Code: the agent in T3 thread", "Delegated task node:delegated-task:")
+
+
+def unwrap_t3_user(raw: str) -> str | None:
+    """Extract the owner's actual prompt from a T3/Antigravity USER_INPUT wrapper."""
+    text = raw
+    m = re.search(r"<user_request>(.*?)</user_request>", text, re.S)
+    if m:
+        text = m.group(1)
+    else:
+        m = re.search(r"<USER_REQUEST>(.*?)</USER_REQUEST>", text, re.S)
+        if m:
+            text = m.group(1)
+    text = re.sub(r"<t3_code_instructions>.*?</t3_code_instructions>", "", text, flags=re.S)
+    text = re.sub(r"<runtime_info>.*?</runtime_info>", "", text, flags=re.S)
+    text = text.strip()
+    if not text or any(text.startswith(p) for p in T3_SKIP_PREFIXES):
+        return None
+    return text
 
 
 def patches(body: str):
@@ -411,8 +439,20 @@ def append_owner_turns(turns: list[dict]) -> None:
     import hook_io
     path = hook_io.state_dir() / "owner-turns.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
+    seen: set[tuple[str, str, str]] = set()
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                row = json.loads(line)
+                seen.add((str(row.get("ts") or ""), str(row.get("session") or ""), str(row.get("text") or "")[:120]))
+            except ValueError:
+                continue
     with open(path, "a", encoding="utf-8") as handle:
         for item in turns:
+            key = (str(item.get("ts") or ""), str(item.get("session") or ""), str(item.get("text") or "")[:120])
+            if key in seen:
+                continue
+            seen.add(key)
             handle.write(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 

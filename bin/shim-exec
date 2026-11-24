@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import shlex
-import shutil
 import sys
 from pathlib import Path
 
@@ -17,12 +16,27 @@ sys.path.insert(0, str(ROOT / "hooks"))
 
 import bash_guard  # noqa: E402
 
+SHIM_MARKER = "# mastack-shim"
+
+
+def is_mastack_shim(path: str) -> bool:
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(256)
+        return SHIM_MARKER.encode() in head
+    except OSError:
+        return False
+
 
 def find_real(program: str, shim_dir: str) -> str | None:
     shim_real = os.path.realpath(shim_dir)
-    entries = [p for p in os.environ.get("PATH", "").split(os.pathsep)
-               if p and os.path.realpath(p) != shim_real]
-    return shutil.which(program, path=os.pathsep.join(entries))
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry or os.path.realpath(entry) == shim_real:
+            continue
+        candidate = os.path.join(entry, program)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK) and not is_mastack_shim(candidate):
+            return candidate
+    return None
 
 
 def main() -> int:
@@ -37,7 +51,14 @@ def main() -> int:
         "cwd": os.getcwd(),
         "tool_input": {"command": command},
     }
-    decision = bash_guard.decide(payload)
+    # A shim cannot tell whether MASTACK_RELEASE_OK came from the owner's shell or from
+    # an agent-typed `MASTACK_RELEASE_OK=... <cmd>` prefix, so fail closed on it.
+    saved_release_ok = os.environ.pop("MASTACK_RELEASE_OK", None)
+    try:
+        decision = bash_guard.decide(payload)
+    finally:
+        if saved_release_ok is not None:
+            os.environ["MASTACK_RELEASE_OK"] = saved_release_ok
     if decision is not None:
         kind = decision.decision[0] if hasattr(decision, "decision") and decision.decision else decision[0]
         reason = decision.decision[1] if hasattr(decision, "decision") and decision.decision else decision[1]

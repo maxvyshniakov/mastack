@@ -164,10 +164,16 @@ class ResolveTests(RoleCase):
         t3 = self.answer("scout", "--harness", "t3", used=50)
         self.assertEqual(t3["launch"]["tool"], "delegate_task")
         self.assertEqual(t3["launch"]["target"]["model"], model_id("sol"))
+        self.assertEqual(t3["launch"]["target"]["driverKind"], "codex")
+        self.assertIn("reasoningEffort", t3["launch"]["target"]["options"])
 
         claude = self.answer("review", "--implementer-family", "anthropic", "--harness", "claude", used=100)
         self.assertEqual(claude["model"], "opus")
+        self.assertEqual(claude["launch"]["model"], "opus")
         self.assertTrue(any("requires delegate_task" in s["reason"] for s in claude["skipped"]))
+
+        bad = self.role("--cooldown", "antropic", "2h")
+        self.assertEqual(bad.returncode, 2)
 
         proc = self.role("--cooldown", "anthropic", "2h")
         self.assertEqual(proc.returncode, 0, proc.stderr)
