@@ -26,6 +26,10 @@ scenario (inputs → wrong result), how it was verified, and:
   ("about N lines" or "a lane"), and whether consumers will see the fix. No
   fix code: the reviewer patches the symptom where it saw it, and the
   implementer anchors on the patch.
+- **Parameterized browser checks.** For every loop over states (`for (const
+  side of ...)` / `args=...`), verify the script asserts the requested state
+  actually took effect in the DOM (`data-side`, `dir`, `data-variant`, etc.)
+  rather than trusting URL `args=` (which Storybook can silently drop).
 
 Then what was examined and found sound, and what was not examined.
 

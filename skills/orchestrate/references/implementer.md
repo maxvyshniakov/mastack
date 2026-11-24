@@ -40,13 +40,17 @@ help or status call is a turn that rereads your whole context.
 1. Merge the integration branch tip into your lane once.
 2. Commit in the repository's style, with the reason in the body. Leave the
    worktree clean.
-3. The brief says whose the lane's full check is. `Check: mine`: the
+3. Run the repo's fast test-hygiene check (`bun run check:hygiene` or
+   `package-kit test-hygiene`, when present) before committing new or edited
+   tests. Assert observable behavior/attributes rather than class names, and
+   never weaken a test (e.g., to `calls.length > 0`) just to satisfy hygiene.
+4. The brief says whose the lane's full check is. `Check: mine`: the
    orchestrator runs it beside the review once you hand back, so stop at
    green focused checks. `Check: yours`: run the brief's check command once on
    the committed tree. A red check: fix and verify with focused checks first,
    and `--rerun` only after they pass. Investigate a timeout alone before
    blaming load.
-4. Stop servers and background processes you started, including every loop
+5. Stop servers and background processes you started, including every loop
    that waits on a command you stopped. Report only once `ps`
    shows nothing of yours running in your worktree or scratch. A wait loop on
    a stopped command never ends: one lane left 53, which held its worktree and

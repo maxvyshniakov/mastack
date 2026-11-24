@@ -77,7 +77,9 @@ judgment or design proposals to `scripts/role design`.
    report's `Least sure` places to inspect — never the lane report or
    conclusions. Triage when both finish and send failures + findings to the same
    implementer in one message. It fixes, the final check runs once, and you
-   land. Nobody reviews the fix. Wait for completion notices, never poll
+   land. Nobody reviews the fix. When you fix small review findings yourself,
+   run targeted local `lint` + the touched unit test file (<10s) before
+   launching `lanefather check`. Wait for completion notices, never poll
    `lanefather list`.
 6. **Land** when the check is green and every finding is marked fixed or
    rejected:
