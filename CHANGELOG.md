@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- `bin/install`: added `--pin <ref>` / `--update <ref>` (`--pin-dir`) to install
+  from a dedicated tag-pinned worktree instead of the live working checkout.
+- `bin/role`: added `--harness <auto|claude|codex|t3>` (ready-to-use launch
+  output and harness filtering) and `--cooldown <family> <duration>` circuit
+  breaker stored in `provider-health.json`.
+- `bin/install-shims` and `bin/shim-exec`: cross-harness PATH shims so
+  `bash_guard` protects Codex and Antigravity / T3 Code sessions.
+- `bin/friction scan`: added T3 / Antigravity `transcript.jsonl` scanning and
+  `owner-turns.jsonl` decision index (referenced from `cross-review`).
+- `bin/lane-receipt` and `bin/quiet-cap`: machine-generated mechanical lane
+  report fields and >8K Bash output capping with temp log path.
+- `bin/sync-docs --check` and `bin/eval --agent antigravity` (+ `CODEX_HOME`
+  isolation for Codex eval runs).
 - Repository simplified to `main`-only with annotated release tags (removed `dev`
   branch, `bin/promote`, and `.github/workflows/promote.yml`); added
   `docs/agents/issue-tracker.md`.

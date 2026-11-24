@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Install cross-harness PATH shims so bash_guard protects Codex and Antigravity / T3 Code.
+#
+#   bin/install-shims [--dir DIR] [--uninstall]
+#
+# Default DIR: ~/.local/share/mastack/shims ($XDG_DATA_HOME/mastack/shims).
+# Prepend DIR to PATH in agent sessions so git, gh, npm, bun, pnpm, codex, kill,
+# and pkill run through hooks/bash_guard.py before exec'ing the real binary.
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")/.." && pwd -P)
+dir=${XDG_DATA_HOME:-$HOME/.local/share}/mastack/shims
+uninstall=0
+PROGRAMS=(git gh npm bun pnpm codex kill pkill)
+
+while (($#)); do
+  case $1 in
+    --dir) dir=${2:?--dir needs a directory}; shift ;;
+    --uninstall) uninstall=1 ;;
+    -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "install-shims: unknown argument: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+if ((uninstall)); then
+  for prog in "${PROGRAMS[@]}"; do
+    [[ -f $dir/$prog ]] && rm -f "$dir/$prog"
+  done
+  echo "install-shims: removed shims from $dir"
+  exit 0
+fi
+
+mkdir -p "$dir"
+for prog in "${PROGRAMS[@]}"; do
+  cat > "$dir/$prog" <<SH
+#!/usr/bin/env bash
+exec python3 "$root/bin/shim-exec" "$dir" "$prog" "\$@"
+SH
+  chmod +x "$dir/$prog"
+done
+echo "install-shims: installed ${#PROGRAMS[@]} shims in $dir"

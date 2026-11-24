@@ -267,6 +267,14 @@ check "uninstall removes the lifecycle dispatchers" test "$(life SubagentStop)" 
 check "uninstall keeps the other SubagentStop hook" py "s['hooks']['SubagentStop'][0]['hooks'][0]['command'].endswith('lane-stop.py')"
 mv "$scratch/hooks.json.plain" "$MASTACK_CONFIG/hooks.json"
 
+# Pinned install (--pin / --update) checks out a dedicated tag/commit worktree.
+fresh
+pin_dir=$scratch/pinned-install
+install --pin HEAD --pin-dir "$pin_dir" --only rate
+check "--pin creates a detached worktree at --pin-dir" test -e "$pin_dir/.git"
+check "--pin symlinks skills into --pin-dir instead of the live checkout" test "$(readlink "$t/rate")" = "$pin_dir/skills/rate"
+git -C "$root" worktree remove --force "$pin_dir" 2>/dev/null || rm -rf "$pin_dir"
+
 if ((failures)); then
   echo "install_test: $failures failure(s)" >&2
   exit 1

@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Emit verified mechanical fields of an implementer lane report from git state.
+
+    bin/lane-receipt [--base REF] [--claims GLOB...] [--json]
+"""
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import json
+import os
+import subprocess
+import sys
+
+
+def git(*args: str) -> str:
+    return subprocess.check_output(["git", *args], text=True, stderr=subprocess.DEVNULL).strip()
+
+
+def matches_any(path: str, globs: list[str]) -> bool:
+    for pattern in globs:
+        if fnmatch.fnmatch(path, pattern) or (pattern.endswith("/**") and path.startswith(pattern[:-2])):
+            return True
+    return False
+
+
+def is_test_file(path: str) -> bool:
+    name = os.path.basename(path)
+    return (name.startswith("test_") or "_test." in name or ".test." in name or ".spec." in name
+            or path.startswith("tests/"))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--base", default="HEAD~1", help="base ref for diffing changed files (default: HEAD~1)")
+    parser.add_argument("--claims", nargs="*", default=[], help="claimed path globs")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    branch = git("rev-parse", "--abbrev-ref", "HEAD")
+    sha = git("rev-parse", "--short=7", "HEAD")
+    worktree = os.path.realpath(git("rev-parse", "--show-toplevel"))
+    try:
+        changed = [p for p in git("diff", "--name-only", f"{args.base}...HEAD").splitlines() if p]
+        added = [p for p in git("diff", "--name-only", "--diff-filter=A", f"{args.base}...HEAD").splitlines() if p]
+    except subprocess.CalledProcessError:
+        changed, added = [], []
+
+    outside = [p for p in changed if args.claims and not matches_any(p, args.claims)]
+    new_tests = [p for p in added if is_test_file(p)]
+
+    data = {
+        "branch": branch,
+        "sha": sha,
+        "worktree": worktree,
+        "changed": changed,
+        "outside_claims": outside,
+        "new_tests": new_tests,
+    }
+    if args.json:
+        print(json.dumps(data, indent=2))
+    else:
+        print(f"Branch: {branch}")
+        print(f"SHA: {sha}")
+        print(f"Worktree: {worktree}")
+        print(f"Outside claims: {', '.join(outside) if outside else 'none'}")
+        print(f"New tests: {', '.join(new_tests) if new_tests else 'none'}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

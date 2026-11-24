@@ -160,6 +160,25 @@ class ResolveTests(RoleCase):
         self.assertNotIn("Traceback", proc.stderr)
         self.assertIn("codex_weekly unreadable", proc.stdout)
 
+    def test_harness_output_and_provider_cooldown(self):
+        t3 = self.answer("scout", "--harness", "t3", used=50)
+        self.assertEqual(t3["launch"]["tool"], "delegate_task")
+        self.assertEqual(t3["launch"]["target"]["model"], model_id("sol"))
+
+        claude = self.answer("review", "--implementer-family", "anthropic", "--harness", "claude", used=100)
+        self.assertEqual(claude["model"], "opus")
+        self.assertTrue(any("requires delegate_task" in s["reason"] for s in claude["skipped"]))
+
+        proc = self.role("--cooldown", "anthropic", "2h")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        after = self.answer("implement", used=50)
+        self.assertEqual(after["model"], "sol")
+        self.assertTrue(any("in cooldown" in s["reason"] for s in after["skipped"]))
+
+        proc = self.role("--cooldown", "anthropic", "0")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.answer("implement", used=50)["model"], "opus")
+
     def test_only_families_skips_the_other_family(self):
         path = self.table(TABLE_HEAD + '[roles.visual]\nonly_families = ["anthropic"]\n'
                           'choices = [{ model = "sol", effort = "high" }, { model = "opus", effort = "high" }]\n')

@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Cross-harness PATH shim dispatcher: runs hooks/bash_guard.decide() before exec'ing the real binary.
+
+Installed via `bin/install-shims`. Each shim invokes:
+    exec python3 <mastack>/bin/shim-exec <shim-dir> <program> "$@"
+"""
+from __future__ import annotations
+
+import os
+import shlex
+import shutil
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "hooks"))
+
+import bash_guard  # noqa: E402
+
+
+def find_real(program: str, shim_dir: str) -> str | None:
+    shim_real = os.path.realpath(shim_dir)
+    entries = [p for p in os.environ.get("PATH", "").split(os.pathsep)
+               if p and os.path.realpath(p) != shim_real]
+    return shutil.which(program, path=os.pathsep.join(entries))
+
+
+def main() -> int:
+    if len(sys.argv) < 3:
+        sys.stderr.write("shim-exec: usage: shim-exec <shim-dir> <program> [args...]\n")
+        return 2
+    shim_dir, program, args = sys.argv[1], sys.argv[2], sys.argv[3:]
+    command = shlex.join([program, *args])
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "cwd": os.getcwd(),
+        "tool_input": {"command": command},
+    }
+    decision = bash_guard.decide(payload)
+    if decision is not None:
+        kind = decision.decision[0] if hasattr(decision, "decision") and decision.decision else decision[0]
+        reason = decision.decision[1] if hasattr(decision, "decision") and decision.decision else decision[1]
+        if kind in ("deny", "ask"):
+            sys.stderr.write(f"mastack shim ({kind}): {reason}\n")
+            return 126
+    real = find_real(program, shim_dir)
+    if not real:
+        sys.stderr.write(f"shim-exec: {program}: command not found\n")
+        return 127
+    os.execv(real, [program, *args])
+    return 127
+
+
+if __name__ == "__main__":
+    sys.exit(main())

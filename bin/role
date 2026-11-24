@@ -30,24 +30,44 @@ import model_roles  # noqa: E402
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("role")
+    parser.add_argument("role", nargs="?")
     parser.add_argument("--implementer-family", metavar="F", help="family of the implementer, e.g. anthropic")
     parser.add_argument("--family", metavar="F", help="limit selection to one family, e.g. google")
     parser.add_argument("--exclude-family", metavar="F", action="append", default=[],
                         help="skip choices from family F (repeatable)")
+    parser.add_argument("--harness", choices=("auto", "claude", "codex", "t3"), default="auto",
+                        help="target harness for launch output (filters incompatible choices)")
+    parser.add_argument("--cooldown", nargs=2, metavar=("FAMILY", "DURATION"),
+                        help="mark FAMILY unavailable for DURATION (e.g. 2h, 30m, 0 to clear)")
     parser.add_argument("--json", action="store_true", help="print the answer as JSON")
     args = parser.parse_args()
+    if args.cooldown:
+        fam, dur = args.cooldown
+        try:
+            until = model_roles.set_cooldown(fam, dur)
+        except ValueError as error:
+            print(f"role: {error}", file=sys.stderr)
+            return 2
+        if until is None:
+            print(f"cooldown cleared: {fam}")
+        else:
+            print(f"cooldown set: {fam} until {int(until)}")
+        if not args.role:
+            return 0
+    if not args.role:
+        parser.error("the following arguments are required: role")
     try:
         table = model_roles.load()
         choice, skipped, quotas = model_roles.resolve(table, args.role, args.implementer_family,
-                                                      family=args.family, exclude_families=args.exclude_family)
+                                                      family=args.family, exclude_families=args.exclude_family,
+                                                      harness=args.harness)
     except model_roles.TableError as error:
         print(f"role: {error}", file=sys.stderr)
         return 2
     if args.json:
-        print(json.dumps(model_roles.as_json(args.role, choice, skipped, quotas), indent=2))
+        print(json.dumps(model_roles.as_json(args.role, choice, skipped, quotas, harness=args.harness), indent=2))
     else:
-        print(model_roles.describe(args.role, choice, skipped))
+        print(model_roles.describe(args.role, choice, skipped, harness=args.harness))
     return 0 if choice else 1
 
 

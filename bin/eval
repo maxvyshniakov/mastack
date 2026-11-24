@@ -73,6 +73,8 @@ def agent_command(agent, model, prompt, repo):
         return ["claude", "-p", prompt, "--model", model, "--output-format", "stream-json", "--verbose",
                 "--permission-mode", "auto", "--add-dir", str(repo.parent), "--setting-sources", "project,local",
                 "--strict-mcp-config", "--allowedTools", *CLAUDE_TOOLS]
+    if agent == "antigravity":
+        return ["agy", "run", "--model", model, "--cwd", str(repo), prompt]
     return ["codex", "exec", "-C", str(repo), "-s", "workspace-write", "-c", 'approval_policy="never"',
             "-c", f'sandbox_workspace_write.writable_roots=["{repo.parent}"]', "-c", f'model="{model}"',
             "--output-last-message", str(repo.parent / "out.txt"), prompt]
@@ -107,6 +109,10 @@ def run_one(skill, path, agent, model, keep, without_skill=False):
         exclude.write(".claude/\n.agents/\n")
 
     agent_env = {k: v for k, v in env.items() if k not in ("EVAL", "MASTACK")}
+    if agent == "codex":
+        codex_home = scratch / "codex-home"
+        codex_home.mkdir(exist_ok=True)
+        agent_env["CODEX_HOME"] = str(codex_home)
     output, status, denials = "", 0, []
     if agent != "none":
         try:
@@ -149,8 +155,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("skill", nargs="?")
     parser.add_argument("scenarios", nargs="*")
-    parser.add_argument("--agent", choices=("claude", "codex", "none"), default="claude")
-    parser.add_argument("--model", help="model id or a models.toml alias (default: opus for claude, sol for codex)")
+    parser.add_argument("--agent", choices=("claude", "codex", "antigravity", "none"), default="claude")
+    parser.add_argument("--model", help="model id or a models.toml alias (default: opus for claude, sol for codex, neon for antigravity)")
     parser.add_argument("--keep", action="store_true", help="keep scratch directories of passing scenarios")
     parser.add_argument("--without-skill", action="store_true",
                         help="do not link the target skill (checks whether the model passes without it)")
@@ -167,9 +173,11 @@ def main():
     missing = [p for p in paths if not p.is_file()]
     if not paths or missing:
         sys.exit(f"eval: no scenario {', '.join(map(str, missing)) or 'in ' + str(EVALS / args.skill)}")
-    if args.agent != "none" and not shutil.which(args.agent):
-        sys.exit(f"eval: {args.agent} not on PATH")
-    model = "-" if args.agent == "none" else model_id(args.model or ("opus" if args.agent == "claude" else "sol"))
+    binary = "agy" if args.agent == "antigravity" else args.agent
+    if args.agent != "none" and not shutil.which(binary):
+        sys.exit(f"eval: {binary} not on PATH")
+    default_alias = {"claude": "opus", "codex": "sol", "antigravity": "neon"}.get(args.agent, "opus")
+    model = "-" if args.agent == "none" else model_id(args.model or default_alias)
 
     failed = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:

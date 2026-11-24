@@ -3,9 +3,12 @@
 # directories that Claude Code and Codex read, and register the Bash hook.
 #
 #   bin/install [--dry-run] [--force] [--uninstall] [--only a,b] [--skip a,b]
-#               [--target DIR]... [--project DIR]... [--settings FILE]
+#               [--pin REF] [--pin-dir DIR] [--target DIR]... [--project DIR]... [--settings FILE]
 #
 # Without --target it installs into ~/.claude/skills and ~/.agents/skills.
+# --pin REF (alias --update REF) checks out REF into a dedicated worktree
+# (--pin-dir, default ~/.local/share/mastack/installed) and links skills and
+# hooks there instead of the live working checkout.
 # --only and --skip pick skills; --uninstall removes only the picked ones.
 # The name `hooks` picks the Bash hook (hooks/bash_guard.py) in the Claude Code
 # settings, ~/.claude/settings.json or --settings FILE ($MASTACK_CLAUDE_SETTINGS):
@@ -27,7 +30,8 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd -P)
 config=${MASTACK_CONFIG:-$HOME/.config/mastack}
-dry=0 force=0 uninstall=0 only='' skip=''
+dry=0 force=0 uninstall=0 only='' skip='' pin=''
+pin_dir=${MASTACK_PIN_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mastack/installed}
 settings=${MASTACK_CLAUDE_SETTINGS:-$HOME/.claude/settings.json}
 targets=() projects=()
 
@@ -38,14 +42,29 @@ while (($#)); do
     --uninstall) uninstall=1 ;;
     --only) only=${2:?--only needs a list}; shift ;;
     --skip) skip=${2:?--skip needs a list}; shift ;;
+    --pin|--update) pin=${2:?--pin needs a git ref or tag}; shift ;;
+    --pin-dir) pin_dir=${2:?--pin-dir needs a directory}; shift ;;
     --target) targets+=("${2:?--target needs a directory}"); shift ;;
     --project) projects+=("${2:?--project needs a directory}"); shift ;;
     --settings) settings=${2:?--settings needs a file}; shift ;;
-    -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install: unknown argument: $1" >&2; exit 2 ;;
   esac
   shift
 done
+if [[ -n $pin ]]; then
+  git -C "$root" rev-parse --verify -q "$pin^{commit}" >/dev/null || { echo "install: unknown ref $pin" >&2; exit 2; }
+  if ((!dry)); then
+    mkdir -p "$(dirname "$pin_dir")"
+    if [[ -e $pin_dir/.git ]]; then
+      git -C "$pin_dir" checkout --detach -q "$pin"
+    else
+      git -C "$root" worktree add --detach -q "$pin_dir" "$pin"
+    fi
+    root=$(cd "$pin_dir" && pwd -P)
+  fi
+  export MASTACK_HOOKS_FROM_WORKTREE=1
+fi
 ((${#targets[@]})) || targets=("$HOME/.claude/skills" "$HOME/.agents/skills")
 
 # Comma lists: "has LIST NAME" is true when NAME is in LIST.

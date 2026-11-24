@@ -153,6 +153,7 @@ class Scanner:
         self.config, self.state, self.known, self.dry_run, self.since = config, state, known, dry_run, since
         self.vocabulary = Vocabulary(config)
         self.events: list[dict] = []
+        self.owner_turns: list[dict] = []
 
     def emit(self, item: dict) -> None:
         key = (item.get("fingerprint"), item.get("session"))
@@ -213,6 +214,12 @@ class Scanner:
         agent, ctx["agent"] = ctx["agent"], ""
         if not text:
             return
+        self.owner_turns.append({
+            "ts": ts or now_iso(),
+            "project": fj.project_name(cwd),
+            "session": ctx.get("session") or "",
+            "text": text[:500],
+        })
         # The marker and the package or component in the same or the next sentence: a long message that says "don't" about
         # one thing and names a component about another is not a correction of it.
         parts = SENTENCE.split(text)
@@ -356,6 +363,27 @@ class Scanner:
                 for file, removed, added in patches(body):
                     self.edit(ctx, file, removed, added, cwd, ts)
 
+    def t3(self, path: Path) -> None:
+        session = path.parent.parent.parent.name
+        ctx = self.context(path, session)
+        cwd = None
+        for line in self.lines(path):
+            try:
+                item = json.loads(line)
+            except ValueError:
+                continue
+            ts = item.get("created_at") or item.get("timestamp")
+            if self.since and ts and ts < self.since:
+                continue
+            kind = item.get("type")
+            content = item.get("content") or ""
+            if not isinstance(content, str):
+                continue
+            if kind == "USER_INPUT" and item.get("source") == "USER_EXPLICIT":
+                self.human(ctx, content, cwd, ts)
+            elif kind == "PLANNER_RESPONSE":
+                self.agent_text(ctx, content, cwd, ts)
+
 
 def patches(body: str):
     """(file, removed text, added text) per file of an apply_patch body."""
@@ -369,11 +397,23 @@ def patches(body: str):
                "\n".join(l[1:] for l in lines if l.startswith("+")))
 
 
-def sources(config: dict) -> tuple[Path, Path]:
+def sources(config: dict) -> tuple[Path, Path, Path]:
     listed = config.get("sources") if isinstance(config.get("sources"), dict) else {}
     claude = Path(listed.get("claude") or Path.home() / ".claude" / "projects").expanduser()
     codex = Path(listed.get("codex") or Path.home() / ".codex" / "sessions").expanduser()
-    return claude, codex
+    t3 = Path(listed.get("t3") or Path.home() / ".t3" / "userdata" / "providers").expanduser()
+    return claude, codex, t3
+
+
+def append_owner_turns(turns: list[dict]) -> None:
+    if not turns:
+        return
+    import hook_io
+    path = hook_io.state_dir() / "owner-turns.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as handle:
+        for item in turns:
+            handle.write(json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
 def summary(events: list[dict]) -> str:
@@ -400,7 +440,7 @@ def run_scan(args) -> int:
         state["files"] = {}
     known = {(e.get("fingerprint"), e.get("session")) for e in fj.read() if e.get("fingerprint")}
     scanner = Scanner(config, json.loads(json.dumps(state)) if args.dry_run else state, known, args.dry_run, args.since)
-    claude, codex = sources(config)
+    claude, codex, t3 = sources(config)
     started, files = time.monotonic(), 0
     for path in sorted(claude.glob("*/*.jsonl")) if claude.is_dir() else []:
         files += 1
@@ -411,6 +451,9 @@ def run_scan(args) -> int:
     for path in sorted(codex.rglob("*.jsonl")) if codex.is_dir() else []:
         files += 1
         scanner.codex(path)
+    for path in sorted(t3.rglob("transcript.jsonl")) if t3.is_dir() else []:
+        files += 1
+        scanner.t3(path)
     events = scanner.events
     if args.dry_run or not args.quiet or events:
         print(f"friction scan: {files} files in {time.monotonic() - started:.0f} s, {len(events)} events ({summary(events)})"
@@ -419,6 +462,7 @@ def run_scan(args) -> int:
         print_events(events)
         return 0
     fj.append(events)
+    append_owner_turns(scanner.owner_turns)
     state["last_scan"] = now_iso()
     # Keep the carried context (the agent's last words, recent type errors) only for files still being written.
     for key, entry in state.get("files", {}).items():

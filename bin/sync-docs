@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Verify or regenerate generated tables in README.md (skills) and models.md (roles).
+
+    bin/sync-docs [--check]
+"""
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def expected_skills() -> list[tuple[str, str]]:
+    rows = []
+    for skill_md in sorted((ROOT / "skills").glob("*/SKILL.md")):
+        name = skill_md.parent.name
+        yaml_path = skill_md.parent / "agents" / "openai.yaml"
+        desc = ""
+        if yaml_path.is_file():
+            m = re.search(r'^\s*short_description:\s*"?([^"\n]+)"?\s*$', yaml_path.read_text(), re.M)
+            if m:
+                desc = m.group(1).strip()
+        rows.append((name, desc))
+    return rows
+
+
+def check_readme() -> list[str]:
+    readme = (ROOT / "README.md").read_text()
+    linked = set(re.findall(r"\]\(skills/([^/]+)/SKILL\.md\)", readme))
+    actual = {name for name, _ in expected_skills()}
+    problems = []
+    for missing in sorted(actual - linked):
+        problems.append(f"README.md missing skill row: {missing}")
+    for extra in sorted(linked - actual):
+        problems.append(f"README.md has stale skill row: {extra}")
+    return problems
+
+
+def check_models_md() -> list[str]:
+    table = tomllib.loads((ROOT / "models.toml").read_text())
+    models_md = (ROOT / "models.md").read_text()
+    problems = []
+    for role, entry in table["roles"].items():
+        m = re.search(rf"^\|\s*{re.escape(role)}\s*\|([^|]+)\|([^|]+)\|", models_md, re.M)
+        if not m:
+            problems.append(f"models.md missing role row: {role}")
+            continue
+        row_text = (m.group(1) + " " + m.group(2)).lower()
+        for choice in entry["choices"]:
+            alias = choice["model"].lower()
+            if alias not in row_text:
+                problems.append(f"models.md role `{role}` missing model `{alias}`")
+    return problems
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--check", action="store_true", help="exit 1 if README.md or models.md drifted")
+    parser.parse_args()
+    problems = check_readme() + check_models_md()
+    for p in problems:
+        print(f"sync-docs: {p}", file=sys.stderr)
+    if problems:
+        return 1
+    print("sync-docs: ok")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

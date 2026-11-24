@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -158,8 +159,46 @@ def unmet(name: str, need, quota: Quota) -> str | None:
     return None
 
 
+HEALTH_FILE = "provider-health.json"
+DURATION_RE = re.compile(r"^(\d+)([smhd]?)$")
+
+
+def parse_duration(spec: str) -> int:
+    match = DURATION_RE.match(spec.strip().lower())
+    if not match:
+        raise ValueError(f"bad duration {spec!r} (expected e.g. 30m, 2h, 0)")
+    value, unit = int(match.group(1)), match.group(2) or "s"
+    return value * {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
+
+
+def load_cooldowns(now: float | None = None) -> dict[str, float]:
+    now = time.time() if now is None else now
+    data = hook_io.read_json(str(hook_io.state_dir() / HEALTH_FILE))
+    cooldowns = data.get("cooldowns") if isinstance(data.get("cooldowns"), dict) else {}
+    return {fam: float(until) for fam, until in cooldowns.items()
+            if isinstance(until, (int, float)) and float(until) > now}
+
+
+def set_cooldown(family: str, duration: str, now: float | None = None) -> float | None:
+    now = time.time() if now is None else now
+    seconds = parse_duration(duration)
+    path = hook_io.state_dir() / HEALTH_FILE
+    data = hook_io.read_json(str(path))
+    cooldowns = dict(data.get("cooldowns") if isinstance(data.get("cooldowns"), dict) else {})
+    if seconds <= 0:
+        cooldowns.pop(family, None)
+        until = None
+    else:
+        until = now + seconds
+        cooldowns[family] = until
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"cooldowns": cooldowns}, indent=2) + "\n")
+    return until
+
+
 def resolve(table: dict, role: str, implementer_family: str | None = None, read=None,
-            family: str | None = None, exclude_families: set[str] | list[str] | tuple[str, ...] | None = None):
+            family: str | None = None, exclude_families: set[str] | list[str] | tuple[str, ...] | None = None,
+            harness: str = "auto"):
     """(the winning Choice or None, [{model, reason}] for each choice skipped before it, {quota: Quota} read).
 
     `read(name) -> Quota` reads a quota; each is read at most once, and only when a choice still needs it."""
@@ -167,6 +206,7 @@ def resolve(table: dict, role: str, implementer_family: str | None = None, read=
     entry = role_of(table, role)
     only = entry.get("only_families")
     excluded = set(exclude_families or ())
+    cooldowns = load_cooldowns()
     quotas: dict[str, Quota] = {}
     skipped = []
     for choice in entry["choices"]:
@@ -183,6 +223,11 @@ def resolve(table: dict, role: str, implementer_family: str | None = None, read=
             reason = f"family is {model['family']}, requested {family}"
         elif model["family"] in excluded:
             reason = f"family {model['family']} excluded"
+        elif model["family"] in cooldowns:
+            mins = max(1, int((cooldowns[model["family"]] - time.time()) / 60))
+            reason = f"family {model['family']} in cooldown (~{mins}m left)"
+        elif harness in ("claude", "codex") and model["cli"] == "antigravity":
+            reason = f"requires delegate_task (unavailable in {harness} harness)"
         elif when.get("not_family") and implementer_family is None:
             reason = UNKNOWN_FAMILY
         elif when.get("not_family") and model["family"] == implementer_family:
@@ -211,15 +256,30 @@ def caution(skipped: list) -> str | None:
     return None
 
 
-def describe(role: str, choice: Choice | None, skipped: list) -> str:
+def launch_payload(choice: Choice, harness: str) -> dict | None:
+    if harness == "t3" or (harness == "auto" and choice.cli == "antigravity"):
+        opts = {choice.option: choice.effort} if choice.option else {}
+        return {"tool": "delegate_task", "target": {"model": choice.id, "options": opts}}
+    if harness == "claude" and choice.cli == "claude":
+        return {"tool": "Agent", "model": choice.id, "effort": choice.effort}
+    if harness == "codex" and "run" in choice.argv:
+        return {"tool": "exec", "argv": choice.argv["run"]}
+    return None
+
+
+def describe(role: str, choice: Choice | None, skipped: list, harness: str = "auto") -> str:
     lines = []
     if choice:
         lines.append(f"{role}: {choice.model} ({choice.id}, {choice.family}), effort {choice.effort}")
-        lines += [f"  {name}: {shlex.join(argv)}" for name, argv in choice.argv.items()]
-        if choice.cli == "antigravity":
-            lines.append(f'  delegate_task: target.model="{choice.id}", target.options.{choice.option}="{choice.effort}"')
-        elif not choice.argv and choice.option:
-            lines.append(f"  option: {choice.option}={choice.effort}")
+        if harness == "t3":
+            payload = launch_payload(choice, "t3")
+            lines.append(f"  delegate_task: {json.dumps(payload['target'])}")
+        else:
+            lines += [f"  {name}: {shlex.join(argv)}" for name, argv in choice.argv.items()]
+            if choice.cli == "antigravity":
+                lines.append(f'  delegate_task: target.model="{choice.id}", target.options.{choice.option}="{choice.effort}"')
+            elif not choice.argv and choice.option:
+                lines.append(f"  option: {choice.option}={choice.effort}")
         if choice.note:
             lines.append(f"  note: {choice.note}")
         if caution(skipped):
@@ -232,9 +292,10 @@ def describe(role: str, choice: Choice | None, skipped: list) -> str:
     return "\n".join(lines)
 
 
-def as_json(role: str, choice: Choice | None, skipped: list, quotas: dict) -> dict:
+def as_json(role: str, choice: Choice | None, skipped: list, quotas: dict, harness: str = "auto") -> dict:
     answer = asdict(choice) if choice else {"error": "no choice qualifies"}
-    return {"role": role, **answer, "caution": caution(skipped), "skipped": skipped,
+    extra = {"launch": launch_payload(choice, harness)} if choice and harness != "auto" else {}
+    return {"role": role, **answer, **extra, "caution": caution(skipped), "skipped": skipped,
             "quotas": {name: {k: v for k, v in asdict(q).items() if k != "read_at"} for name, q in quotas.items()}}
 
 

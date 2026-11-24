@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Cap oversized command output before it enters an agent's context.
+
+    bin/quiet-cap [--max-chars 8000] -- <command...>
+
+When combined stdout+stderr stays within --max-chars, prints it verbatim.
+Otherwise writes the full output to a temp log file and prints head (40 lines),
+lines matching error/FAIL, tail (60 lines), and the log path, preserving exit code.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+ERROR_RE = re.compile(r"(?i)\b(?:error|fail(?:ed|ure)?|traceback|exception|panic)\b")
+
+
+def summarize(text: str, log_path: str, head_n: int = 40, tail_n: int = 60) -> str:
+    lines = text.splitlines()
+    if len(lines) <= head_n + tail_n:
+        return f"{text[:3000]}\n... [truncated {len(text)} chars; full output: {log_path}] ...\n{text[-3000:]}\n"
+    head = lines[:head_n]
+    tail = lines[-tail_n:]
+    middle = lines[head_n:-tail_n]
+    errors = [line for line in middle if ERROR_RE.search(line)][:30]
+    parts = [*head, f"... [{len(middle)} lines omitted; full output: {log_path}] ..."]
+    if errors:
+        parts.append("... [matching error/FAIL lines from omitted section] ...")
+        parts.extend(errors)
+    parts.extend(tail)
+    return "\n".join(parts) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--max-chars", type=int, default=8000)
+    parser.add_argument("cmd", nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    cmd = args.cmd[1:] if args.cmd and args.cmd[0] == "--" else args.cmd
+    if not cmd:
+        parser.error("missing command after --")
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    out = proc.stdout or ""
+    if len(out) <= args.max_chars:
+        sys.stdout.write(out)
+    else:
+        fd, log_path = tempfile.mkstemp(prefix=f"mastack-out-{os.getpid()}-", suffix=".log")
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(out)
+        sys.stdout.write(summarize(out, log_path))
+    return proc.returncode
+
+
+if __name__ == "__main__":
+    sys.exit(main())

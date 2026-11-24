@@ -83,7 +83,8 @@ route the rest to [Owner's decisions](#owners-decisions).
 Before escalating a finding, lead, or question to the owner, search (using a
 scout if wider than a few greps):
 
-- session histories across harnesses (`~/.claude/projects`, `~/.codex/sessions`,
+- `$XDG_STATE_HOME/mastack/owner-turns.jsonl` (maintained by `bin/friction scan`),
+  then raw session histories (`~/.claude/projects`, `~/.codex/sessions`,
   `~/.t3/userdata/providers`) for the symbol/file and owner messages;
 - the tracker, `git log`, and `git blame` (an owner commit is a decision; an
   agent commit is not).
