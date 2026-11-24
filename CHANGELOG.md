@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0
+
 - `lease_guard`: `LEASE_GUARD_OK` now uses the shared `hook_io.card_reaches_owner`
   check so overrides in `auto` mode or subagent sessions are denied rather than
   auto-approved.
