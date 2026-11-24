@@ -188,6 +188,27 @@ Reconcile every ticket and accepted requirement with commits and checks,
 publish only on an explicit push (`push`), and clean up lanes and
 worktrees (`cleanup`).
 
+Route what the reports carried besides the work, before the batch report;
+a line nobody routes is lost when the session ends:
+
+- `Least sure`: to the lane's reviewer (step 5), else check it yourself.
+- `Nearby`, and a review's leads: `cross-review`, "One round of fixes".
+- `Friction`: fix the brief, doc or skill it names now when it is yours;
+  a tool defect goes to that tool's tracker. Tell agents already running
+  on the same wrong line: a brief that wrapped a lane check in a second
+  lease slowed every lane for a day before one implementer said so.
+- `Upstream`: a ticket in the dependency's tracker; in a tracker the owner
+  does not control, a draft for the owner to approve.
+- A review's "should have been caught by": a check or a reviewer rule, not
+  only a ticket. A class that came back in a second lane or repository
+  (a gate's false skip, twice) is fixed where both share it.
+
+The batch report gives each count and where the lines went, then the date
+of the last `usage-audit` (weekly) and `test-audit` (monthly). Run the one
+that is due, or say why not: nobody else is asked how well the lanes, runs
+and gates work, and one gate audit the owner had to ask for halved two
+repositories' lane checks.
+
 After a release, or a promote to the default branch, comment the version or
 the main SHA on each ticket it closed, found from the `Fixes #N` lines in the
 range. A ticket whose landed work leaves known follow-ups keeps them as

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `orchestrate` Finish: every `Least sure`, `Nearby`, `Friction` and `Upstream`
+  line and every review lead is routed before the batch report, and the report
+  names the last `usage-audit` and `test-audit` and runs the one that is due.
 - `orchestrate` pushes a green, review-resolved batch to the everyday branch
   itself, in small batches, unless the project's publishing doc says the
   branch waits for the owner; the release branch, releases and publications
