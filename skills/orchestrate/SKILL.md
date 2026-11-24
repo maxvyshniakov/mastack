@@ -157,6 +157,13 @@ goes to `scripts/role design` instead.
 8. **Gate once per batch**: the full gate on the batch tip, not per lane. Red:
    find the lane by running the failed suites on each merge. The batch moves to
    the everyday branch only when it is green and every review is resolved.
+   Then push it there yourself, the way `docs/agents/publishing.md` says,
+   and report it in one line: the everyday branch does not wait for the
+   owner unless that file says it does. Push small batches, every three to
+   five lanes: a batch of 37 merges hid which lanes broke each other and
+   left a CI fix unpushed through a week of red nightly runs. The release
+   branch, a release, a publication and anything the project's guard refuses
+   stay the owner's command, each time.
    Cross-cutting migrations and legacy removals use the
    [collect-all verification record](references/batch-verification.md#cross-cutting-verification)
    before fixes are distributed.

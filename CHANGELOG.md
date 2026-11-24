@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `orchestrate` pushes a green, review-resolved batch to the everyday branch
+  itself, in small batches, unless the project's publishing doc says the
+  branch waits for the owner; the release branch, releases and publications
+  stay the owner's command.
 - `cross-review` Depth: an owner-decided look with a guard, tooling outside
   the shipped package and a few-line CI or config change need no review; the
   depth is chosen when the lane starts, and one exempt lane in five is
