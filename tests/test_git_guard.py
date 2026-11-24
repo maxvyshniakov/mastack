@@ -49,6 +49,7 @@ class GitGuardTests(HookCase):
         reason = self.denied(self.bash("git_guard.py", "git worktree add ../app-outside", "{home}/app"))
         self.assertIn("[worktree-location]", reason)
         self.assertIn("junkfather own --kind worktree", reason)
+        self.assertIn("[protected-branch]", self.denied(self.bash("git_guard.py", "git branch -C lane dev", "{home}/app")))
 
     def test_env_replaces_the_configured_checkouts(self):
         self.env["MASTACK_HOOK_REPOS"] = str(self.tmp / "other")
@@ -67,6 +68,51 @@ class GitGuardTests(HookCase):
         self.assertIsNone(self.bash("git_guard.py", 'cd /tmp && echo "$(git reset --hard)" && cd {home}/app', "{home}/app"))
         self.assertIn("[stash]",
                       self.denied(self.bash("git_guard.py", 'echo "`git stash`"', "{home}/app")))
+
+    def test_branch_move_copy_protected_branches(self):
+        denied_cmds = [
+            "git branch -C lane dev",
+            "git branch -c lane dev",
+            "git branch --copy lane main",
+            "git branch -M lane dev",
+            "git branch -m lane main",
+            "git branch --move lane DEV",
+            "git branch -m dev",
+            "git branch -M main",
+            "git branch -C dev",
+            "git branch -c Main",
+            "git branch -m main other",
+            "git branch -M DEV other",
+            "git branch -f -m lane dev",
+            "git branch -fm lane dev",
+            "git branch -cm lane dev",
+            "git branch -M -- lane dev",
+            "git branch lane dev -C",
+            "git -C {home}/app branch -C lane dev",
+            "zsh -lc 'git branch -M lane dev'",
+        ]
+        for cmd in denied_cmds:
+            with self.subTest(deny=cmd):
+                self.assertIn("[protected-branch]", self.denied(self.bash("git_guard.py", cmd, "{home}/app")))
+
+        allowed_cmds = [
+            "git branch -c main my-feature",
+            "git branch -C main my-feature",
+            "git branch --copy dev my-feature",
+            "git branch -m old-lane new-lane",
+            "git branch -M old-lane new-lane",
+            "git branch -m new-lane",
+            "git branch -c new-lane",
+            "git branch -u origin/main",
+            "git branch -umain",
+            "git branch --list main",
+            "git branch --show-current",
+            "git branch --move --no-move lane dev",
+            "git branch -h",
+        ]
+        for cmd in allowed_cmds:
+            with self.subTest(allow=cmd):
+                self.assertIsNone(self.bash("git_guard.py", cmd, "{home}/app"))
 
     def test_unreadable_or_empty_input_passes(self):
         self.assertFailsOpen("git_guard.py")

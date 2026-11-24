@@ -4,6 +4,9 @@
 Denies the git shapes behind incidents of parallel agents sharing one machine (audit 2026-10-21):
   pipe-mask        a mutating git step piped into tail/head/grep/sed/awk inside a
                    chain that continues with &&, || or ; and no `set -o pipefail`
+  protected-branch git branch -c/-C/--copy/-m/-M/--move targeting main or dev
+                   (or renaming main/dev away), which bypasses or races the
+                   reference-transaction hook
   push-by-name     pushing main, dev or HEAD by name in a shared checkout's repository
                    (the `checkouts` setting) instead of `<sha>:refs/heads/<branch>`
   push-force       --force, --force-with-lease, +refspec or --no-verify on push
@@ -40,11 +43,16 @@ WRAPPERS = vocabulary.WRAPPERS - {"noglob", "nocorrect", "nice"}
 PUNCTUATION = set("();<>|&")
 PUSH_OPTIONS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
 WORKTREE_ADD_OPTIONS_WITH_VALUE = {"-b", "-B", "--orphan", "--reason"}
+BRANCH_OPTIONS_WITH_VALUE = {"-u", "--set-upstream-to", "--sort", "--points-at", "--format",
+                             "--contains", "--no-contains", "--forked", "--delete-merged"}
+PROTECTED_BRANCHES = frozenset({"main", "dev"})
 SHA = re.compile(r"^[0-9a-f]{7,40}$")
 
 SAFE = {
     "pipe-mask": "begin the command with `set -o pipefail;`, or run the git step alone and check its exit status "
                  "before the next step.",
+    "protected-branch": "leave `main` and `dev` in place; work on a separate branch instead, and update `main`/`dev` "
+                        "through a fast-forward merge or a SHA push.",
     "push-by-name": "push the verified commit by SHA: `git push {remote} <sha>:refs/heads/<branch>`.",
     "push-force": "push a new commit on top, by SHA. Force pushes and skipped hooks are the owner's to run.",
     "shared-checkout": "run it in your own worktree under {repo}/.claude/worktrees/, or set work aside with a WIP commit.",
@@ -178,6 +186,10 @@ def protected_repo(directory: str | None) -> bool:
 
 def short_flag(args, letter):
     return any(re.match(r"^-[a-zA-Z]+$", a) and letter in a for a in args)
+
+
+def protected_branch_name(name: str) -> bool:
+    return name.lower().removeprefix("refs/heads/") in PROTECTED_BRANCHES
 
 
 class Guard:
@@ -352,6 +364,62 @@ class Guard:
                       f"`git worktree add {target_raw}` places a worktree at `{target}`, outside "
                       f"`{repo or '<repo>'}/.claude/worktrees/` and the session scratchpad.",
                       repo=repo or "<repo>")
+
+    def verb_branch(self, rest, directory):
+        move, copy = False, False
+        positionals, position = [], 0
+        while position < len(rest):
+            word = rest[position]
+            if word in ("-h", "--help"):
+                return
+            if word == "--":
+                positionals.extend(rest[position + 1:])
+                break
+            if word in BRANCH_OPTIONS_WITH_VALUE:
+                position += 2
+                continue
+            if word == "--move":
+                move = True
+            elif word == "--no-move":
+                move = False
+            elif word == "--copy":
+                copy = True
+            elif word == "--no-copy":
+                copy = False
+            elif word.startswith("--"):
+                pass
+            elif word.startswith("-") and len(word) > 1:
+                for idx, ch in enumerate(word[1:], 1):
+                    if ch == "u":
+                        if idx == len(word) - 1:
+                            position += 1
+                        break
+                    if ch in ("m", "M"):
+                        move = True
+                    elif ch in ("c", "C"):
+                        copy = True
+            else:
+                positionals.append(word)
+            position += 1
+        if not (move or copy) or not positionals:
+            return
+        if len(positionals) == 1:
+            target = positionals[0]
+            if protected_branch_name(target):
+                action = "rename/copy" if (move and copy) else "rename" if move else "copy"
+                self.deny("protected-branch",
+                          f"`git branch {' '.join(rest)}` would {action} the current branch onto `{target}`, "
+                          "which can bypass or race the reference-transaction guard on `main`/`dev`.")
+            return
+        source, target = positionals[0], positionals[1]
+        if protected_branch_name(target):
+            action = "rename/copy" if (move and copy) else "rename" if move else "copy"
+            self.deny("protected-branch",
+                      f"`git branch {' '.join(rest)}` would {action} `{source}` onto `{target}`, "
+                      "which can bypass or race the reference-transaction guard on `main`/`dev`.")
+        elif move and protected_branch_name(source):
+            self.deny("protected-branch",
+                      f"`git branch {' '.join(rest)}` would rename protected branch `{source}` to `{target}`.")
 
 
 def check(data: dict):
