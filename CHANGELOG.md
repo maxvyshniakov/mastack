@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `orchestrate` reviews a lane before it lands: the lane check and the review
+  run together on the committed tree, findings go to the same implementer in
+  the same lane, and the lane lands once (was: review after the land, then a
+  fix lane). The brief says whose the lane check is (`Check: mine | yours`).
+  The fix-lane path remains for lanes that landed unreviewed. `cross-review`
+  gains a Unit step: one contract per review, large diffs split by subsystem,
+  small lanes of one subsystem reviewed together, docs-against-code as its
+  own pass, a second reviewer from another family.
 - `cross-review` reviewers now answer a fixed brief
   (`references/reviewer-brief.md`): per finding a confidence, a falsifier, the
   guard that should have caught it and a fix direction; up to five leads wider

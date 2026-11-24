@@ -40,10 +40,12 @@ help or status call is a turn that rereads your whole context.
 1. Merge the integration branch tip into your lane once.
 2. Commit in the repository's style, with the reason in the body. Leave the
    worktree clean.
-3. Once the focused checks pass, run the lane's full check command from the
-   brief (`lanefather check <id>`) once on the committed tree. If it is red,
-   fix and verify with focused checks first; run `--rerun` only after the
-   focused checks pass. Investigate a timeout alone before blaming load.
+3. The brief says whose the lane's full check is. `Check: mine`: the
+   orchestrator runs it beside the review once you hand back, so stop at
+   green focused checks. `Check: yours`: run the brief's check command once on
+   the committed tree. A red check: fix and verify with focused checks first,
+   and `--rerun` only after they pass. Investigate a timeout alone before
+   blaming load.
 4. Stop servers and background processes you started, including every loop
    that waits on a command you stopped. Report only once `ps`
    shows nothing of yours running in your worktree or scratch. A wait loop on
@@ -52,9 +54,10 @@ help or status call is a turn that rereads your whole context.
 
 ## Hand back
 
-Once the check is green on your last commit, return the report below and
-stop. Landing, the review and cleanup are the orchestrator's steps; it gets
-your report as your completion notice. Wait for none of them and poll no
+Once your part of the checks is green on your last commit, return the report
+below and stop. The lane check (when it is the orchestrator's), the review,
+landing and cleanup are the orchestrator's steps; it gets your report as your
+completion notice. Wait for none of them and poll no
 lane state (`lanefather list` in a loop). In the rare case a step of yours
 really needs a lane state, `lanefather wait <id> --for <state>` blocks until
 it (Lanefather with fathers#175); without that command, put the need under
@@ -62,13 +65,18 @@ Questions and hand back.
 
 ## Review fixes
 
-The coordinator resumes you for the fix round only when you are still within
-the active provider's prompt-cache window and your context is small enough to
-stay well under compaction (per `[providers.<family>]` in the model table);
-otherwise a fresh agent gets
-the findings, the lane's diff, and the fix lane's commands. Fix
-each finding that holds, reject the others with a reason in the commit and
-report, check, hand back. There is no second review.
+The review runs on your committed tree before the lane lands, beside the lane
+check. Its findings and the check's failures come back to you once, in this
+lane, while your context is warm. Each finding carries a falsifier: run it
+first as a failing test; if it passes on your tree, reject the finding with
+that test as the reason. Fix what holds at its cause, not with the reviewer's
+proposed patch, one finding or root per commit. Merge the integration tip,
+run the lane check on the final tree, hand back. There is no second review.
+
+A fresh agent gets the same findings with the lane's diff when you are past
+the provider's prompt-cache window or near compaction (per
+`[providers.<family>]` in the model table), or when the lane had already
+landed.
 
 ## Report
 

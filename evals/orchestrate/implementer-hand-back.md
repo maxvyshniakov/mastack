@@ -19,9 +19,9 @@ Tickets: none, this repository has no tracker. The requirement: add `greet_loud 
 Lane greet, registered. Base: integrate/wave. Claims: src/**, tests/**.
 Nearby lanes: none.
 Worktree: ../repo-greet (next to this checkout). Branch: lane/greet.
-Check: tools/lane check greet (run in the worktree)
+Check: yours, once before hand-back: tools/lane check greet (run in the worktree)
 Hand back: commit, a green check on the committed tree, then return your report and stop.
-After you: I land the lane (tools/lane land greet --into ../repo-integrate), its review runs, and the findings come back to you once, in the fix lane.
+After you: I run the review and send you its findings once, in this lane; then I land it (tools/lane land greet --into ../repo-integrate).
 Read .claude/skills/orchestrate/references/implementer.md in this checkout, then: tools/lane is this project's lane tool, with Lanefather's command line; ./check.sh is light and needs no slot wrapper. Report labels: Lane: <id>.
 ```
 

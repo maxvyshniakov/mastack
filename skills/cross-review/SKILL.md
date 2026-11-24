@@ -42,6 +42,20 @@ description: Use when asked for a review, or before shipping a large change. A m
      releasing what another process holds): both passes, and both families in
      parallel where `role` offers a reviewer of another family.
 
+6. **Unit.** One review covers one contract: one subsystem, up to about 20
+   files or 1,500 changed lines. Split a larger diff by subsystem into
+   parallel reviews; each gets the whole file list for context, its own files
+   to answer for, and by name any seam it shares with another part. A
+   reviewer samples a diff that large instead of covering it: five full
+   reviews of one 4,700-line merge shared three findings and each found
+   others. Small lanes of one subsystem that landed unreviewed are reviewed
+   together as one diff: the reading is paid once, and a guard from one lane
+   is checked against the writer in another. Claims in docs, changelog and
+   comments against the code are a pass of their own for the scout model;
+   inside the defect hunt they take its attention. A second reviewer is
+   another family, not another run: two families shared fewer findings than
+   two runs of one.
+
 ## Review blind
 
 The reviewer gets the diff command, the spec and the standards, and nothing
@@ -73,7 +87,9 @@ before promotion or release. The implementer answers every finding once:
 - `rejected: <reason>`, a concrete reason such as wrong premise, out of scope,
   or contradicted by a test.
 
-With a lane tool, the fix round starts through its fix-round path
+A lane reviewed before its land (`orchestrate` step 5) gets its findings in
+the same lane, from the same implementer, and lands once. For a lane that had
+already landed, with a lane tool, the fix round starts through its fix-round path
 (Lanefather: `review <id> --fix-lane`, or `start <fix-id> --fix-of A,B,C` for
 several lanes' findings), never a plain `start`: the tool reviews an ordinary
 lane at land, and fix lanes started that way chained six rounds deep.

@@ -92,19 +92,38 @@ goes to `scripts/role design` instead.
    Nearby lanes: <id: claims>, ...
    Worktree: <absolute path>. Branch: <lane branch>.
    Focused checks: <the scripts and filters for what this lane changes>
-   Check (once, before hand-back): <the lane's check command, e.g. lanefather check <id>>
-   Hand back: commit, green focused checks, then one green lane check on the
-   committed tree, then return your report and stop.
-   After you: I land the lane (<land command>), its review runs, and any
-   findings are handled once in the fix lane.
+   Check: mine | yours, once before hand-back: <the lane's check command>
+   Hand back: commit, green focused checks (and the lane check if it is
+   yours), then return your report and stop.
+   After you: I run the lane check and the review together and send you both
+   results once, in this lane; then I land it (<land command>).
    Read <this skill's directory>/references/implementer.md, then:
    <the project's brief additions>. Report labels: <labels>.
    ```
-5. **Land** a lane when it reports green. The report reaches you as the
-   agent's completion notice; wait for that, not on `lanefather list`. Merge
-   it into the integration branch, run a quick smoke on the merge, send a red
-   smoke to the lane whose change broke it. Resolve trivial conflicts
-   yourself, real ones in the lane.
+5. **Check and review before the land.** When a lane hands back a committed
+   tree with green focused checks, start its lane check and its review
+   (`cross-review`, which also says which lanes need none) at the same time;
+   they take about as long. The reviewer sees the diff, ticket, standards and
+   the [reviewer brief](../cross-review/references/reviewer-brief.md), never
+   the lane's report; give it the report's `Least sure` places as places to
+   read, without the implementer's conclusions. Triage when both finish, and
+   send the check's failures and the findings to the same implementer in one
+   message, in the same lane. It fixes, the check runs once more on the final
+   tree, and you land. Nobody reviews the fix. The report reaches you as the
+   agent's completion notice; wait for that, not on `lanefather list`.
+   Reviews after the land found defects in nearly every lane, and each then
+   cost a fix lane queued behind the lane cap and claims, a cold agent, a
+   second check and a second land, while other lanes built on the defect.
+   Until the lane tool reviews before the land
+   ([fathers#242](https://github.com/maxvyshniakov/fathers/issues/242)), land
+   with `LANEFATHER_REVIEW_START=manual` and keep the review's findings and
+   marks in its report file.
+6. **Land** a lane when its check is green and every finding is marked fixed
+   or rejected. The lane merges the integration tip before its last check, so
+   the receipt covers the merge tree and the post-merge smoke has nothing new
+   to run. Merge it into the integration branch; a red smoke goes to the lane
+   whose change broke it. Resolve trivial conflicts yourself, real ones in
+   the lane.
    The merge message ends with `Fixes #N`, so the ticket closes only when the
    merge reaches the default branch. After a green smoke, label the ticket
    `integrated` (create it if missing: green, "Done and landed in the
@@ -118,33 +137,19 @@ goes to `scripts/role design` instead.
    them in the report. Push, release, publish and closing a ticket before its
    fix ships follow `publishing.md`; another project's tracker needs the
    owner's yes first.
-6. **Review** each landed lane once (`cross-review`), when and how the project's
-   review policy says, else right after the land: the
-   reviewer sees the diff, ticket, standards and the
-   [reviewer brief](../cross-review/references/reviewer-brief.md), never the
-   lane's report. It
-   runs beside implementation. Triage findings as soon as the review finishes
-   (or the lane list/stop hook reports them), while the diff is fresh; the
-   [Lanefather gate](https://github.com/maxvyshniakov/fathers/issues/177) enforces
-   this before further lands. Every finding is marked fixed or rejected before
-   promotion or release. One round of fixes, started only through the lane
-   tool's fix-round path:
-   `lanefather review <id> --fix-lane` for one lane, `lanefather start <fix-id>
-   --fix-of A,B,C` for the findings of several (fathers#174; until it ships,
-   one `--fix-lane` per lane). For the fix round, resume the implementer when
-   it is still within the active provider's prompt-cache window and its
-   context is small enough to stay well under compaction (per
-   `[providers.<family>]` in the model table);
-   otherwise start a fresh agent with the findings, the lane's diff, and the
-   fix lane's commands. A plain `start` is an ordinary lane, which
-   `land` reviews: batched fix lanes started that way chained six and seven
-   rounds deep. Nobody reviews the fix. A review of it that runs anyway opens
-   no new round and no new fix lane: mark each of its findings
-   `rejected: fix round, not reviewed again (one review per lane)` so the
-   lane finishes. Finish the lane in
-   the lane tool (Lanefather's `done`) as soon as its last finding is marked:
-   it removes only merged worktrees, branches and scratch, and finished lanes
-   left for batch end fill the disk until the lane tool refuses new lanes.
+   **A lane that landed unreviewed** and gets findings later (a themed review
+   of small lanes, an audit) takes one round of fixes through the lane tool's
+   fix-round path: `lanefather review <id> --fix-lane`, or `lanefather start
+   <fix-id> --fix-of A,B,C` for several lanes; a plain `start` is an ordinary
+   lane that `land` reviews, and fix lanes started that way chained six and
+   seven rounds deep. Resume the implementer when it is still within the
+   provider's prompt-cache window and under compaction (per
+   `[providers.<family>]` in the model table), else brief a fresh agent with
+   the findings and the lane's diff. A review of fix work that runs anyway
+   opens no new round: mark its findings `rejected: fix round, not reviewed
+   again (one review per lane)`. Finish each lane in the lane tool
+   (Lanefather's `done`) as soon as its last finding is marked: finished lanes
+   left for batch end fill the disk until the tool refuses new lanes.
 7. **Recompute the frontier** after every land and launch what became ready.
 
 ## Batch
