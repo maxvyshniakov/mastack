@@ -87,7 +87,8 @@ merge's `Fixes #N` closes it when it reaches the default branch. Put known
 follow-ups on the ticket as checklist items or linked issues. A lane registered without a ticket gets
 none of this; say so under Questions.
 
-Return at most 4000 characters to the orchestrator, ending with:
+Return at most 4000 characters to the orchestrator, ending with the footer
+below (`bin/lane-receipt --claims <globs>` prints the mechanical git fields):
 
 ```
 Branch: <lane branch>

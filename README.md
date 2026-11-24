@@ -138,9 +138,11 @@ skill, in English: the model matches requests against it, so keep it short.
 ```sh
 git clone https://github.com/maxvyshniakov/mastack ~/mastack
 ~/mastack/bin/install --dry-run                    # show what it would do
+~/mastack/bin/install --pin v0.5.0                 # install from a tag-pinned worktree (--update to move)
 ~/mastack/bin/install --skip push,release,finish   # symlink the rest into ~/.claude/skills and ~/.agents/skills
 ~/mastack/bin/install --only push                  # add one later
 ~/mastack/bin/install --uninstall --only push      # remove one; without --only/--skip, all
+~/mastack/bin/install-shims                        # optional cross-harness PATH shims for Codex / Antigravity
 ```
 
 `~/.claude/skills` is where Claude Code reads user skills and
@@ -356,13 +358,11 @@ to follow a new repo-kit format, copy that file and update the hash.
   blocks.
 - **`/friction <text>`** (skills/friction) logs the owner's correction with
   the project and session.
-- **Ordinary sessions**: `bin/friction scan` reads new Claude Code transcripts
-  and Codex sessions since its last run and logs type errors, owner
-  corrections (a typed message naming the package or a component, with a
-  correction marker, after an agent turn naming the same) and misuse (an edit
-  removing a component right after a type error about it; an agent sentence
-  saying a component "has no" something), each with the reason in `why`.
-  `--dry-run` prints them and writes nothing.
+- **Ordinary sessions**: `bin/friction scan` reads new Claude Code transcripts,
+  Codex sessions, and T3 Code / Antigravity `transcript.jsonl` files since its
+  last run, logs friction events, and indexes owner messages into
+  `$XDG_STATE_HOME/mastack/owner-turns.jsonl` (searched first by `cross-review`
+  "Owner's decisions"). `--dry-run` prints them and writes nothing.
 - **Vendored copies**: `bin/friction vendor` (weekly from `scan`) compares
   each copy with its upstream at the copy's version and logs each patched
   source file as "kit patched for app need".
@@ -397,8 +397,16 @@ another language. See [evals/README.md](evals/README.md).
   check and through the dispatcher.
   `.githooks/pre-push` runs it; enable with `git config core.hooksPath .githooks`.
   CI runs the same on every push and pull request.
-- After a new model ships: run the evals, then reread each skill and delete any
-  line the model would follow without being told.
+- `bin/sync-docs --check` verifies `README.md` skills and `models.md` role
+  tables against `skills/` and `models.toml`.
+- `bin/role <role> --harness <auto|claude|codex|t3>` prints ready-to-use launch
+  targets; `bin/role --cooldown <family> <duration>` temporarily skips an
+  exhausted family via `provider-health.json`.
+- `bin/lane-receipt` emits verified git fields for implementer reports;
+  `bin/quiet-cap -- <cmd>` caps >8K command output to a temp log file.
+- After a new model ships: run the evals (use `--without-skill` for no-op
+  checks), then reread each skill and delete any line the model would follow
+  without being told.
 - [CONTRIBUTING.md](CONTRIBUTING.md) says what a change needs;
   [SECURITY.md](SECURITY.md) how to report a problem and what the hooks run.
 

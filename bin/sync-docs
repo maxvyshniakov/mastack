@@ -40,17 +40,24 @@ def check_readme() -> list[str]:
     return problems
 
 
-def check_models_md() -> list[str]:
-    table = tomllib.loads((ROOT / "models.toml").read_text())
-    models_md = (ROOT / "models.md").read_text()
+def check_models_md(root: Path = ROOT) -> list[str]:
+    table = tomllib.loads((root / "models.toml").read_text())
+    models_md = (root / "models.md").read_text()
     problems = []
     for role, entry in table["roles"].items():
         m = re.search(rf"^\|\s*{re.escape(role)}\s*\|([^|]+)\|([^|]+)\|", models_md, re.M)
         if not m:
             problems.append(f"models.md missing role row: {role}")
             continue
-        row_text = (m.group(1) + " " + m.group(2)).lower()
-        for choice in entry["choices"]:
+        first_col, fallback_col = m.group(1).lower(), m.group(2).lower()
+        choices = entry["choices"]
+        if choices:
+            first_alias = choices[0]["model"].lower()
+            first_effort = str(choices[0].get("effort") or "medium").lower()
+            if first_alias not in first_col or first_effort not in first_col:
+                problems.append(f"models.md role `{role}` first choice mismatch (expected {first_alias}, {first_effort})")
+        row_text = first_col + " " + fallback_col
+        for choice in choices:
             alias = choice["model"].lower()
             if alias not in row_text:
                 problems.append(f"models.md role `{role}` missing model `{alias}`")
