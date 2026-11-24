@@ -55,6 +55,12 @@ class GitGuardTests(HookCase):
         self.assertIsNone(self.bash("git_guard.py", "git reset --hard a780eb7b", "{home}/app"))
         self.assertIn("[shared-checkout]", self.denied(self.bash("git_guard.py", "git reset --hard x", str(self.tmp / "other"))))
 
+    def test_shell_combined_c_flags_and_command_substitutions_are_denied(self):
+        self.assertIn("[shared-checkout]",
+                      self.denied(self.bash("git_guard.py", "zsh -lc 'git reset --hard'", "{home}/app")))
+        self.assertIn("[push-force]",
+                      self.denied(self.bash("git_guard.py", "echo $(git push --force origin feat)", "{home}/app")))
+
     def test_unreadable_or_empty_input_passes(self):
         self.assertFailsOpen("git_guard.py")
 

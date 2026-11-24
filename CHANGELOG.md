@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Repository simplified to `main`-only with annotated release tags (removed `dev`
+  branch, `bin/promote`, and `.github/workflows/promote.yml`); added
+  `docs/agents/issue-tracker.md`.
+- Removed `reprompt`; upgraded `critique` with a blind cross-family `Council`
+  mode (using `scripts/role`) and linked it from `grill-me`'s `Done` step.
+- Renamed `usage-audit` to `orchestration-audit` (covering token burn,
+  orchestration mechanics, and `cross-review` yield); tightened `orchestrate`
+  and `cross-review` prose and moved web UI/DOM examples from `architecture` and
+  `test-audit` into `references/web-ui.md`.
+- Added `tests/test_skill_lint.py` (enforces `openai.yaml`, 200-line `SKILL.md`
+  cap, `README.md`/`models.md` sync, `[roles.review]` ordering, and no raw issue
+  ref leaks in skills).
+- Hardened `hooks/git_guard.py` to catch combined `-c` shell flags (`zsh -lc`)
+  and command substitutions (`$(git push --force)`).
+- Added `--without-skill` to `bin/eval` and updated `evals/orchestrate`
+  worktree paths to `.claude/worktrees/`.
+
 ## 0.5.0
 
 - `lease_guard`: `LEASE_GUARD_OK` now uses the shared `hook_io.card_reaches_owner`

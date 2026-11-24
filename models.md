@@ -69,7 +69,7 @@ A quota it cannot read (no `codex`, no answer) counts as not met and is named.
 `not_family` is not met without `--implementer-family`, and the answer then
 carries a caution. Exit 1 when no choice qualifies, 2 when the table or the
 role cannot be read. `MASTACK_MODELS` names another table. Skills that start
-another model (`cross-review`, `orchestrate`, `research`, `rate`) run it
+another model (`cross-review`, `orchestrate`, `research`, `rate`, `critique`) run it
 through `scripts/role` in their own directory, a link to `bin/role`, and use
 its answer.
 

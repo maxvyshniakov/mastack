@@ -332,9 +332,9 @@ class SkillTests(unittest.TestCase):
     def test_every_skill_that_picks_a_model_runs_role_through_its_own_link(self):
         """`<this skill's directory>/scripts/role` works whether the path is resolved physically or by text, as an
         agent normalising `..` would, since the link sits inside the installed skill directory."""
-        # `usage-audit` references `models.toml` for `[pricing.*]` / `[providers.*]` weights, not to pick a model.
+        # `orchestration-audit` references `models.toml` for `[pricing.*]` / `[providers.*]` weights, not to pick a model.
         named = [path.parent for path in (ROOT / "skills").glob("*/SKILL.md")
-                 if path.parent.name != "usage-audit"
+                 if path.parent.name != "orchestration-audit"
                  and any(text in path.read_text() for text in ("bin/role", "scripts/role", "models.toml"))]
         self.assertGreaterEqual({p.name for p in named}, {"cross-review", "orchestrate", "research", "rate"})
         for skill in named:

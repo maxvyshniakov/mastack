@@ -18,7 +18,7 @@ You are the implementer of one lane, launched in the background by the orchestra
 Tickets: none, this repository has no tracker. The requirement: add `greet_loud NAME` to src/greet.sh, printing "HELLO, NAME!" with NAME in upper case, and test it in tests/greet_test.sh. Spec: this paragraph.
 Lane greet, registered. Base: integrate/wave. Claims: src/**, tests/**.
 Nearby lanes: none.
-Worktree: ../repo-greet (next to this checkout). Branch: lane/greet.
+Worktree: .claude/worktrees/greet. Branch: lane/greet.
 Check: yours, once before hand-back: tools/lane check greet (run in the worktree)
 Hand back: commit, a green check on the committed tree, then return your report and stop.
 After you: I run the review and send you its findings once, in this lane; then I land it (tools/lane land greet --into ../repo-integrate).
@@ -51,8 +51,8 @@ MD
 install_lane
 git add -A && git commit -qm "chore: greet, its check and the lane tool"
 git branch integrate/wave
-git worktree add -q -b lane/greet "$EVAL/repo-greet" integrate/wave
-git worktree add -q "$EVAL/repo-integrate" integrate/wave
+git worktree add -q -b lane/greet "$EVAL/repo/.claude/worktrees/greet" integrate/wave
+git worktree add -q "$EVAL/repo/.claude/worktrees/integrate" integrate/wave
 save base "$(git rev-parse integrate/wave)"
 printf 'greet  active  lane/greet\n' > "$EVAL/state/lanes"
 ```
@@ -60,7 +60,7 @@ printf 'greet  active  lane/greet\n' > "$EVAL/state/lanes"
 ## Grade
 
 ```sh grade
-cd "$EVAL/repo-greet"
+cd "$EVAL/repo/.claude/worktrees/greet"
 tool_uses Bash > "$EVAL/bash.txt"
 expect "the lane branch has the change" sh -c 'git diff --name-only "$(cat "$EVAL/state/base")" lane/greet | grep -q "^src/greet.sh$"'
 expect "greet_loud works on the lane tip" bash -c '. src/greet.sh; [[ $(greet_loud ann) == "HELLO, ANN!" ]]'

@@ -52,20 +52,17 @@ files. Every finding cites `file:line`.
   first: features mean real behavior, refactors mean coupling to internals.
 - **Gaps hidden by volume.** Large modules with no test beside them. Propose a
   coverage run as a ticket; its result is where to look, not a finding.
-- **Stubbed-out capability paths.** Code branches for modern platform APIs
-  (`CloseWatcher`, WAAPI `animate()`, `scroll-state`, `ResizeObserver`) that
-  tests never exercise because the test environment lacks them and only runs
-  the fallback branch.
-- **Duplicated scaffolding.** The same multi-line mock or harness
-  (`ResizeObserver`, `matchMedia`, history/watcher fakes, store fixtures)
-  copy-pasted across many files with subtle drift instead of one
-  contract-checked test adapter.
-- **Silent or swallowed assertions.** Smoke-only tests (`toBeTruthy()`,
-  `not.toThrow()`), `console.error` spies that hide framework/hydration
-  warnings, or assertions inside `if` guards or unawaited callbacks.
-- **Order-dependent global leaks.** Mutations to `window.history`,
-  `document.body`, `localStorage`, module singletons, or fake timers without
-  symmetric `afterEach` cleanup (propose shuffled-order runs as a check).
+- **Unexercised capability branches.** Platform or optional-feature branches
+  that tests never exercise because the test environment lacks the capability
+  and only runs the fallback.
+- **Duplicated scaffolding.** Multi-line mocks or test harnesses copy-pasted
+  across files with drift instead of one contract-checked test adapter.
+- **Silent or swallowed assertions.** Smoke-only checks, error spies that hide
+  real warnings, or assertions inside `if` guards or unawaited callbacks.
+- **Order-dependent global leaks.** Mutations to global state, env, files,
+  singletons, or fake timers without symmetric cleanup (propose shuffled-order
+  runs as a check). For web UI examples, see
+  [references/web-ui.md](references/web-ui.md).
 
 Also list what is already done well, so a fix does not remove it.
 

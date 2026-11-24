@@ -11,7 +11,8 @@ tree, a promote tool that owns the main branches, CI followed to the end. A set
 of Bash hooks for Claude Code turns the mechanical rules into checks.
 
 **Status.** This is one developer's daily setup, published as it is. It runs
-on macOS with Claude Code and Codex. Development happens on `dev`. Each promotion to `main` publishes a Git tag with a
+on macOS with Claude Code, Codex and Antigravity / T3 Code. Development happens
+on `main`. Each release publishes a Git tag with a
 [changelog](CHANGELOG.md); there is no support promise, and a rule changes when
 an incident shows it was wrong. Take what fits, adapt the rest.
 
@@ -75,8 +76,8 @@ flowchart LR
 - **Keep the environment good**: `retro` after a session that went wrong,
   `agent-docs` for what agents read, `friction-audit` for what keeps confusing
   agents in a package, `test-audit` for what the tests cost and prove,
-  `usage-audit` for token/quota burn and lane cost, `deps-update` to update
-  pins and retire workarounds.
+  `orchestration-audit` for token/quota burn, orchestration mechanics and review
+  yield, `deps-update` to update pins and retire workarounds.
 - **Between sessions**: `status` shows what runs and what waits for you;
   `handoff` pauses cleanly for the next agent.
 
@@ -110,12 +111,11 @@ flowchart LR
 | [agent-docs](skills/agent-docs/SKILL.md) | Writing and auditing what agents read |
 | [friction-audit](skills/friction-audit/SKILL.md) | What confuses agents in a package, and the layer that fixes it |
 | [test-audit](skills/test-audit/SKILL.md) | Tests that cost time or confidence, and the change for each |
-| [usage-audit](skills/usage-audit/SKILL.md) | Token usage, quota burn and lane cost across providers |
+| [orchestration-audit](skills/orchestration-audit/SKILL.md) | Token burn, orchestration mechanics and cross-review yield across providers |
 | [friction](skills/friction/SKILL.md) | `/friction <text>`: log the owner's correction of package usage (user-invoked) |
 | [video-feedback](skills/video-feedback/SKILL.md) | Recorded feedback to timestamped, verified requirements |
-| [reprompt](skills/reprompt/SKILL.md) | Deepening a task, then rewriting the prompt (user-invoked) |
 
-Every skill except `reprompt` and `friction` can be invoked by the model, so a request in your
+Every skill except `friction` can be invoked by the model, so a request in your
 own words, in any language, reaches it. A description says when to use the
 skill, in English: the model matches requests against it, so keep it short.
 
@@ -183,8 +183,7 @@ Before installing:
 
 - **A few skills.** `--only` picks them. These work in any repository without
   project files: `critique`, `grill-me`, `prototype`, `research`, `tdd`,
-  `debug`, `rate`, `handoff`, `retro`, `agent-docs`, `video-feedback`,
-  `reprompt`. The shipping skills (`commit`, `push`, `release`, `finish`,
+  `debug`, `rate`, `handoff`, `retro`, `agent-docs`, `video-feedback`. The shipping skills (`commit`, `push`, `release`, `finish`,
   `cleanup`, `orchestrate`, `status`) pay off once the project has the
   [contract files](#project-contract).
 - **Without the installer.** Copy a skill's folder into a project's
@@ -212,7 +211,7 @@ conditions, for example "a reviewer of another family than the implementer,
 while at least 15% of the weekly Codex quota is left". `bin/role <role>`
 evaluates it with the live quotas and prints the model, effort and headless
 command (from `[cli.*]` or T3 Code `delegate_task`); skills that start another
-model (`cross-review`, `orchestrate`, `research`, `rate`) run it. [models.md](models.md) gives the
+model (`cross-review`, `orchestrate`, `research`, `rate`, `critique`) run it. [models.md](models.md) gives the
 reasons. The model ids are the author's; edit the table, not the skills, to
 use yours.
 

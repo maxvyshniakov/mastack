@@ -204,10 +204,22 @@ class Guard:
                 pipefail = True
             elif name == "cd":
                 current = resolve(current, words[1]) if len(words) > 1 else os.path.expanduser("~")
-            elif name in SHELLS and "-c" in words[1:-1]:
-                self.check(words[words.index("-c") + 1], current)
+            elif name in SHELLS:
+                c_idx = next((i for i in range(1, len(words) - 1) if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", words[i])),
+                             None)
+                if c_idx is not None:
+                    self.check(words[c_idx + 1], current)
             elif name == "git":
                 self.git(words[1:], current, parts, index, separator, pipefail)
+        if "$(" in command or "`" in command or "<(" in command:
+            import shell
+            try:
+                for tok in shell.tokens(shell.strip_heredocs(command)):
+                    if isinstance(tok, shell.Word):
+                        for sub in tok.subs:
+                            self.check(sub, current)
+            except (shell.Unreadable, ValueError, RecursionError):
+                pass
 
     def git(self, args, directory, parts, index, separator, pipefail):
         position = 0

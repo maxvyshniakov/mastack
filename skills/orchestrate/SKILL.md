@@ -5,85 +5,56 @@ description: Use when asked to orchestrate, run implement-spec, or build several
 
 # Orchestrate
 
-A **lane** is a registered unit of repository work, with **claims** for the paths
-it expects to change. An implementer normally works on it in a worktree; the lane
-has its own lifecycle through checks, integration, review and cleanup. It can make
-several Slotfather requests, which lease machine capacity only for executions.
+A **lane** is a registered unit of work with **claims** for the paths it expects
+to change. An implementer works in its own worktree; Slotfather requests lease
+machine capacity only for executions.
 
-Read `docs/agents/orchestration.md`: the lane tool, the report labels, the
-review policy, the owner queue and the additions to the implementer brief.
-Report missing required project files and recover the facts from the task's
-available instructions; do not guess a project's tool or publishing policy.
-Defaults apply to omitted sections. With a lane tool, drive every step through
-it. When the project has none, use worktrees, branches
-and `gh`, and keep the bookkeeping in a notes file. Put lane worktrees where
-`docs/agents/publishing.md` says, else inside the repository at
-`<repo>/.claude/worktrees/<name>` (ignored and contained, so `cleanup` finds
-them and nothing clutters the parent directory).
+Read `docs/agents/orchestration.md` (lane tool, report labels, review policy,
+owner queue, brief additions). Report missing project files; never guess tool or
+publishing policy. With a lane tool, drive every step through it; without one,
+use worktrees, branches, `gh`, and a notes file. Default worktree path when
+`docs/agents/publishing.md` names none: `<repo>/.claude/worktrees/<name>`.
 
 ## Plan
 
-1. Read the spec and every ticket with its blockers. The **frontier** is the
-   open tickets whose blockers are closed. Keep an
+1. Read the spec and every ticket with its blockers. The **frontier** is open
+   tickets whose blockers are closed. Keep an
    [accepted-requirement record](references/batch-verification.md#accepted-scope)
-   for the batch and add follow-ups as they are accepted.
+   for the batch.
 2. Create an integration branch in its own worktree. Only you write to it, and
-   only you move the main branches, through the promote tool if there is one.
-3. Budget lanes. A usage limit stops every agent at once, so run fewer lanes
-   when limits are low. Choose between reusing a warm agent and starting a
-   fresh one instead of a fixed chain-per-agent rule: reuse an agent when it
-   is still within the active provider's prompt-cache window, its context is
-   small enough to stay well under compaction (look up `warm_idle_minutes` and
-   `warm_context_tokens` for the active family under `[providers.<family>]` in
-   the model table, e.g. Anthropic with 1h subagent TTL: idle under ~50 min
-   and context under ~200K; OpenAI: ~5 min / ~150K; Google/Antigravity: ~50 min
-   / ~250K), and the next task works on the same code; otherwise start a fresh
-   agent with a brief (a WIP commit on its branch carries the state). Lanes
-   whose claims overlap run in sequence; land a prefactor that moves files
+   only you move the main branches (via the promote tool if one exists).
+3. **Budget lanes.** Run fewer lanes when usage limits are low. Choose warm
+   reuse vs fresh agent per task: reuse when idle and context stay within
+   `warm_idle_minutes` and `warm_context_tokens` under `[providers.<family>]` in
+   `models.toml` and the next task touches the same code; otherwise start fresh
+   from a WIP commit. Sequence lanes with overlapping claims; land a prefactor
    before lanes that edit around it.
 
-**Scouting.** Before you hand off a read-only scouting task (map X, find where
-Y lives, list the callers of Z), run `<this skill's directory>/scripts/role
-scout` (with `--family` or `--exclude-family` when routing by live provider
-availability); it picks Sol while Codex has quota, then Sonnet or Flash.
-Launch by harness:
-- **Codex (`sol`)**: its `run` command with `-s read-only -C <repo>
-  --output-last-message <file> "<task>" < /dev/null` in the background, then
-  read the file; without `< /dev/null` `codex exec` waits on stdin.
-- **Claude Code (`sonnet`)**: the `Agent` tool with the role's `model` and
-  `effort`, and `Role: scout` in the prompt.
-- **T3 Code / Antigravity (`flash`, or cross-provider via T3 Code)**:
-  `delegate_task` with `target.model` set to the role's `id`,
-  `target.options.<option>` set to the role's `effort` (`thought_level` for
-  Google/Antigravity, `effort` for Claude, `model_reasoning_effort` for Codex),
-  and `Role: scout` in `task`.
-A task that asks for judgment or a proposal (a design, what should replace X)
-goes to `scripts/role design` instead.
+## Launch
+
+Run `<this skill's directory>/scripts/role <role>` (with `--family` or
+`--exclude-family` to route around exhausted providers) and pass its model and
+reasoning option on **every** launch (implement, fix rounds, scouting):
+
+- **Claude Code (`Agent`)**: pass `model` and `effort`; include `Role: <role>`
+  so `hooks/agent_role.py` fills them if omitted.
+- **Codex (`codex exec`)**: use `[cli.codex].run`; for read-only scouting add
+  `-s read-only -C <repo> --output-last-message <file> "<task>" < /dev/null`
+  in the background (`< /dev/null` prevents stdin hang).
+- **T3 Code / Antigravity (`delegate_task`)**: set `target.model` to `id`,
+  `target.options.<option>` to `effort`, and include `Role: <role>` in `task`.
+  Claude Code hooks only fire for Claude-backed sessions (not Antigravity or
+  Codex), so enforce model/option selection and bounded output via the brief.
+
+**Scouting.** Use `scripts/role scout` for read-only mapping/grepping; send
+judgment or design proposals to `scripts/role design`.
 
 ## Run
 
-4. **Launch** each lane in the background with the model, effort and
-   provider-specific option `<this skill's directory>/scripts/role implement`
-   prints (it reads the live quotas; pass `--family` or `--exclude-family`
-   when routing around an exhausted provider). Pass the role's model and
-   effort on every agent launch, including fix rounds and scouting:
-   - **Claude Code (`Agent`)**: pass `model` and `effort`, and name the role
-     in the brief (`Role: <role>`) so the PreToolUse Agent hook fills them in
-     if omitted.
-   - **Codex (`codex exec`)**: use the command from `[cli.codex].run` (`model`
-     and `model_reasoning_effort`).
-   - **T3 Code / Antigravity (`delegate_task`)**: pass `target.model` and
-     `target.options.<option>` (e.g. `target.options.thought_level` for
-     `gemini-4-neon` / `gemini-4-argon` / `gemini-3.8-flash`), and name
-     `Role: <role>` in `task`. Claude Code hooks only fire for Claude-backed
-     sessions (including Claude inside T3 Code), not Antigravity or Codex, so
-     enforce explicit model/option selection and bounded tool output directly
-     through the brief.
-   Register the lane with its ticket (`--ticket`) first, so the
-   brief can name its worktree. Point at the spec and tickets; do not paste
-   them. Fill every command with the lane's id and paths: implementers spent
-   hundreds of turns on `lanefather --help` and polling `lanefather list`
-   for steps that were yours, each turn rereading their whole context.
+4. **Launch lanes.** Register each lane with `--ticket` first so the brief names
+   its worktree. Point at spec and tickets; do not paste them. Pre-fill every
+   command with lane id and paths so implementers never spend turns on `--help`
+   or polling `lanefather list`.
 
    ```text
    Role: implement
@@ -91,124 +62,82 @@ goes to `scripts/role design` instead.
    Lane <id>, registered. Base: <integration branch>. Claims: <globs>.
    Nearby lanes: <id: claims>, ...
    Worktree: <absolute path>. Branch: <lane branch>.
-   Focused checks: <the scripts and filters for what this lane changes>
-   Check: mine | yours, once before hand-back: <the lane's check command>
-   Hand back: commit, green focused checks (and the lane check if it is
-   yours), then return your report and stop.
-   After you: I run the lane check and the review together and send you both
-   results once, in this lane; then I land it (<land command>).
+   Focused checks: <scripts and filters for what this lane changes>
+   Check: mine | yours, once before hand-back: <lane check command>
+   Hand back: commit, green focused checks (and lane check if yours), return report and stop.
+   After you: I run the lane check and review together and send both results once; then I land (<land command>).
    Read <this skill's directory>/references/implementer.md, then:
-   <the project's brief additions>. Report labels: <labels>.
+   <project brief additions>. Report labels: <labels>.
    ```
-5. **Check and review before the land.** When a lane hands back a committed
-   tree with green focused checks, start its lane check and its review
-   (`cross-review`, which also says which lanes need none) at the same time;
-   they take about as long. The reviewer sees the diff, ticket, standards and
-   the [reviewer brief](../cross-review/references/reviewer-brief.md), never
-   the lane's report; give it the report's `Least sure` places as places to
-   read, without the implementer's conclusions. Triage when both finish, and
-   send the check's failures and the findings to the same implementer in one
-   message, in the same lane. It fixes, the check runs once more on the final
-   tree, and you land. Nobody reviews the fix. The report reaches you as the
-   agent's completion notice; wait for that, not on `lanefather list`.
-   Reviews after the land found defects in nearly every lane, and each then
-   cost a fix lane queued behind the lane cap and claims, a cold agent, a
-   second check and a second land, while other lanes built on the defect.
-6. **Land** a lane when its check is green and every finding is marked fixed
-   or rejected. The lane merges the integration tip before its last check, so
-   the receipt covers the merge tree and the post-merge smoke has nothing new
-   to run. Merge it into the integration branch; a red smoke goes to the lane
-   whose change broke it. Resolve trivial conflicts yourself, real ones in
-   the lane.
-   The merge message ends with `Fixes #N`, so the ticket closes only when the
-   merge reaches the default branch. After a green smoke, label the ticket
-   `integrated` (create it if missing: green, "Done and landed in the
-   integration/dev branch; not yet on main or released") and comment the merge
-   SHA, the integration branch, whether it is pushed (a SHA origin lacks is
-   "local only" and not linked), the checks it passed and the preview to try
-   it on. Where the lane tool does this (Lanefather's `[tickets]`), read its
-   output instead. Writes to the project's own tracker are bookkeeping, not
-   publishing: post the evidence comments the lane tool asks for, file
-   follow-up tickets and correct your own comments without asking, then link
-   them in the report. Push, release, publish and closing a ticket before its
-   fix ships follow `publishing.md`; another project's tracker needs the
-   owner's yes first.
-   **A lane that landed unreviewed** and gets findings later (a themed review
-   of small lanes, an audit) takes one round of fixes through the lane tool's
-   fix-round path: `lanefather review <id> --fix-lane`, or `lanefather start
-   <fix-id> --fix-of A,B,C` for several lanes; a plain `start` is an ordinary
-   lane that `land` reviews, and fix lanes started that way chained six and
-   seven rounds deep. Resume the implementer when it is still within the
-   provider's prompt-cache window and under compaction (per
-   `[providers.<family>]` in the model table), else brief a fresh agent with
-   the findings and the lane's diff. A review of fix work that runs anyway
-   opens no new round: mark its findings `rejected: fix round, not reviewed
-   again (one review per lane)`. Finish each lane in the lane tool
-   (Lanefather's `done`) as soon as its last finding is marked: finished lanes
-   left for batch end fill the disk until the tool refuses new lanes.
-7. **Recompute the frontier** after every land and launch what became ready.
+
+5. **Check and review before land.** When a lane hands back a committed tree
+   with green focused checks, start its lane check and `cross-review` together.
+   The reviewer gets the diff, ticket, standards,
+   [reviewer brief](../cross-review/references/reviewer-brief.md), and the
+   report's `Least sure` places to inspect — never the lane report or
+   conclusions. Triage when both finish and send failures + findings to the same
+   implementer in one message. It fixes, the final check runs once, and you
+   land. Nobody reviews the fix. Wait for completion notices, never poll
+   `lanefather list`.
+6. **Land** when the check is green and every finding is marked fixed or
+   rejected:
+   - Merge the integration tip into the lane before its final check, then merge
+     into the integration branch. Route a red smoke to the breaking lane;
+     resolve trivial conflicts yourself, real ones in the lane.
+   - End the merge message with `Fixes #N` so the ticket closes when it reaches
+     the default branch. After green smoke, label the ticket `integrated` and
+     comment merge SHA, branch, push status (never link an unpushed SHA), checks
+     passed, and preview (or read Lanefather `[tickets]` output).
+   - Project tracker bookkeeping (evidence comments, follow-up tickets) needs no
+     permission; another project's tracker, pushes to release branches,
+     releases, and premature closes follow `publishing.md`.
+   - **Unreviewed landed lanes** that later get findings take one fix round via
+     the lane tool's fix-round path (`lanefather review <id> --fix-lane`, or
+     `start <fix-id> --fix-of A,B,C`), never a plain `start` (which triggers
+     endless review loops). Reuse warm implementer per `[providers.<family>]`,
+     else start fresh with findings and diff. If a review runs on fix work
+     anyway, mark its findings `rejected: fix round, not reviewed again (one
+     review per lane)`.
+   - Finish each lane (`lanefather done`) as soon as its last finding is marked
+     so worktrees do not fill disk.
+7. **Recompute the frontier** after every land and launch ready tickets.
 
 ## Batch
 
-8. **Gate once per batch**: the full gate on the batch tip, not per lane. Red:
-   find the lane by running the failed suites on each merge. The batch moves to
-   the everyday branch only when it is green and every review is resolved.
-   Then push it there yourself, the way `docs/agents/publishing.md` says,
-   and report it in one line: the everyday branch does not wait for the
-   owner unless that file says it does. Push small batches, every three to
-   five lanes: a batch of 37 merges hid which lanes broke each other and
-   left a CI fix unpushed through a week of red nightly runs. The release
-   branch, a release, a publication and anything the project's guard refuses
-   stay the owner's command, each time, unless the project's publishing doc
-   gives a standing permission for the version level; then release it the way
-   the `release` skill says.
-   Cross-cutting migrations and legacy removals use the
-   [collect-all verification record](references/batch-verification.md#cross-cutting-verification)
-   before fixes are distributed.
-9. **Questions** from lane reports and reviews first go through
-   `cross-review`'s "Owner's decisions": search the session histories, tracker
-   and blame for the answer the owner already gave, and ask only what is left.
-   Those go to the owner queue the project names,
-   else to the owner in one message: numbered, each with the default the lane
-   already implemented. Record answers on the
-   spec issue, not in session notes. Settle a question yourself when the
-   default is clearly right, stays inside approved scope and is cheap to
-   reverse (lane order, skipping an optional item whose gain is marginal), and
-   report it in one line: the owner should only see real trade-offs in look,
-   behaviour, public names, cost or taste.
+8. **Gate once per batch** on the batch tip (not per lane). Red: bisect failed
+   suites across merges. Move to the everyday branch only when green and all
+   reviews are resolved; push small batches (3–5 lanes) to the everyday branch
+   per `docs/agents/publishing.md` and report in one line (the everyday branch
+   does not wait for the owner unless `publishing.md` says so). Release branch,
+   releases, and guarded publishes stay the owner's command unless `publishing.md`
+   grants standing permission (`release` skill). Cross-cutting migrations use
+   [collect-all verification](references/batch-verification.md#cross-cutting-verification).
+9. **Questions** first go through `cross-review`'s "Owner's decisions" (search
+   session histories, tracker, and blame). Send only what remains to the owner
+   queue (or one numbered message with implemented defaults); record answers on
+   the spec issue. Settle cheap, reversible in-scope defaults yourself and
+   report in one line.
 10. **After a limit stop**, resume only agents one step from done; commit the
-    rest as WIP on their branch and restart them fresh from it.
+    rest as WIP on their branch and restart fresh.
 
 ## Finish
 
-Reconcile every ticket and accepted requirement with commits and checks,
+Reconcile tickets and accepted requirements with commits and checks,
 [read back tracker changes](references/batch-verification.md#tracker-readback),
 keep release-branch pushes and publishes to explicit owner requests (`push`,
 `release`), and clean up lanes and worktrees (`cleanup`).
 
-Route what the reports carried besides the work, before the batch report;
-a line nobody routes is lost when the session ends:
+Route non-code report lines before the batch report:
 
-- `Least sure`: to the lane's reviewer (step 5), else check it yourself.
-- `Nearby`, and a review's leads: `cross-review`, "One round of fixes".
-- `Friction`: fix the brief, doc or skill it names now when it is yours;
-  a tool defect goes to that tool's tracker. Tell agents already running
-  on the same wrong line: a brief that wrapped a lane check in a second
-  lease slowed every lane for a day before one implementer said so.
-- `Upstream`: a ticket in the dependency's tracker; in a tracker the owner
-  does not control, a draft for the owner to approve.
-- A review's "should have been caught by": a check or a reviewer rule, not
-  only a ticket. A class that came back in a second lane or repository
-  (a gate's false skip, twice) is fixed where both share it.
+- `Least sure`: to the lane's reviewer (step 5), else check yourself.
+- `Nearby` and review leads: `cross-review`, "One round of fixes".
+- `Friction`: fix owned brief/doc/skill now and warn running lanes; file tool
+  defects in the tool's tracker.
+- `Upstream`: file in owned dependency tracker; draft for owner elsewhere.
+- Review's "should have been caught by": promote recurring classes to a check or
+  reviewer rule, not just a ticket.
 
-The batch report gives each count and where the lines went, then the date
-of the last `usage-audit` (weekly) and `test-audit` (monthly). Run the one
-that is due, or say why not: nobody else is asked how well the lanes, runs
-and gates work, and one gate audit the owner had to ask for halved two
-repositories' lane checks.
-
-After a release, or a promote to the default branch, comment the version or
-the main SHA on each ticket it closed, found from the `Fixes #N` lines in the
-range. A ticket whose landed work leaves known follow-ups keeps them as
-checklist items or linked issues; `integrated` still means the accepted scope
-landed.
+End the batch report with routing counts and the last run dates of
+`orchestration-audit` (weekly) and `test-audit` (monthly); run any overdue audit
+or say why not. After a release or default-branch promote, comment the version
+or main SHA on each closed ticket (`Fixes #N`).

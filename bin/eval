@@ -78,12 +78,13 @@ def agent_command(agent, model, prompt, repo):
             "--output-last-message", str(repo.parent / "out.txt"), prompt]
 
 
-def run_one(skill, path, agent, model, keep):
+def run_one(skill, path, agent, model, keep, without_skill=False):
     name = f"{skill}/{path.stem}"
     prompt, setup, grade = parse(path)
     scratch = Path(tempfile.mkdtemp(prefix=f"mastack-eval-{skill}-{path.stem}-")).resolve()
     env = {**os.environ, "EVAL": str(scratch), "MASTACK": str(ROOT)}
-    lines = [f"== {name} ({agent}, {model})  {scratch}"]
+    mode = f"{agent}, {model}, without-skill" if without_skill else f"{agent}, {model}"
+    lines = [f"== {name} ({mode})  {scratch}"]
 
     def shell(script, **kwargs):
         return subprocess.run(["bash", "-c", script], cwd=scratch, env=env, text=True,
@@ -98,6 +99,8 @@ def run_one(skill, path, agent, model, keep):
     for skills_dir in (repo / ".claude/skills", repo / ".agents/skills"):
         skills_dir.mkdir(parents=True, exist_ok=True)
         for skill_dir in sorted((ROOT / "skills").iterdir()):
+            if without_skill and skill_dir.name == skill:
+                continue
             if (skill_dir / "SKILL.md").is_file():
                 (skills_dir / skill_dir.name).symlink_to(skill_dir)
     with open(repo / ".git/info/exclude", "a") as exclude:
@@ -149,6 +152,8 @@ def main():
     parser.add_argument("--agent", choices=("claude", "codex", "none"), default="claude")
     parser.add_argument("--model", help="model id or a models.toml alias (default: opus for claude, sol for codex)")
     parser.add_argument("--keep", action="store_true", help="keep scratch directories of passing scenarios")
+    parser.add_argument("--without-skill", action="store_true",
+                        help="do not link the target skill (checks whether the model passes without it)")
     parser.add_argument("--jobs", type=int, default=3, help="scenarios run at once")
     parser.add_argument("--list", action="store_true")
     args = parser.parse_args()
@@ -168,7 +173,8 @@ def main():
 
     failed = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
-        for passed, report in pool.map(lambda p: run_one(args.skill, p, args.agent, model, args.keep), paths):
+        for passed, report in pool.map(
+                lambda p: run_one(args.skill, p, args.agent, model, args.keep, args.without_skill), paths):
             print(report, flush=True)
             failed += not passed
     print(f"\n{len(paths) - failed}/{len(paths)} scenarios passed")

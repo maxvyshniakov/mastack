@@ -9,7 +9,7 @@ longer docs it summarises instead of copying them.
 | File | Read by |
 |---|---|
 | `docs/agents/publishing.md` | `push`, `release`, `finish`, `cleanup`, `orchestrate`, `babysit-pr` |
-| `docs/agents/checks.md` | `commit`, `tdd`, `cross-review`, `browser-verify`, `test-audit`, `deps-update`, `usage-audit` |
+| `docs/agents/checks.md` | `commit`, `tdd`, `cross-review`, `browser-verify`, `test-audit`, `deps-update`, `orchestration-audit` |
 | `docs/agents/domain.md` | `grill-me`, `to-spec`, `architecture`, `research` |
 | `docs/agents/issue-tracker.md` | `status`, `roadmap`, `to-spec`, `cross-review`, `orchestrate` |
 | `docs/agents/orchestration.md` | `orchestrate` |

@@ -7,150 +7,98 @@ description: Use when asked for a review, or before shipping a large change. A m
 
 ## Set up
 
-1. **Fixed point.** The base the work started from: a SHA, branch or tag.
-   Resolve it and check the diff `git diff <base>...HEAD` is not empty.
-2. **Spec.** The issue, spec or brief the work answers. None: the spec pass is
-   skipped and the report says so.
-3. **Standards.** Coding standards the repository documents, and the Review
-   section of `docs/agents/checks.md`: project rules and what to ignore. On
-   top, a smell baseline, always as a judgment call that a documented rule
-   overrides: unclear names, duplication, feature envy, data clumps, primitive
-   obsession, repeated switches, shotgun surgery, speculative generality,
-   middle men. Two design questions on top: does the change fit the structure
-   it lands in, or is it bolted on beside it (and which refactor would make it
-   fit); and does it add a copy of behaviour the repository already has (name
-   the existing code). And a test baseline, since nothing else reads the tests and the
-   implementer wrote them to pass: a tautology (asserts a constant, recomputes
-   the code's answer), a test of a mock or fake instead of the real thing, the
-   wrong layer (a browser for text, a DOM emulator for paint), fixed sleeps or
-   wall-clock asserts outside a perf suite, a duplicate of an existing test of
-   the same rule.
-4. **Reviewer.** The model the Review section of `docs/agents/checks.md` names,
-   else what `<this skill's directory>/scripts/role review
-   --implementer-family <family>` prints: model, effort and command (or
-   `delegate_task` target for Antigravity / T3 Code; for `codex exec` pass
-   `-s read-only` and `< /dev/null`), and its note and caution in the report.
-   Use its answer, not your reading of `models.toml`: only it reads the live
-   quotas.
-5. **Depth.** Match the review to what the change can break; the Review
-   section of `docs/agents/checks.md` says which paths fall where, else judge
-   by the diff. State the depth you chose and why in the report.
-   - Mechanical (docs, a rename or move, regenerated files with no code
-     change): no review.
-   - Owner-decided look with a guard (a colour, spacing or wording the owner
-     chose after seeing it, plus a check or test that fails without the
-     change), tooling outside the shipped package, a CI or config change of a
-     few lines: no review. Write the owner's words with their date, or the
-     guard's name, where the lane tool records exemptions.
-   - Ordinary change: the spec pass only.
-   - Behaviour change in the core, or a refactor declared "behaviour
-     identical": both passes.
-   - Risky surface (migrations, auth, money, deletion, signals to processes,
-     releasing what another process holds): both passes, and both families in
-     parallel where `role` offers a reviewer of another family.
-
-   Choose the depth when the lane starts and tell the lane tool then (a fix
-   round as a fix of its parent, an exempt lane with its reason). A gate that
-   first asks for the review at the push buys a review nobody needs: ten
-   lanes were refused at one push, six of them fix rounds, a background
-   colour the owner had picked and a CI line. One exempt lane in five gets a
-   review after the fact, which blocks nothing; a serious finding there
-   tightens the list above.
-
-6. **Unit.** One review covers one contract: one subsystem, up to about 20
-   files or 1,500 changed lines. Split a larger diff by subsystem into
-   parallel reviews; each gets the whole file list for context, its own files
-   to answer for, and by name any seam it shares with another part. A
-   reviewer samples a diff that large instead of covering it: five full
-   reviews of one 4,700-line merge shared three findings and each found
-   others. Small lanes of one subsystem that landed unreviewed are reviewed
-   together as one diff: the reading is paid once, and a guard from one lane
-   is checked against the writer in another. Claims in docs, changelog and
-   comments against the code are a pass of their own for the scout model;
-   inside the defect hunt they take its attention. A second reviewer is
-   another family, not another run: two families shared fewer findings than
-   two runs of one.
+1. **Fixed point.** Resolve the base SHA/branch/tag and confirm
+   `git diff <base>...HEAD` is non-empty.
+2. **Spec.** The issue, spec, or brief the work answers. None: skip the spec
+   pass and say so.
+3. **Standards.** Repository coding standards plus the Review section of
+   `docs/agents/checks.md`, plus three baselines (documented rules override):
+   - **Smells:** unclear names, duplication, feature envy, data clumps,
+     primitive obsession, repeated switches, shotgun surgery, speculative
+     generality, middle men.
+   - **Design:** does the change fit existing structure or bolt on beside it;
+     does it duplicate existing repository behavior (cite the existing code).
+   - **Tests:** tautologies (constant asserts, recomputing code), testing
+     mocks/fakes instead of real behavior, wrong layer, fixed sleeps or
+     wall-clock asserts outside perf suites, duplicate tests of the same rule.
+4. **Reviewer.** Use the model in `docs/agents/checks.md` under Review, else run
+   `<this skill's directory>/scripts/role review --implementer-family <family>`
+   (never read `models.toml` by eye; only `role` reads live quotas). Use its
+   command or `delegate_task` target (`codex exec` needs `-s read-only` and
+   `< /dev/null`) and include its note/caution in the report.
+5. **Depth.** Choose at lane start and tell the lane tool (state depth and why
+   in the report; `docs/agents/checks.md` overrides):
+   - **None (exempt):** mechanical docs/renames/generated files; owner-decided
+     look with a guard (record owner quote/date or guard name); non-shipped
+     tooling; tiny CI/config tweaks. Audit 1 in 5 exempt lanes post-hoc
+     (non-blocking).
+   - **Spec only:** ordinary change.
+   - **Both passes:** core behavior change or "behavior identical" refactor.
+   - **Both passes, two families in parallel:** risky surfaces (migrations,
+     auth, money, deletion, process signals, releasing shared holds).
+6. **Unit.** One contract per review: one subsystem, up to ~20 files or 1,500
+   changed lines. Split larger diffs by subsystem into parallel reviews (each
+   gets the full file list and shared seams). Batch small unreviewed lanes of
+   one subsystem into one diff. Run doc/changelog claims against code as a
+   separate `scout` pass. A second reviewer must be another family, not a repeat
+   run.
 
 ## Review blind
 
-The reviewer gets the diff command, the spec and the standards, and nothing
-else: not the implementer's report, summary or self-assessment. Reviewers are
-read-only; they run no gates.
+Give the reviewer only the diff command, spec, and standards — never the
+implementer's report or self-assessment. Reviewers are read-only and run no
+gates. Run required passes in separate contexts, never merged or reranked:
 
-The passes the depth calls for, in separate contexts, never merged or reranked
-against each other:
+- **Standards:** each violation with its rule, separating hard violations from
+  judgment calls; skip what tooling already enforces.
+- **Spec:** missing, partial, unasked, or wrong behavior, quoting the spec line.
 
-- **Standards**: each violation with the rule it breaks, hard violations apart
-  from judgment calls; skip what tooling already enforces.
-- **Spec**: what is missing or partial, what was not asked for, what looks
-  implemented but wrong. Quote the spec line for each.
-
-Every reviewer's brief also asks for what
-[references/reviewer-brief.md](references/reviewer-brief.md) lists: a
-falsifier, the missing guard and a fix direction per finding, up to five leads
-wider than the diff, and a triage table. When both passes run, only the spec
-pass writes the leads and the table.
+Include [references/reviewer-brief.md](references/reviewer-brief.md) in every
+brief (falsifier, missing guard, fix direction, up to 5 wider leads, triage
+table). With both passes, only the spec pass writes leads and the triage table.
 
 ## One round of fixes
 
-Triage findings when the review finishes or the lane list/stop hook reports
-them, while the diff is fresh; the lane tool's gate enforces this before
-further lands. Every finding is marked fixed or rejected
-before promotion or release. The implementer answers every finding once:
+Triage findings as soon as the review finishes while the diff is fresh; the lane
+tool's gate enforces this before further lands. Mark every finding before
+promotion or release:
 
 - `fixed: <commit>`
-- `rejected: <reason>`, a concrete reason such as wrong premise, out of scope,
-  or contradicted by a test.
+- `rejected: <reason>` (wrong premise, out of scope, or falsifier passes).
 
-A lane reviewed before its land (`orchestrate` step 5) gets its findings in
-the same lane, from the same implementer, and lands once. For a lane that had
-already landed, with a lane tool, the fix round starts through its fix-round path
-(Lanefather: `review <id> --fix-lane`, or `start <fix-id> --fix-of A,B,C` for
-several lanes' findings), never a plain `start`: the tool reviews an ordinary
-lane at land, and fix lanes started that way chained six rounds deep.
+Pre-land reviews (`orchestrate` step 5) fix in the same lane and land once.
+Already-landed lanes start one fix round via the lane tool's fix-round path
+(`lanefather review <id> --fix-lane` or `start <fix-id> --fix-of A,B,C`), never
+a plain `start` (which loops reviews). No second review of fixes: if one runs
+anyway, mark its findings `rejected: fix round, not reviewed again (one review
+per lane)`.
 
-No second review of the fixes; review loops do not converge. A review of fix
-work that runs anyway opens no new round: each of its findings is marked
-`rejected: fix round, not reviewed again (one review per lane)`, so the lane
-finishes.
-
-A fix starts from the finding's falsifier as a failing test; a finding whose
-falsifier passes is rejected with that test as the reason. Leads are not
-findings and are not marked: a small one of the same root joins the fix round,
-a class gets its hits counted by a scout and a ticket, the rest go to
-[Owner's decisions](#owners-decisions).
+Start each fix by running the finding's falsifier as a failing test; if it
+passes, reject with that test. Leads are not findings: fold a small same-root
+lead into the fix round, count a wider class with a scout and file a ticket, and
+route the rest to [Owner's decisions](#owners-decisions).
 
 ## Owner's decisions
 
-Before a finding, lead or lane question goes to the owner, look for the answer
-they already gave; most such questions were decided in an earlier session, and
-each one asked again costs them a round trip. Search, with a scout when it is
-more than a couple of greps:
+Before escalating a finding, lead, or question to the owner, search (using a
+scout if wider than a few greps):
 
-- the session histories of every harness the owner uses (Claude Code
-  `~/.claude/projects`, Codex `~/.codex/sessions`, T3 Code and Antigravity
-  under `~/.t3/userdata/providers`), for the file, symbol or token name and
-  for the owner's own messages around it;
-- the tracker, and `git log` and `git blame` of the lines: a hand-made commit
-  by the owner is a decision, an agent's commit is not.
+- session histories across harnesses (`~/.claude/projects`, `~/.codex/sessions`,
+  `~/.t3/userdata/providers`) for the symbol/file and owner messages;
+- the tracker, `git log`, and `git blame` (an owner commit is a decision; an
+  agent commit is not).
 
 Then:
+- **Owner decided it** (unreversed quote or commit): apply and report in one
+  line with quote and date; ask only if it breaks something unseen.
+- **Agent decided it** or nothing found: settle cheap, reversible in-scope
+  defaults yourself (report in one line); otherwise ask with options, impact,
+  recommendation, and search result.
 
-- **The owner decided it** (their words, or their own commit, and nothing
-  later reverses it): apply the decision and report it in one line with the
-  quote and its date. If what they chose breaks something they could not have
-  seen, ask about that breakage only, with the quote.
-- **An agent decided it**, or nothing is found: settle it yourself when the
-  default is clearly right, stays inside approved scope, and is cheap to
-  reverse (reporting it in one line); otherwise ask, with the options, what
-  each breaks, your recommendation, and what the search found.
-
-History never authorizes a push, release, publish, deletion or spending:
-approval given in one context does not carry to the next.
+History never authorizes a push, release, publish, deletion, or spending.
 
 ## Report
 
-The depth and why, each pass as returned, then the disposition list, then one
-line per pass: the number of findings and the worst one. Then the leads with
-what became of each, and the owner's decisions found in history, each with
-its quote.
+Depth and why, each pass verbatim, disposition list, one summary line per pass
+(count and worst severity), leads with outcomes, and owner decisions found in
+history with quotes.
