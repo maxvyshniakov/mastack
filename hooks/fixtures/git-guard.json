@@ -44,7 +44,17 @@
     {"name": "worktree add outside repo in a chain with &&", "cwd": "{home}/app", "command": "git fetch origin && git worktree add {home}/outside-wt origin/main", "rules": ["worktree-location"]},
     {"name": "worktree add outside repo after ;", "cwd": "{home}/app", "command": "echo start; git worktree add --detach ../app-detached HEAD", "rules": ["worktree-location"]},
     {"name": "worktree add outside repo in a subshell", "cwd": "{home}/app", "command": "(cd {home}/kit && git worktree add ../kit-lane)", "rules": ["worktree-location"]},
-    {"name": "worktree add outside repo via git -C", "cwd": "/tmp", "command": "git -C {home}/app worktree add -B lane/x ../app-x", "rules": ["worktree-location"]}
+    {"name": "worktree add outside repo via git -C", "cwd": "/tmp", "command": "git -C {home}/app worktree add -B lane/x ../app-x", "rules": ["worktree-location"]},
+    {"name": "branch -C lane dev bypasses reference-transaction", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -C lane dev", "rules": ["protected-branch"]},
+    {"name": "branch -M lane dev non-atomically deletes lane", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -M lane dev", "rules": ["protected-branch"]},
+    {"name": "branch -m dev renames current branch onto dev", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -m dev", "rules": ["protected-branch"]},
+    {"name": "branch -M main renames current branch onto main", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -M main", "rules": ["protected-branch"]},
+    {"name": "branch -C dev copies current branch onto dev", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -C dev", "rules": ["protected-branch"]},
+    {"name": "branch -m main other renames main away", "cwd": "{home}/app", "command": "git branch -m main other", "rules": ["protected-branch"]},
+    {"name": "branch -C lane DEV case-insensitive target", "cwd": "{home}/app", "command": "git branch -C lane DEV", "rules": ["protected-branch"]},
+    {"name": "branch --force --copy lane Main", "cwd": "{home}/app", "command": "git branch --force --copy lane Main", "rules": ["protected-branch"]},
+    {"name": "branch -cm lane dev combined short flags", "cwd": "{home}/app", "command": "git branch -cm lane dev", "rules": ["protected-branch"]},
+    {"name": "branch -M -- lane dev with double-dash", "cwd": "{home}/app", "command": "git branch -M -- lane dev", "rules": ["protected-branch"]}
   ],
   "allow": [
     {"name": "audit neighbour: pipefail and a SHA refspec", "cwd": "{home}/app", "command": "set -o pipefail; git merge --ff-only d52ab67d | tail -1 && git push origin d52ab67d:refs/heads/main"},
@@ -72,6 +82,12 @@
     {"name": "worktree add inside .claude/worktrees from a linked worktree", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git worktree add ../lane-b HEAD"},
     {"name": "worktree add in /tmp scratchpad", "cwd": "{home}/app", "command": "git worktree add --detach /tmp/mastack-scratch-wt HEAD"},
     {"name": "worktree add in $TMPDIR scratchpad", "cwd": "{home}/app", "command": "git worktree add -b test/x $TMPDIR/scratch-wt main"},
-    {"name": "worktree list and remove pass", "cwd": "{home}/app", "command": "git worktree list && git worktree remove ../old-lane"}
+    {"name": "worktree list and remove pass", "cwd": "{home}/app", "command": "git worktree list && git worktree remove ../old-lane"},
+    {"name": "branch -c main my-feature copies from main", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -c main my-feature"},
+    {"name": "branch -C dev my-feature copies from dev", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -C dev my-feature"},
+    {"name": "branch -m old-lane new-lane renames non-protected branches", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -m old-lane new-lane"},
+    {"name": "branch -m new-lane renames current branch to non-protected", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -m new-lane"},
+    {"name": "branch -u origin/main sets upstream without move/copy", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -u origin/main"},
+    {"name": "branch -umain attached upstream value does not trigger -m", "cwd": "{home}/app/.claude/worktrees/lane-a", "command": "git branch -umain"}
   ]
 }

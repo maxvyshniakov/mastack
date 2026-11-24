@@ -16,6 +16,9 @@
   ref leaks in skills).
 - Hardened `hooks/git_guard.py` to catch combined `-c` shell flags (`zsh -lc`)
   and command substitutions (`$(git push --force)`).
+- Hardened `hooks/git_guard.py` (`protected-branch`) to refuse `git branch`
+  move/copy (`-c`, `-C`, `--copy`, `-m`, `-M`, `--move`) targeting `main` or
+  `dev` (or renaming `main`/`dev` away).
 - Added `--without-skill` to `bin/eval` and updated `evals/orchestrate`
   worktree paths to `.claude/worktrees/`.
 
