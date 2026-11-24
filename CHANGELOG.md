@@ -3,19 +3,27 @@
 ## Unreleased
 
 - `release_guard`: a standing permission for routine releases. A project that
-  declares `release_standing` (packages, optionally levels) in
-  `docs/agents/hooks.json` on `origin/main` gets releases, publishes, `v*` tag
-  pushes, release workflow dispatches and `promote --ship` through without a
-  go-ahead when local facts show a patch or minor of an already-tagged package
-  with no Breaking CHANGELOG entry and no access change. Majors, breaking
-  changes, first publications and access changes stay the owner's; the guard
-  now also refuses `gh repo edit --visibility`, `gh repo create --public`,
-  `npm access` changes and Pages writes through `gh api`, and release or
-  publish `gh workflow run`. What it refuses it asks on a permission card only
-  where the card reaches a person (T3 Code Claude sessions in default,
-  accept-edits or full-access mode); elsewhere, Codex included, it denies and
-  names the missing fact. `MASTACK_RELEASE_OK` keeps working. `release` and
-  `orchestrate` follow the standing permission.
+  declares `release_standing` (its package, optionally levels) in
+  `docs/agents/hooks.json` on the remote's `main` gets a patch or minor of its
+  one already-published package through without a go-ahead, when the whole
+  command is one plain documented release command (`bun run release -- <pkg>:<level>`,
+  `bun run release:publish`, `gh workflow run release-npm.yml --ref main`,
+  `lanefather promote <sha> --ship`) run from the root of a clean checkout,
+  and the facts read from the commit and the remote (`git ls-remote`, about a
+  second) show no major, no first publication, no Breaking CHANGELOG entry and
+  no access change. Majors, breaking changes, first publications and
+  visibility, access or Pages changes stay the owner's. The guard now catches
+  the ordinary spellings of these (`run --silent`, `run-script`,
+  `package-kit`, `--follow-tags`, several tags in one push, `gh api` writes,
+  `npm config`/`npm pkg` access, mixed-case workflow names) and refuses a
+  release command it cannot read. What it refuses it asks on a permission card
+  only where the card reaches a person (T3 Code Claude sessions in default,
+  accept-edits or full-access mode, not a subagent); elsewhere, Codex
+  included, it denies and names the missing fact. `MASTACK_RELEASE_OK` keeps
+  working, a release workflow dispatch included. `bash_guard` runs the release
+  guard first and refuses when it fails or runs out of time. `release` decides
+  the level first and asks the owner for anything the standing permission does
+  not cover; `orchestrate` follows it.
 - `orchestrate` Finish: every `Least sure`, `Nearby`, `Friction` and `Upstream`
   line and every review lead is routed before the batch report, and the report
   names the last `usage-audit` and `test-audit` and runs the one that is due.

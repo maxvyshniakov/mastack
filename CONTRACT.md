@@ -13,7 +13,7 @@ longer docs it summarises instead of copying them.
 | `docs/agents/domain.md` | `grill-me`, `architecture`, `tdd`, `debug`, `research` |
 | `docs/agents/issue-tracker.md` | `status`, `cross-review`, `commit`, `orchestrate` |
 | `docs/agents/orchestration.md` | `orchestrate` |
-| `docs/agents/hooks.json` | the Bash hook's `unguarded_sequence` check |
+| `docs/agents/hooks.json` | the Bash hook's `unguarded_sequence` and `release_guard` checks |
 
 `AGENTS.md` stays the entry point and points at these files; it does not repeat
 them.
@@ -163,11 +163,13 @@ main checkout.
 ```
 
 `release_standing` is the owner's standing permission for routine releases,
-read by the release guard from the file as committed on `origin/main` (an
-unlanded edit does not count). It names the packages, by their `package.json`
-name, that agents may release and publish without asking, and the levels
-(`patch`, `minor`; both when left out). Declare a package only after its first
-publication. Say the same in `publishing.md` under Release.
+read by the release guard from the file in the commit the remote's `main`
+points at (`git ls-remote origin`; a local branch or an unlanded edit does not
+count). It names the package, by its `package.json` name, that agents may
+release and publish without asking, and the levels (`patch`, `minor`; both when
+left out, none for `[]`). The guard supports one publishable package per
+repository, at the root or in `packages/<name>`. Declare it only after its
+first publication. Say the same in `publishing.md` under Release.
 
 `lanefather` has shared mutation semantics, including its global `--config PATH`
 and `--config=PATH` forms. `lanefather_commands` names project wrappers with that
