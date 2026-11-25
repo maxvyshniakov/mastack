@@ -25,7 +25,7 @@ import sys
 
 import hook_io
 import shell
-from vocabulary import SHELLS
+from vocabulary import OWNER_TOOLS, SHELLS
 
 XCRUN_VALUE = {"--sdk", "-sdk", "--toolchain", "-toolchain"}
 XCRUN_LOOKS = {"-f", "--find", "-h", "--help", "--version", "--show-sdk-path", "--show-sdk-version",
@@ -34,15 +34,28 @@ SIMCTL_VALUE = {"--set", "--profiles"}
 OWN_VALUE = {"--ttl", "--keep-for", "--label", "--lane", "--log", "--kind", "--agent"}
 
 
+def owner_tool() -> tuple[str, str] | None:
+    """Return `(tool_name, path)` for spawnfather or legacy junkfather when configured/installed, else None."""
+    cfg = hook_io.config()
+    for name, env_key in (("spawnfather", "MASTACK_SPAWNFATHER"), ("junkfather", "MASTACK_JUNKFATHER")):
+        configured = os.environ.get(env_key) or cfg.get(name)
+        if isinstance(configured, str) and configured:
+            path = os.path.expanduser(configured)
+            return (name, path) if os.access(path, os.X_OK) else None
+    for name in ("spawnfather", "junkfather"):
+        found = shutil.which(name)
+        if found:
+            return name, found
+        fallback = os.path.expanduser(f"~/.local/bin/{name}")
+        if os.access(fallback, os.X_OK):
+            return name, fallback
+    return None
+
+
 def junkfather() -> str | None:
-    """$MASTACK_JUNKFATHER or `junkfather` in hooks.json when set (None when it is not executable), else PATH, else
-    ~/.local/bin/junkfather, where its installer puts it."""
-    configured = os.environ.get("MASTACK_JUNKFATHER") or hook_io.config().get("junkfather")
-    if isinstance(configured, str) and configured:
-        path = os.path.expanduser(configured)
-        return path if os.access(path, os.X_OK) else None
-    fallback = os.path.expanduser("~/.local/bin/junkfather")
-    return shutil.which("junkfather") or (fallback if os.access(fallback, os.X_OK) else None)
+    """Compatibility wrapper returning the installed spawnfather/junkfather executable path, or None."""
+    found = owner_tool()
+    return found[1] if found else None
 
 
 def name_of(words) -> str:
@@ -90,8 +103,9 @@ def boots(words) -> bool:
 
 
 def own_parts(words):
-    """(kind, wrapped words) of `junkfather own [options] [--] CMD...`, or None for another command."""
-    if name_of(words) != "junkfather" or len(words) < 2 or words[1].literal != "own":
+    """(tool, kind, wrapped words) of `(spawnfather|junkfather) own [options] [--] CMD...`, or None."""
+    tool = name_of(words)
+    if tool not in OWNER_TOOLS or len(words) < 2 or words[1].literal != "own":
         return None
     kind, index = None, 2
     while index < len(words):
@@ -110,7 +124,7 @@ def own_parts(words):
             index += 1
         else:
             break
-    return kind, words[index:]
+    return tool, kind, words[index:]
 
 
 def _walk(lst):
@@ -177,17 +191,22 @@ def findings(command: str):
             yield shell.show(words), "boots a simulator nothing shuts down", words
             continue
         parts = own_parts(words)
-        if parts is None or parts[0] == "simulator":
+        if parts is None or parts[1] == "simulator":
             continue
-        for boot in wrapped(parts[1]):
-            yield (shell.show(words), f"runs the boot under `junkfather own` without `--kind simulator`, so it owns "
+        used_tool, _, inner = parts
+        for boot in wrapped(inner):
+            yield (shell.show(words), f"runs the boot under `{used_tool} own` without `--kind simulator`, so it owns "
                    "only the boot command, which exits at once and leaves the simulator running", boot)
 
 
 def check(data: dict):
     command = hook_io.command_of(data)
-    if command is None or "simctl" not in command or junkfather() is None:
+    if command is None or "simctl" not in command:
         return None
+    resolved = owner_tool()
+    if resolved is None:
+        return None
+    tool, _ = resolved
     try:
         found = list(findings(command))
     except (shell.Unreadable, ValueError, IndexError, StopIteration, RecursionError):
@@ -195,11 +214,11 @@ def check(data: dict):
     if not found:
         return None
     lines = list(dict.fromkeys(
-        f"- `{shown}` {why}. Run: `junkfather own --kind simulator --label \"<what it is for>\" -- "
+        f"- `{shown}` {why}. Run: `{tool} own --kind simulator --label \"<what it is for>\" -- "
         f"{' '.join(w.raw for w in boot)}`." for shown, why, boot in found))
     return hook_io.deny(
-        "simctl-boot denied this command: a simulator booted outside junkfather stays booted after the session "
-        "ends. `junkfather own --kind simulator [--ttl 2h] [--label L] -- xcrun simctl boot <udid>` owns the "
+        f"simctl-boot denied this command: a simulator booted outside {tool} stays booted after the session "
+        f"ends. `{tool} own --kind simulator [--ttl 2h] [--label L] -- xcrun simctl boot <udid>` owns the "
         "booted device and shuts it down when the session ends or its TTL runs out.\n" + "\n".join(lines))
 
 

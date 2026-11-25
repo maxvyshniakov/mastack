@@ -76,6 +76,7 @@ install_gate() {
 # tool_uses [name]: one line per tool call of the agent, "<tool>\t<input as JSON>",
 # optionally only calls of one tool. Claude runs only (reads $EVAL/agent.jsonl).
 tool_uses() {
+  [ -s "$EVAL/agent.jsonl" ] || return 0
   python3 - "$EVAL/agent.jsonl" "${1:-}" <<'PY'
 import json, sys
 path, only = sys.argv[1], sys.argv[2]
@@ -90,6 +91,13 @@ for line in open(path, encoding="utf-8"):
         if block.get("type") == "tool_use" and (not only or block.get("name") == only):
             print(f"{block['name']}\t{json.dumps(block.get('input', {}), ensure_ascii=False)}")
 PY
+}
+
+# skill_loaded <name>: true when Claude's agent.jsonl records a Skill call for
+# <name>; passes on harnesses that do not emit agent.jsonl (Codex, none).
+skill_loaded() {
+  [ -s "$EVAL/agent.jsonl" ] || return 0
+  tool_uses Skill | grep -q "\"$1\""
 }
 
 # install_lane: tools/lane, a stand-in lane tool with Lanefather's command

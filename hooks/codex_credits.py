@@ -10,8 +10,8 @@ than the review role's Codex choice needs in models.toml (`when.limit.codex_week
 reached. It finds the run by name or path, after Codex's global options (an unknown option's value or a variable
 is looked past), in chains, pipes, compound commands, command substitutions, `sh|bash|zsh -c` scripts and `eval`,
 and behind wrappers: env, nohup and the others unguarded_sequence.unwrap knows, `timeout`/`gtimeout`, `xargs`,
-`npx`/`bunx`/`pnpx` of `codex` or `@openai/codex`, and the leased command after `--` of `slotfather run` and
-`junkfather own`. It cannot see a run behind a shell alias or function, a program name in a variable (`$CODEX
+`npx`/`bunx`/`pnpx` of `codex` or `@openai/codex`, and the leased command after `--` of `slotfather run`,
+`spawnfather own`, and `junkfather own`. It cannot see a run behind a shell alias or function, a program name in a variable (`$CODEX
 exec`), or inside a script the command starts.
 
 The refusal names the share left, the threshold, what `bin/role review` picks instead, how to read the limit again,
@@ -32,7 +32,7 @@ import time
 
 import hook_io
 import shell
-from vocabulary import SHELLS
+from vocabulary import LEASED_RUNNERS, SHELLS
 
 CACHE_SECONDS = 300
 READ_SECONDS = 5.0  # at most; the hook's budget may leave less
@@ -51,7 +51,7 @@ XARGS_VALUES = {"-n", "-L", "-P", "-I", "-J", "-E", "-d", "-s", "-a", "-R", "-S"
 NPX = {"npx", "bunx", "pnpx"}
 NPX_VALUES = {"-p", "--package", "-c", "--call"}
 CODEX_PACKAGES = {"codex", "@openai/codex"}
-LEASED = {"slotfather": "run", "junkfather": "own"}
+LEASED = LEASED_RUNNERS
 
 
 def _walk(lst):

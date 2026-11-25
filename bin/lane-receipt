@@ -69,13 +69,12 @@ def main() -> int:
     base = args.base or default_base()
     try:
         changed = diff_paths(base)
-        added = diff_paths(base, ["--diff-filter=A"])
     except subprocess.CalledProcessError as error:
         sys.stderr.write(f"lane-receipt: cannot diff against {base!r}: {error.stderr.decode('utf-8', 'replace').strip()}\n")
         return 2
 
     outside = [p for p in changed if args.claims and not matches_any(p, args.claims)]
-    new_tests = [p for p in added if is_test_file(p)]
+    new_tests = [p for p in changed if is_test_file(p)]
 
     data = {
         "branch": branch,
@@ -93,7 +92,11 @@ def main() -> int:
         print(f"SHA: {sha}")
         print(f"Worktree: {worktree}")
         print(f"Outside claims: {', '.join(outside) if outside else 'none'}")
-        print(f"New tests: {', '.join(new_tests) if new_tests else 'none'}")
+        if new_tests:
+            formatted = "; ".join(f"{p}: <count>, <layer>, <seconds>" for p in new_tests)
+            print(f"New tests: {formatted}")
+        else:
+            print("New tests: none")
     return 0
 
 

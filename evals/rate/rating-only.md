@@ -41,7 +41,7 @@ save base "$(git rev-parse HEAD)"
 
 ```sh grade
 cd "$EVAL/repo"
-expect "the rate skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"rate\""'
+expect "the rate skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; skill_loaded rate'
 expect "no commit" test "$(git rev-parse HEAD)" = "$(state base)"
 expect "tree unchanged" test -z "$(git status --porcelain)"
 expect "six or more criteria scored" test "$(grep -Ec '[0-9]+(\.[0-9]+)?/10|^\|[^|]+\| *[0-9]+(\.[0-9]+)? *\|' "$EVAL/out.txt")" -ge 7

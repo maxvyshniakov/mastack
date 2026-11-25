@@ -48,7 +48,7 @@ class GitGuardTests(HookCase):
         self.assertIn("[stash]", self.denied(self.bash("git_guard.py", "git stash", "{home}/app")))
         reason = self.denied(self.bash("git_guard.py", "git worktree add ../app-outside", "{home}/app"))
         self.assertIn("[worktree-location]", reason)
-        self.assertIn("junkfather own --kind worktree", reason)
+        self.assertIn("spawnfather own --kind worktree", reason)
         self.assertIn("[protected-branch]", self.denied(self.bash("git_guard.py", "git branch -C lane dev", "{home}/app")))
 
     def test_env_replaces_the_configured_checkouts(self):

@@ -59,7 +59,7 @@ SAFE = {
     "stash": "make a WIP commit, or `git stash push -u -m <unique-tag>`, then `git stash apply <sha>` and drop "
              "your entry by its tag.",
     "worktree-location": "put the worktree under {repo}/.claude/worktrees/<name> (or in the session scratchpad / "
-                         "$TMPDIR), and wrap it with `junkfather own --kind worktree -- git worktree add ...` so it "
+                         "$TMPDIR), and wrap it with `spawnfather own --kind worktree -- git worktree add ...` so it "
                          "has an owner.",
 }
 

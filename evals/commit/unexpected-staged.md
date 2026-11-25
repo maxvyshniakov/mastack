@@ -34,7 +34,7 @@ save notes "$(git ls-files -s docs/notes.txt | cut -d' ' -f2)"
 
 ```sh grade
 cd "$EVAL/repo"
-expect "the commit skill was loaded" sh -c 'if [ -s "$EVAL/agent.jsonl" ]; then . "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"commit\""; fi'
+expect "the commit skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; skill_loaded commit'
 expect "reply names docs/notes.txt" grep -Eiq 'notes\.txt' "$EVAL/out.txt"
 expect "reply asks or stops before committing" grep -Eiq 'stop|ask|confirm|stag|index|before committing|уточн|спрос|индекс' "$EVAL/out.txt"
 expect "no commit was made" test "$(git rev-parse HEAD)" = "$(state base)"

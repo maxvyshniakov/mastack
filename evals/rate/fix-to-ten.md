@@ -42,7 +42,7 @@ save readme "$(git hash-object README.md)"
 
 ```sh grade
 cd "$EVAL/repo"
-expect "the rate skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"rate\""'
+expect "the rate skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; skill_loaded rate'
 expect "README improved" test "$(git hash-object README.md)" != "$(state readme)"
 expect "README documents both options" sh -c 'grep -q -- "--name" README.md && grep -q -- "--shout" README.md'
 expect "a total line" grep -Eiq '(Total|Итого)[^0-9]*[0-9]' "$EVAL/out.txt"

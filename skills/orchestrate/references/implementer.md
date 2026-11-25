@@ -84,8 +84,8 @@ follow-ups on the ticket as checklist items or linked issues. A lane registered
 without a ticket gets none of this; note it under `Questions`.
 
 Return at most 4000 characters to the orchestrator, ending with the footer below
-(`<orchestrate skill dir>/scripts/lane-receipt --claims <globs>` prints the
-mechanical git fields). Emit all 6 mandatory lines (plus `Screenshots` whenever
+(`<orchestrate skill dir>/scripts/lane-receipt --base <integration branch> --claims <globs>`
+prints the mechanical git fields). Emit all 6 mandatory lines (plus `Screenshots` whenever
 the lane touches rendering/styles); **omit any other optional field with nothing
 to report — never emit `: none` or `n/a` filler for omitted optional fields**:
 

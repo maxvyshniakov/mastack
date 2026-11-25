@@ -53,6 +53,49 @@ class LaneReceiptTests(unittest.TestCase):
                                  cwd=repo, env=env, capture_output=True, text=True)
             self.assertEqual(bad.returncode, 2)
 
+    def test_integration_base_and_modified_test_files(self):
+        with tempfile.TemporaryDirectory(prefix="mastack-receipt-int-") as tmp:
+            repo = pathlib.Path(tmp)
+            env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+            env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null")
+
+            def git(*args):
+                return subprocess.check_output(["git", "-C", str(repo), *args], env=env, text=True).strip()
+
+            git("init", "-q", "-b", "main")
+            (repo / "src").mkdir()
+            (repo / "tests").mkdir()
+            (repo / "src/a.py").write_text("x = 1\n")
+            (repo / "tests/test_a.py").write_text("assert True\n")
+            git("add", ".")
+            git("-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-qm", "base")
+
+            git("checkout", "-qb", "integration")
+            (repo / "other_lane.py").write_text("y = 1\n")
+            git("add", ".")
+            git("-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-qm", "other lane landed")
+
+            git("checkout", "-qb", "lane/mine")
+            (repo / "src/a.py").write_text("x = 2\n")
+            (repo / "tests/test_a.py").write_text("assert 2 == 2\n")
+            git("add", ".")
+            git("-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-qm", "modify code and existing test")
+
+            proc_json = subprocess.run(
+                [sys.executable, str(ROOT / "bin/lane-receipt"), "--base", "integration", "--claims", "src/", "tests/**", "--json"],
+                cwd=repo, env=env, capture_output=True, text=True, check=True,
+            )
+            data = json.loads(proc_json.stdout)
+            self.assertEqual(data["outside_claims"], [])
+            self.assertEqual(data["new_tests"], ["tests/test_a.py"])
+
+            proc_text = subprocess.run(
+                [sys.executable, str(ROOT / "bin/lane-receipt"), "--base", "integration", "--claims", "src/", "tests/**"],
+                cwd=repo, env=env, capture_output=True, text=True, check=True,
+            )
+            self.assertIn("Outside claims: none", proc_text.stdout)
+            self.assertIn("New tests: tests/test_a.py: <count>, <layer>, <seconds>", proc_text.stdout)
+
 
 class QuietCapTests(unittest.TestCase):
     def test_enforces_max_chars_on_long_lines_non_utf8_and_missing_command(self):

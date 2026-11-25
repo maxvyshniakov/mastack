@@ -90,7 +90,7 @@ GH_VALUE = {"-R", "--repo", "-F", "--notes-file", "-n", "--notes", "-t", "--titl
 PUSH_OPTIONS_WITH_VALUE = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
 TIMEOUT_VALUES = {"-s", "--signal", "-k", "--kill-after"}
 XARGS_VALUES = {"-n", "-L", "-P", "-I", "-J", "-E", "-d", "-s", "-a", "-R", "-S"}
-LEASED = {"slotfather": "run", "junkfather": "own"}
+LEASED = {"slotfather": "run", "spawnfather": "own", "junkfather": "own"}
 GH_VALUE |= {"-f", "--field", "-r", "--raw-field", "--ref", "-X", "--method", "--input", "-H", "--header"}
 
 STANDING_KEY = "release_standing"
@@ -135,7 +135,7 @@ def after_options(args, values: set[str]) -> list:
 
 
 def unwrap_runners(words: list[shell.Word]) -> list[shell.Word]:
-    """Unwrap env/nohup/sudo, timeout/gtimeout, xargs, and slotfather/junkfather leases."""
+    """Unwrap env/nohup/sudo, timeout/gtimeout, xargs, and slotfather/spawnfather/junkfather leases."""
     own = shell.unwrap(words)
     while own:
         name, rest = name_of(own[0]), own[1:]

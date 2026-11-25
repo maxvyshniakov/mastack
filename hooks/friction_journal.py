@@ -416,7 +416,7 @@ def type_errors(text: str, cwd, config: dict, *, session=None, source: str, ts: 
 LARGE_OUTPUT_THRESHOLD = 8_000
 _IDENTIFIER = re.compile(CONTRACT["redaction"]["identifier"]["pattern"], re.ASCII)
 _SUBCOMMAND_TOOLS = frozenset({
-    "git", "gh", "lanefather", "slotfather", "junkfather",
+    "git", "gh", "lanefather", "slotfather", "spawnfather", "junkfather",
     "bun", "npm", "pnpm", "yarn", "cargo", "docker", "kubectl", "repo-kit",
 })
 _SUBCOMMAND_VALUE_FLAGS = frozenset({

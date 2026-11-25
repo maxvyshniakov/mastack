@@ -10,10 +10,13 @@
     {"name": "inside a command substitution", "command": "out=$(xcrun simctl boot \"$UDID\" 2>&1) || echo \"$out\"", "says": "boots a simulator nothing shuts down", "run": "-- xcrun simctl boot \"$UDID\"`"},
     {"name": "simctl by path", "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/simctl boot $UDID", "says": "boots a simulator nothing shuts down", "run": "-- /Applications/Xcode.app/Contents/Developer/usr/bin/simctl boot $UDID`"},
     {"name": "junkfather own without the simulator kind", "command": "junkfather own --ttl 2h -- xcrun simctl boot $UDID", "says": "without `--kind simulator`", "run": "junkfather own --kind simulator --label \"<what it is for>\" -- xcrun simctl boot $UDID`"},
+    {"name": "spawnfather own without the simulator kind", "command": "spawnfather own --ttl 2h -- xcrun simctl boot $UDID", "says": "without `--kind simulator`", "run": "-- xcrun simctl boot $UDID`"},
     {"name": "junkfather own without the kind around sh -c", "command": "junkfather own -- bash -c 'xcrun simctl boot \"$UDID\"'", "says": "without `--kind simulator`", "run": "-- xcrun simctl boot \"$UDID\"`"}
   ],
   "allow": [
     {"name": "owned boot", "command": "junkfather own --kind simulator -- xcrun simctl boot $UDID"},
+    {"name": "owned boot via spawnfather", "command": "spawnfather own --kind simulator -- xcrun simctl boot $UDID"},
+    {"name": "owned boot via spawnfather, kind with equals", "command": "spawnfather own --kind=simulator xcrun simctl boot $UDID"},
     {"name": "owned boot with ttl and label", "command": "junkfather own --kind simulator --ttl 2h --label \"ui check\" -- xcrun simctl boot \"iPhone 17 Pro\" && xcrun simctl install booted App.app"},
     {"name": "owned boot, kind with equals", "command": "junkfather own --kind=simulator xcrun simctl boot $UDID"},
     {"name": "shutdown", "command": "xcrun simctl shutdown $UDID"},

@@ -37,7 +37,7 @@ save working "$(git hash-object src/app.txt)"
 
 ```sh grade
 cd "$EVAL/repo"
-expect "the commit skill was loaded" sh -c 'if [ -s "$EVAL/agent.jsonl" ]; then . "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"commit\""; fi'
+expect "the commit skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; skill_loaded commit'
 expect "reply names src/app.txt" grep -Eiq 'app\.txt' "$EVAL/out.txt"
 expect "reply asks or stops before committing" grep -Eiq 'stop|ask|confirm|mix|hunk|separate|before committing|уточн|спрос|смеш' "$EVAL/out.txt"
 expect "no commit was made" test "$(git rev-parse HEAD)" = "$(state base)"

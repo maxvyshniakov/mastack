@@ -58,6 +58,17 @@ class SimctlBootTests(HookCase):
         self.stand_in()
         self.assertFailsOpen("simctl_boot.py")
 
+    def test_spawnfather_env_and_wrapped_form(self):
+        fake = self.tmp / "spawnfather"
+        fake.write_text("#!/bin/sh\nexit 1\n")
+        fake.chmod(0o755)
+        self.env["MASTACK_SPAWNFATHER"] = str(fake)
+        reason = self.denied(self.bash("simctl_boot.py", "xcrun simctl boot $UDID", "{home}/app"))
+        self.assertIn("spawnfather own --kind simulator", reason)
+        self.assertIsNone(self.bash("simctl_boot.py", "spawnfather own --kind simulator -- xcrun simctl boot $UDID", "{home}/app"))
+        denied_missing_kind = self.denied(self.bash("simctl_boot.py", "spawnfather own --ttl 2h -- xcrun simctl boot $UDID", "{home}/app"))
+        self.assertIn("without `--kind simulator`", denied_missing_kind)
+
 
 if __name__ == "__main__":
     unittest.main()

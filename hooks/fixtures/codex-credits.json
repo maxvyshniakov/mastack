@@ -14,6 +14,7 @@
     {"name": "an override that is not 1", "command": "MASTACK_ALLOW_CREDITS=0 codex exec 'review'"},
     {"name": "the override on another command only", "command": "MASTACK_ALLOW_CREDITS=1 true && codex exec 'review'"},
     {"name": "leased through slotfather", "command": "slotfather run -n 1 --label 'r5 sol review' -- codex exec 'review'"},
+    {"name": "owned by spawnfather", "command": "spawnfather own --ttl 20m --label r5 -- codex review --base main"},
     {"name": "owned by junkfather", "command": "junkfather own --ttl 20m --label r5 -- codex review --base main"},
     {"name": "behind gtimeout with options", "command": "gtimeout -k 10 600 codex exec 'review'"},
     {"name": "behind xargs", "command": "printf '%s' prompt.md | xargs -0 -n 1 codex exec"},
