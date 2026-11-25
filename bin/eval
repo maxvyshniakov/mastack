@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run skill scenarios against scratch repositories and grade what the agent did.
 
-    bin/eval <skill> [scenario...] [--agent claude|codex] [--model ID] [--keep] [--jobs N]
+    bin/eval <skill> [scenario...] [--agent claude|codex|agy|none] [--model ID] [--keep] [--jobs N]
     bin/eval --list
 
 A scenario is evals/<skill>/<name>.md with a `## Prompt` section, a ```sh setup
@@ -73,9 +73,56 @@ def agent_command(agent, model, prompt, repo):
         return ["claude", "-p", prompt, "--model", model, "--output-format", "stream-json", "--verbose",
                 "--permission-mode", "auto", "--add-dir", str(repo.parent), "--setting-sources", "project,local",
                 "--strict-mcp-config", "--allowedTools", *CLAUDE_TOOLS]
+    if agent == "agy":
+        return ["agy", "-p", prompt, "--model", model, "--dangerously-skip-permissions",
+                "--add-dir", str(repo.parent), "--output-format", "stream-json"]
     return ["codex", "exec", "-C", str(repo), "-s", "workspace-write", "-c", 'approval_policy="never"',
             "-c", f'sandbox_workspace_write.writable_roots=["{repo.parent}"]', "-c", f'model="{model}"',
             "--output-last-message", str(repo.parent / "out.txt"), prompt]
+
+
+def parse_agy_stream(raw: str):
+    """Translate `agy --output-format stream-json` NDJSON into `(reply_text, claude_compat_jsonl)`."""
+    reply_text = ""
+    compat_lines = []
+    skill_re = re.compile(r"(?:^|/)(?:\.agents|\.claude|skills)/([^/]+)/SKILL\.md$")
+    for line in raw.splitlines():
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        kind = ev.get("event")
+        if kind == "result":
+            res = ev.get("result") or {}
+            if isinstance(res.get("response"), str):
+                reply_text = res["response"]
+        elif kind == "step_update":
+            su = ev.get("step_update") or {}
+            if su.get("state") != "DONE" or su.get("step_type") != "tool":
+                continue
+            info = su.get("tool_info") or {}
+            tname = su.get("tool_name") or info.get("name") or ""
+            params = info.get("parameters") or {}
+            blocks = []
+            if tname == "run_command":
+                blocks.append({"type": "tool_use", "name": "Bash", "input": {"command": params.get("CommandLine", "")}})
+            elif tname in ("replace_file_content", "multi_replace_file_content", "sed_file", "edit_file"):
+                path = params.get("TargetFile") or params.get("Path") or ""
+                blocks.append({"type": "tool_use", "name": "Edit", "input": {"file_path": path}})
+            elif tname in ("write_to_file", "write_file"):
+                path = params.get("TargetFile") or params.get("Path") or ""
+                blocks.append({"type": "tool_use", "name": "Write", "input": {"file_path": path}})
+            elif tname in ("invoke_subagent", "delegate_task"):
+                blocks.append({"type": "tool_use", "name": "Agent", "input": params})
+            elif tname in ("view_file", "read_file"):
+                path = params.get("AbsolutePath") or params.get("Path") or ""
+                blocks.append({"type": "tool_use", "name": "Read", "input": {"file_path": path}})
+                m = skill_re.search(path)
+                if m:
+                    blocks.append({"type": "tool_use", "name": "Skill", "input": {"skill": m.group(1)}})
+            if blocks:
+                compat_lines.append(json.dumps({"type": "assistant", "message": {"content": blocks}}, ensure_ascii=False))
+    return reply_text, "\n".join(compat_lines) + ("\n" if compat_lines else "")
 
 
 def run_one(skill, path, agent, model, keep, without_skill=False):
@@ -127,6 +174,12 @@ def run_one(skill, path, agent, model, keep, without_skill=False):
         reply = next((e for e in reversed(events) if e.get("type") == "result"), {})
         denials = [d.get("tool_input", {}).get("command") or d.get("tool_name") for d in reply.get("permission_denials", [])]
         (scratch / "out.txt").write_text(reply.get("result") or "")
+    elif agent == "agy":
+        raw = result.stdout if status != "timeout" else output
+        (scratch / "agy.jsonl").write_text(raw)
+        reply_text, compat_jsonl = parse_agy_stream(raw)
+        (scratch / "agent.jsonl").write_text(compat_jsonl)
+        (scratch / "out.txt").write_text(reply_text)
     elif agent == "none":
         (scratch / "out.txt").write_text("")
     (scratch / "agent.log").write_text(f"exit: {status}\n{output}")
@@ -149,8 +202,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("skill", nargs="?")
     parser.add_argument("scenarios", nargs="*")
-    parser.add_argument("--agent", choices=("claude", "codex", "none"), default="claude")
-    parser.add_argument("--model", help="model id or a models.toml alias (default: opus for claude, sol for codex)")
+    parser.add_argument("--agent", choices=("claude", "codex", "agy", "none"), default="claude")
+    parser.add_argument("--model", help="model id or a models.toml alias (default: opus for claude, sol for codex, neon for agy)")
     parser.add_argument("--keep", action="store_true", help="keep scratch directories of passing scenarios")
     parser.add_argument("--without-skill", action="store_true",
                         help="do not link the target skill (checks whether the model passes without it)")
@@ -169,7 +222,8 @@ def main():
         sys.exit(f"eval: no scenario {', '.join(map(str, missing)) or 'in ' + str(EVALS / args.skill)}")
     if args.agent != "none" and not shutil.which(args.agent):
         sys.exit(f"eval: {args.agent} not on PATH")
-    model = "-" if args.agent == "none" else model_id(args.model or ("opus" if args.agent == "claude" else "sol"))
+    default_alias = {"claude": "opus", "codex": "sol", "agy": "neon"}.get(args.agent, "")
+    model = "-" if args.agent == "none" else model_id(args.model or default_alias)
 
     failed = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
