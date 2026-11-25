@@ -9,15 +9,14 @@
   breaker stored in `provider-health.json`.
 - `bin/install-shims` and `bin/shim-exec`: cross-harness PATH shims so
   `bash_guard` protects Codex and Antigravity / T3 Code sessions.
-- `bin/friction report`: added local journal ranking subcommand that separates
-  `large-bash-output` tool noise into a compact bottom summary by default
-  (pass `--include-tool-noise` to rank it inline).
-- `bin/friction scan`: T3 / Antigravity scanner now prefers sibling
-  `transcript_full.jsonl` when present (avoiding truncated `USER_INPUT` prompts),
-  infers project `cwd` from tool-call paths, and detects `type-error` in
-  `GENERIC` outputs and reverted `edit_file` usage in `PLANNER_RESPONSE` tool calls.
-- `bin/friction scan`: added T3 / Antigravity `transcript.jsonl` scanning and
-  `owner-turns.jsonl` decision index (referenced from `cross-review`).
+- `bin/friction report` and `bin/friction scan`: added local journal ranking
+  subcommand (`--package`, `--since`, `--limit`, `--include-tool-noise`,
+  `--json`) that separates `large-bash-output` tool noise into a compact bottom
+  summary by default; added T3 / Antigravity `transcript.jsonl` scanning and
+  `owner-turns.jsonl` decision index (preferring sibling `transcript_full.jsonl`
+  when present, pre-pass project `cwd` inference, compact stringified
+  `tool_calls` args, `GENERIC` command output `type-error` detection, and
+  reverted `edit_file` usage) (mastack#35).
 - `bin/lane-receipt` and `bin/quiet-cap`: machine-generated mechanical lane
   report fields and >8K Bash output capping with temp log path.
 - `bin/sync-docs --check`: verifies `README.md` and `models.md` tables against

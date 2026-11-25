@@ -334,8 +334,10 @@ found.
 
 Moments an agent misread or misused one of your packages land in one local
 JSONL file, `$XDG_STATE_HOME/friction/events.jsonl` (repo-kit's friction
-schema; `repo-kit friction report` ranks it, `repo-kit friction export` writes
-a redacted bundle to share), so `friction-audit` starts from counts. Which
+schema; `bin/friction report` ranks it with `large-bash-output` noise
+separated by default — pass `--include-tool-noise` to include it inline —
+and `repo-kit friction export` writes a redacted bundle to share), so
+`friction-audit` starts from counts. Which
 packages count is `~/.config/mastack/friction.json` (`$MASTACK_CONFIG`); see
 `hooks/friction_journal.py`. Without it nothing is logged;
 `FRICTION_JOURNAL=off` turns every writer off. Nothing goes over the network.

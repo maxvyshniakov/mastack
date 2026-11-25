@@ -17,8 +17,10 @@ Start with the **friction journal**, then read the rest with a subagent
   `hooks/friction_journal.py`): lint findings beyond the baseline, type errors
   on the package's types, the owner's `/friction` corrections, corrections and
   misuse the session scanner found, vendored-copy patches. Rank it with
-  `repo-kit friction report --package <name> --since <period>`, or read the
-  JSONL. Run `bin/friction scan` first so the newest sessions are in. Each
+  `bin/friction report [--package <name>] [--since <period>]` (separates
+  `large-bash-output` noise by default; pass `--include-tool-noise` to rank it
+  inline) or `repo-kit friction report --package <name> --since <period>`, or
+  read the JSONL. Run `bin/friction scan` first so the newest sessions are in. Each
   event's `why`, file and session point at the evidence; read the transcript
   only there and for the sources below that the journal does not cover.
   Coworkers' `repo-kit friction export` bundles count the same way.

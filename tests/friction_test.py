@@ -530,8 +530,32 @@ class ReportTests(FrictionCase):
 
         limited = json.loads(self.run_friction("report", "--limit", "1", "--json").stdout)
         self.assertEqual(len(limited["ranking"]), 1)
+        self.assertEqual((limited["total_groups"], limited["truncated_groups"]), (2, 1))
         self.assertEqual(limited["excluded_tool_noise"], 8)
         self.assertEqual(limited["tool_noise"][0]["rule"], "large-bash-output")
+        self.assertIn("... 1 more", self.run_friction("report", "--limit", "1").stdout)
+
+    def test_report_validates_since_and_limit_and_tolerates_non_string_fields(self):
+        self._seed_journal()
+        bad_since = self.run_friction("report", "--since", "not-a-date", check=False)
+        self.assertEqual(bad_since.returncode, 2)
+        self.assertIn("invalid --since", bad_since.stderr)
+
+        bad_limit = self.run_friction("report", "--limit", "0", check=False)
+        self.assertEqual(bad_limit.returncode, 2)
+        self.assertIn("--limit must be a positive integer", bad_limit.stderr)
+
+        # Relative <N>d is accepted.
+        rel = self.run_friction("report", "--since", "3650d", "--json")
+        self.assertEqual(json.loads(rel.stdout)["total"], 11)
+
+        # Malformed non-string fields in the journal must not crash report.
+        with open(self.journal, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"v": 1, "ts": 12345, "package": ["bad"], "kind": "note",
+                                     "component": 99, "rule": {"nested": True}}) + "\n")
+        out = self.run_friction("report", "--json")
+        data = json.loads(out.stdout)
+        self.assertGreaterEqual(data["included"], 4)
 
     def test_report_handles_noise_only_journal(self):
         friction_journal.append([
