@@ -40,7 +40,13 @@ reviewer already read, plus one repository-wide grep per item. Split Part 2 into
 two explicit buckets:
 
 - **Follow-ups** (`small` — about N lines, one sensible outcome — or `lane`):
-  out-of-scope leads to fix or queue in the tracker without asking the owner.
+  0–3 high-leverage systemic/cross-cutting leads to fix or queue in the tracker
+  without asking the owner (`none` is a complete answer — never invent filler).
+  Format each item so a follow-up ticket or agent starts warm:
+  - `[<small|lane>, <high|med>] <file:line> — <what hurts / smells>`
+  - `Proof:` concrete fact observed (grep hit count, rule mismatch, live probe)
+  - `Direction:` which seam/module should own it plus any trap to avoid
+  - `Verify:` test, lint rule, or command that proves the fix
 - **Owner decisions** (omit if empty): ONLY choices that are irreversible,
   require explicit owner authorization, or are genuine product/contract
   trade-offs not already answered by `AGENTS.md`, the ticket, or docs. Never

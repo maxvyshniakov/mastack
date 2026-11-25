@@ -137,7 +137,10 @@ keep release-branch pushes and publishes to explicit owner requests (`push`,
 Route non-code report lines before the batch report:
 
 - `Least sure`: to the lane's reviewer (step 5), else check yourself.
-- `Nearby` and review leads: `cross-review`, "One round of fixes".
+- `Nearby`, `Garden`, and review follow-ups: fold `small` same-root items into
+  the fix round; deduplicate `lane` items against open issues and file them
+  with their `Proof / Direction / Verify` body; drop noise. Record
+  `Garden yield` (kept vs dropped) in the batch report.
 - `Friction`: fix owned brief/doc/skill now and warn running lanes; file tool
   defects in the tool's tracker.
 - `Upstream`: file in owned dependency tracker; draft for owner elsewhere.

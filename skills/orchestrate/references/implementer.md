@@ -104,6 +104,7 @@ Outside claims: none | <paths>
 Owner-visible defaults changed: none | <each one>
 Questions: none | <numbered, each with the default you implemented>
 Nearby: none | <at most five, each with a size>
+Garden: none | <0-3 high-leverage warm-context leads: [small|lane, high|med] file:line — what hurts; Proof / Direction (seam + trap) / Verify>
 Least sure: none | <at most three: the place, why, the check that would settle it>
 Decisions: none | <each choice the ticket did not dictate: what, over what, why>
 Friction: none | <what the brief, docs or tools got wrong or left out, and the fix>
@@ -120,6 +121,16 @@ places (pattern, number of hits, two examples), a fix that belongs in another
 layer, a decision the ticket took silently. Leads, not work: size each as
 small (about N lines), a lane, or owner's decision. You were deeper in this
 code than the reviewer will be, and the orchestrator cannot ask you later.
+
+`Garden` captures 0–3 high-leverage maintainability, API, or invariant leads
+from your warm context (think like a gardener who will maintain this codebase
+for years; `none` is a complete answer — never invent filler or style nits).
+Do not fix them in this lane. Each item must include four lines so the next
+agent starts warm instead of re-exploring:
+- `[<small|lane>, <high|med>] <file:line> — <what hurts / smells>`
+- `Proof:` concrete fact observed in this session (grep count, broken invariant, real friction)
+- `Direction:` which module/API should own it plus any trap/gotcha you already saw
+- `Verify:` test, lint rule, or command that proves the fix
 
 `Least sure` is where you made a judgment call or could not verify (an effect
 order, a browser you did not run, a path with no test). The reviewer samples a
