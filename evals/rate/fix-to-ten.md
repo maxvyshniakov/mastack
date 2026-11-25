@@ -46,10 +46,10 @@ expect "the rate skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; skill_loade
 expect "README improved" test "$(git hash-object README.md)" != "$(state readme)"
 expect "README documents both options" sh -c 'grep -q -- "--name" README.md && grep -q -- "--shout" README.md'
 expect "a total line" grep -Eiq '(Total|Итого)[^0-9]*[0-9]' "$EVAL/out.txt"
-expect "a subagent re-scored after the last README edit" sh -c '
+expect "a subagent or fresh reviewer re-scored after the last README edit" sh -c '
   . "$MASTACK/evals/lib.sh"
   tool_uses | awk -F "\t" "
     /^(Edit|Write)\t/ && /README.md/ { last_edit = NR }
-    /^(Agent|Task)\t/ { last_agent = NR }
+    /^(Agent|Task)\t/ || (/^Bash\t/ && /(claude -p|codex (exec|review)|agy -p)/) { last_agent = NR }
     END { exit !(last_edit && last_agent > last_edit) }"'
 ```
