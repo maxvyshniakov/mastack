@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.6.0
+
 - Skills pack cleanup and single-owner consolidation across all 29 skills and
   references:
   - Adopted `1 agent = 1 checkout (worktree)` invariant: removed
