@@ -36,6 +36,12 @@
   - Overhauled `README.md` (and `THIRD_PARTY_NOTICES.md`) to showcase core
     design choices, add a clearer Mermaid workflow diagram, and link all five
     public `fathers` companion tools.
+  - Added `spawnfather` support alongside legacy `junkfather` across hooks
+    (`vocabulary.py`, `simctl_boot.py`, `codex_credits.py`, `release_guard.py`,
+    `git_guard.py`, `friction_journal.py`), updated `bin/lane-receipt` to
+    report modified test files in footer format with `--base`, added
+    `--agent agy` (Antigravity / Neon) to `bin/eval`, and centralized
+    harness-agnostic `skill_loaded` in `evals/lib.sh`.
 - `bin/install`: added `--pin <ref>` / `--update <ref>` (`--pin-dir`) to install
   from a dedicated tag-pinned worktree instead of the live working checkout.
 - `bin/role`: added `--harness <auto|claude|codex|t3>` (ready-to-use launch
