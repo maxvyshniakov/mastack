@@ -478,5 +478,71 @@ class CommandTests(FrictionCase):
         self.assertTrue(plist["RunAtLoad"])
 
 
+class ReportTests(FrictionCase):
+    def _seed_journal(self):
+        events = [
+            friction_journal.event(package="@acme/ui-kit", kind="type-error", project="app", source="mastack-hook",
+                                   ts="2026-11-24T10:00:00.000Z", component="CollapsibleTrigger", rule="TS2322",
+                                   detail="TS2322: bad prop"),
+            friction_journal.event(package="@acme/ui-kit", kind="type-error", project="app", source="mastack-hook",
+                                   ts="2026-11-24T10:01:00.000Z", component="CollapsibleTrigger", rule="TS2322",
+                                   detail="TS2322: bad prop 2"),
+            friction_journal.event(package="@acme/ui-kit", kind="owner-correction", project="app", source="mastack-scan",
+                                   ts="2026-11-20T09:00:00.000Z", component="ItemBody", detail="use ItemBody"),
+        ]
+        for i in range(5):
+            events.append(friction_journal.event(package="mastack", kind="note", project="app", source="mastack-hook",
+                                                 ts=f"2026-11-24T11:0{i}:00.000Z", component="sed",
+                                                 rule="large-bash-output", detail="9000 chars: sed"))
+        for i in range(3):
+            events.append(friction_journal.event(package="mastack", kind="note", project="app", source="mastack-hook",
+                                                 ts=f"2026-11-24T12:0{i}:00.000Z", component="git/diff",
+                                                 rule="large-bash-output", detail="9500 chars: git diff"))
+        friction_journal.append(events, {"FRICTION_JOURNAL": str(self.journal)})
+
+    def test_report_separates_large_bash_output_noise_by_default(self):
+        self._seed_journal()
+        out = self.run_friction("report").stdout
+        self.assertIn("friction report: 3 events (11 total, 8 tool noise excluded)", out)
+        # Main ranking contains package friction and not large-bash-output rows.
+        ranking_part, _, noise_part = out.partition("Tool noise")
+        self.assertIn("CollapsibleTrigger", ranking_part)
+        self.assertIn("ItemBody", ranking_part)
+        self.assertNotIn("large-bash-output", ranking_part)
+        self.assertIn("large-bash-output: 8 events (sed 5, git/diff 3)", noise_part)
+        self.assertIn("--include-tool-noise", noise_part)
+
+    def test_report_include_tool_noise_ranks_large_bash_output_inline(self):
+        self._seed_journal()
+        out = self.run_friction("report", "--include-tool-noise").stdout
+        self.assertIn("friction report: 11 events", out)
+        self.assertNotIn("Tool noise", out)
+        self.assertIn("large-bash-output", out)
+        # sed (5) outranks CollapsibleTrigger (2) when included inline.
+        self.assertLess(out.index("sed"), out.index("CollapsibleTrigger"))
+
+    def test_report_filters_by_package_since_limit_and_json(self):
+        self._seed_journal()
+        data = json.loads(self.run_friction("report", "--since", "2026-11-24", "--package", "@acme/ui-kit", "--json").stdout)
+        self.assertEqual((data["total"], data["included"], data["excluded_tool_noise"]), (2, 2, 0))
+        self.assertEqual(len(data["ranking"]), 1)
+        self.assertEqual((data["ranking"][0]["component"], data["ranking"][0]["count"]), ("CollapsibleTrigger", 2))
+
+        limited = json.loads(self.run_friction("report", "--limit", "1", "--json").stdout)
+        self.assertEqual(len(limited["ranking"]), 1)
+        self.assertEqual(limited["excluded_tool_noise"], 8)
+        self.assertEqual(limited["tool_noise"][0]["rule"], "large-bash-output")
+
+    def test_report_handles_noise_only_journal(self):
+        friction_journal.append([
+            friction_journal.event(package="mastack", kind="note", project="app", source="mastack-hook",
+                                   ts="2026-11-24T11:00:00.000Z", component="cat", rule="large-bash-output",
+                                   detail="10000 chars: cat"),
+        ], {"FRICTION_JOURNAL": str(self.journal)})
+        out = self.run_friction("report").stdout
+        self.assertIn("(no package friction events)", out)
+        self.assertIn("large-bash-output: 1 events (cat 1)", out)
+
+
 if __name__ == "__main__":
     unittest.main()

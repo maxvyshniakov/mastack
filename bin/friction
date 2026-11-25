@@ -2,6 +2,7 @@
 """Fill the friction journal from ordinary sessions, vendored copies and the owner's corrections.
 
     bin/friction log [--package P] [--component C] [--kind K] [--session S] [--project P] TEXT...
+    bin/friction report [--package P] [--since YYYY-MM-DD] [--limit N] [--include-tool-noise] [--json]
     bin/friction scan [--dry-run] [--quiet] [--all] [--since YYYY-MM-DD]
     bin/friction vendor [--dry-run] [--quiet]
     bin/friction plist [--interval SECONDS]
@@ -365,9 +366,11 @@ class Scanner:
 
     def t3(self, path: Path) -> None:
         session = path.parent.parent.parent.name
-        ctx = self.context(path, session)
+        full = path.with_name("transcript_full.jsonl")
+        source_path = full if full.is_file() else path
+        ctx = self.context(source_path, session)
         cwd = ctx.get("cwd")
-        for line in self.lines(path):
+        for line in self.lines(source_path):
             try:
                 item = json.loads(line)
             except ValueError:
@@ -376,10 +379,9 @@ class Scanner:
             if self.since and ts and ts < self.since:
                 continue
             kind = item.get("type")
-            content = item.get("content") or ""
-            if not isinstance(content, str):
-                continue
-            if not cwd:
+            raw_content = item.get("content")
+            content = raw_content if isinstance(raw_content, str) else ""
+            if not cwd and content:
                 m_cwd = re.search(r"Command Working Directory:\s*(\S+)", content)
                 if m_cwd:
                     cwd = m_cwd.group(1)
@@ -388,8 +390,40 @@ class Scanner:
                 text = unwrap_t3_user(content)
                 if text:
                     self.human(ctx, text, cwd, ts)
-            elif kind == "PLANNER_RESPONSE" and content:
-                self.agent_text(ctx, content, cwd, ts)
+            elif kind == "PLANNER_RESPONSE":
+                if content:
+                    self.agent_text(ctx, content, cwd, ts)
+                for tc in item.get("tool_calls") or []:
+                    if not isinstance(tc, dict):
+                        continue
+                    tool_args = tc.get("args") or {}
+                    if isinstance(tool_args, dict):
+                        if not cwd:
+                            inferred = _infer_t3_cwd(tool_args)
+                            if inferred:
+                                cwd = inferred
+                                ctx["cwd"] = cwd
+                        ctx["agent"] = (ctx["agent"] + "\n" + json.dumps(tool_args)[:4000])[-AGENT_CONTEXT:]
+                        if tc.get("name") == "edit_file":
+                            self.edit(ctx, str(tool_args.get("Path") or ""), str(tool_args.get("Target") or ""),
+                                      str(tool_args.get("Replacement") or ""), cwd, ts)
+                    elif tool_args:
+                        ctx["agent"] = (ctx["agent"] + "\n" + str(tool_args)[:4000])[-AGENT_CONTEXT:]
+            elif kind == "GENERIC" and content:
+                self.tool_output(ctx, content, cwd, ts)
+
+
+def _infer_t3_cwd(tool_args: dict) -> str | None:
+    """Infer a workspace directory from Antigravity tool_call arguments (Path or Cwd)."""
+    for key in ("Cwd", "Path"):
+        val = tool_args.get(key)
+        if not isinstance(val, str) or not val.startswith("/"):
+            continue
+        if "/.t3/userdata/providers/" in val or "/.system_generated/" in val:
+            continue
+        p = Path(val)
+        return str(p if key == "Cwd" or p.is_dir() else p.parent)
+    return None
 
 
 T3_SKIP_PREFIXES = ("[T3 Code: the agent in T3 thread", "Delegated task node:delegated-task:")
@@ -647,6 +681,100 @@ def run_log(args) -> int:
     return 0
 
 
+TOOL_NOISE_RULES = frozenset({"large-bash-output"})
+
+
+def is_tool_noise(item: dict) -> bool:
+    return item.get("rule") in TOOL_NOISE_RULES
+
+
+def build_report(events: list[dict], *, package: str | None = None, since: str | None = None,
+                 include_tool_noise: bool = False, limit: int = 20) -> dict:
+    filtered = [
+        e for e in events
+        if (not since or (e.get("ts") or "") >= since)
+        and (not package or e.get("package") == package)
+    ]
+    if include_tool_noise:
+        main_events, noise_events = filtered, []
+    else:
+        main_events = [e for e in filtered if not is_tool_noise(e)]
+        noise_events = [e for e in filtered if is_tool_noise(e)]
+
+    counts: dict[tuple[str, str, str, str], int] = {}
+    for e in main_events:
+        key = (e.get("package") or "unknown", e.get("kind") or "note", e.get("component") or "-", e.get("rule") or "-")
+        counts[key] = counts.get(key, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:max(0, limit)]
+    ranking = [
+        {"count": count, "package": pkg, "kind": kind, "component": comp, "rule": rule}
+        for (pkg, kind, comp, rule), count in ranked
+    ]
+
+    noise_by_rule: dict[str, dict[str, int]] = {}
+    for e in noise_events:
+        rule = e.get("rule") or "tool-noise"
+        comp = e.get("component") or "-"
+        by_comp = noise_by_rule.setdefault(rule, {})
+        by_comp[comp] = by_comp.get(comp, 0) + 1
+    tool_noise = []
+    for rule, by_comp in sorted(noise_by_rule.items(), key=lambda kv: (-sum(kv[1].values()), kv[0])):
+        comps = sorted(by_comp.items(), key=lambda kv: (-kv[1], kv[0]))
+        tool_noise.append({
+            "rule": rule,
+            "count": sum(by_comp.values()),
+            "components": [{"component": c, "count": n} for c, n in comps],
+        })
+
+    return {
+        "total": len(filtered),
+        "included": len(main_events),
+        "excluded_tool_noise": len(noise_events),
+        "ranking": ranking,
+        "tool_noise": tool_noise,
+    }
+
+
+def format_report(report: dict) -> str:
+    lines: list[str] = []
+    header = f"friction report: {report['included']} events"
+    if report["excluded_tool_noise"]:
+        header += f" ({report['total']} total, {report['excluded_tool_noise']} tool noise excluded)"
+    lines.append(header)
+    if report["ranking"]:
+        pkg_w = max(len(r["package"]) for r in report["ranking"])
+        kind_w = max(len(r["kind"]) for r in report["ranking"])
+        comp_w = max(len(r["component"]) for r in report["ranking"])
+        for r in report["ranking"]:
+            lines.append(f"  {r['count']:>4}  {r['package']:<{pkg_w}}  {r['kind']:<{kind_w}}  "
+                         f"{r['component']:<{comp_w}}  {r['rule']}")
+    else:
+        lines.append("  (no package friction events)")
+    if report["tool_noise"]:
+        lines.append("")
+        lines.append("Tool noise (excluded from ranking; pass --include-tool-noise to include):")
+        for bucket in report["tool_noise"]:
+            top = ", ".join(f"{c['component']} {c['count']}" for c in bucket["components"][:5])
+            suffix = f" ({top})" if top else ""
+            lines.append(f"  {bucket['rule']}: {bucket['count']} events{suffix}")
+    return "\n".join(lines)
+
+
+def run_report(args) -> int:
+    report = build_report(
+        fj.read(),
+        package=args.package,
+        since=args.since,
+        include_tool_noise=args.include_tool_noise,
+        limit=args.limit,
+    )
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(format_report(report))
+    return 0
+
+
 def run_plist(args) -> int:
     state = state_path().parent
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}
@@ -680,6 +808,13 @@ def main() -> int:
     log.add_argument("--session")
     log.add_argument("--project")
     log.add_argument("text", nargs="*")
+    report = sub.add_parser("report", help="rank friction journal events (separates tool noise by default)")
+    report.add_argument("--package")
+    report.add_argument("--since")
+    report.add_argument("--limit", type=int, default=20)
+    report.add_argument("--include-tool-noise", action="store_true",
+                        help="include large-bash-output noise inline in the main ranking")
+    report.add_argument("--json", action="store_true")
     scan = sub.add_parser("scan", help="read new transcripts")
     scan.add_argument("--dry-run", action="store_true")
     scan.add_argument("--quiet", action="store_true")
@@ -691,7 +826,7 @@ def main() -> int:
     plist = sub.add_parser("plist", help="print the launchd agent")
     plist.add_argument("--interval", type=int, default=86400)
     args = parser.parse_args()
-    return {"log": run_log, "scan": run_scan, "vendor": run_vendor, "plist": run_plist}[args.command](args)
+    return {"log": run_log, "report": run_report, "scan": run_scan, "vendor": run_vendor, "plist": run_plist}[args.command](args)
 
 
 if __name__ == "__main__":
