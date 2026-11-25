@@ -27,7 +27,7 @@ Recommendation: <your answer and reason>
 ## Facts are yours, decisions are theirs
 
 Look up anything the code, docs, tracker or tools can answer, using parallel
-read-only `scout` subagents (`bin/role scout`) when starting on an existing
+read-only `scout` subagents (`<this skill's directory>/scripts/role scout`) when starting on an existing
 repository (code, open issues, recent history). Never ask the user a fact you
 could find. Put every real choice to them with your recommendation; do not
 reopen settled decisions or turn delegated technical details into approval gates.

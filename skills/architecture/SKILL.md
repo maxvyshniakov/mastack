@@ -67,7 +67,7 @@ For the chosen candidate, classify its dependencies: `in-process`, `local stand-
 `owned remote` (port plus adapters), `true external` (injected, mocked in tests).
 Design two or three radically different interfaces (minimal entry points; most
 common caller trivial; ports and adapters): spawn parallel `design` subagents
-(`bin/role design`) for public, persistent, or core cross-cutting seams, and
+(`<this skill's directory>/scripts/role design`) for public, persistent, or core cross-cutting seams, and
 sketch the contrasts inline yourself for local internal seams (parallel frontier
 subagents reread the repo per launch). Compare on depth, locality and seam
 placement, and recommend one, hybrid if better. Tests move to the new interface;

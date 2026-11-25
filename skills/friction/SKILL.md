@@ -22,4 +22,4 @@ local friction journal so a later friction audit counts it.
 2. Reply with the one line it prints. Do not act on the correction unless the
    owner asked for that too; then apply it as usual.
 
-Nothing leaves the machine. `bin/friction report` (or `repo-kit friction report`) ranks the journal.
+Nothing leaves the machine. `<this skill's directory>/scripts/friction report` (or `repo-kit friction report`) ranks the journal.

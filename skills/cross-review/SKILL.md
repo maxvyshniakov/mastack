@@ -65,8 +65,10 @@ Pre-land reviews (`orchestrate` step 5) fix in the same lane and land once.
 Already-landed lanes take one fix round via `lanefather review <id> --fix-lane`
 or `start <fix-id> --fix-of A,B,C`, never plain `start` (which loops reviews).
 No second review of fixes: on a stray fix-round review, mark findings
-`rejected: fix round, not reviewed again (one review per lane)` unless a finding
-is a verified P0 with a failing falsifier (flag and fix before land/promotion).
+`rejected: fix round, not reviewed again (one review per lane)`. Only if the
+coordinator verifies a `P0` finding ([reviewer brief](references/reviewer-brief.md))
+by running its falsifier and seeing it fail, fix it via the fix-round path
+(`--fix-lane` / `--fix-of`), and that fix lands with no further review.
 
 Start each fix by running the finding's falsifier as a failing test; if it
 passes, reject with that test. Leads are not findings: route `Follow-ups` per
@@ -81,14 +83,16 @@ Before escalating a finding, lead, or question, search in authority order (use a
 1. Project docs, `AGENTS.md`, glossary, and ADRs (`docs/agents/domain.md`).
 2. Tracker, PR threads, `git log`, and `git blame` (owner commit = decision;
    agent commit = not).
-3. `$XDG_STATE_HOME/mastack/owner-turns.jsonl` (`bin/friction scan`), checking
-   matching repo, feature/contract context, and freshness.
+3. `$XDG_STATE_HOME/mastack/owner-turns.jsonl` (maintained by the friction
+   scanner), checking matching repo/feature context and freshness: a chat quote
+   is fresh only if newer than the latest commit touching that path or contract
+   (`git log -1 -- <path>`) and not superseded by docs or ADRs.
 
 Then:
-- **Authoritative or recent owner decision** (doc/ADR, owner commit, or fresh
+- **Authoritative or fresh owner decision** (doc/ADR, owner commit, or fresh
   in-context quote): apply and report in one line with citation/quote and date;
   ask only if it breaks something unseen.
-- **Stale or tangential chat-only remark:** propose as a default with quote and
+- **Older or tangential chat-only remark:** propose as a default with quote and
   date, never silent binding law.
 - **Agent decided or nothing found:** settle cheap, reversible in-scope defaults
   yourself (`Decisions`, one-line report). Escalate ONLY irreversible,

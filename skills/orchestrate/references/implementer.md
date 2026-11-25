@@ -26,7 +26,7 @@ only after a command fails: every help or status call rereads your whole context
 - Keep the diff to your tickets; other lanes edit nearby files on parallel
   branches.
 - Keep tool output small (every tool result stays in context on later turns):
-  wrap noisy commands (>8K output) with `bin/quiet-cap -- <cmd>`, read only
+  wrap noisy commands (>8K output) with `<orchestrate skill dir>/scripts/quiet-cap -- <cmd>`, read only
   needed line ranges, cap searches (`grep -m`, `| head`), run `git show --stat`
   / `git diff --stat` before a full diff, and tail or grep logs instead of
   printing them whole.
@@ -79,14 +79,15 @@ is no second review.
 
 Comment on each ticket: what changed, RED and GREEN evidence, check totals, new
 tests with layer and run time, deviations and why. Leave the ticket open (the
-orchestrator closes it at land). Put known follow-ups on the ticket as checklist
-items or linked issues. A lane registered without a ticket gets none of this;
-note it under `Questions`.
+orchestrator handles integration labels and default-branch closing). Put known
+follow-ups on the ticket as checklist items or linked issues. A lane registered
+without a ticket gets none of this; note it under `Questions`.
 
 Return at most 4000 characters to the orchestrator, ending with the footer below
-(`bin/lane-receipt --claims <globs>` prints the mechanical git fields). Emit all
-6 mandatory lines; **omit any optional field with nothing to report — never emit
-`: none` or `n/a` filler for optional fields**:
+(`<orchestrate skill dir>/scripts/lane-receipt --claims <globs>` prints the
+mechanical git fields). Emit all 6 mandatory lines (plus `Screenshots` whenever
+the lane touches rendering/styles); **omit any other optional field with nothing
+to report — never emit `: none` or `n/a` filler for omitted optional fields**:
 
 ```text
 Branch: <lane branch>
@@ -118,7 +119,9 @@ Optional fields (omit completely when empty):
 - `Friction:` one line per brief, doc, or tool defect costing turns, and the fix
   (code gotchas belong in project docs inside your lane).
 - `Upstream:` dependency defect worked around (`file:line`, upstream ask).
-- `Screenshots:` light and dark paths (UI/visual lanes only).
+- `Screenshots:` `<light and dark paths> | n/a: <reason>` — **required** on any
+  lane touching UI, layout, or styles (omit on non-UI lanes so missing pictures
+  are never silent).
 
 `New tests` traces gate time growth to the lane that added it. Append any
 project-specific report labels the orchestrator gave, one per line. Link logs

@@ -46,13 +46,15 @@ Stop when any of these holds:
 - every criterion is 10 by the blind re-score;
 - for each remaining point, the price (time, complexity, trade-offs) is named
   and the user decided it is not worth it;
-- two to three fix and blind re-score rounds have run — pause, report the
-  current blind score, per-criterion movement, and the concrete price of
-  remaining points so the user decides whether to continue.
+- 3 autonomous fix and blind re-score rounds have run (each re-score spawns a
+  fresh cross-family agent) — pause, report the current blind score,
+  per-criterion movement, and the concrete price of remaining points so the
+  user decides whether to continue.
 
 Any edit after the blind re-score, however small, voids it: re-score again.
-Three rounds without movement on a criterion means the problem is structural:
-say so and propose the larger change.
+Repeat steps 3–4 otherwise. If any criterion shows no movement across all 3
+rounds, call the problem structural and propose the larger change instead of
+more tweaks.
 
 ## Report
 

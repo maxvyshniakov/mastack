@@ -21,7 +21,7 @@ Read-only: change no project code; route findings to tickets or settings.
 2. Pull lane, check, and review aggregates:
 
    ```bash
-   lanefather stats --json [--since <ISO-8601-start>] [--project <name>]
+   lanefather stats --json [--days <N>] [--lane <id>]
    ```
 
 3. Note machine vs quota limits (Slotfather slot contention and load vs provider

@@ -10,8 +10,11 @@ and scope `git diff` per file to avoid `large-bash-output` friction entries.
 
 ## Part 1: each finding
 
-A stable id (`F1`, `F2`, …), severity, file and line, what is wrong, a concrete
-scenario (inputs → wrong result), how it was verified, and:
+A stable id (`F1`, `F2`, …), severity (`P0`: data loss, security/auth breach,
+crash, or broken public contract; `P1`: behavior bug or missing requirement;
+`P2`: minor defect, edge-case gap, or maintainability issue), file and line,
+what is wrong, a concrete scenario (inputs → wrong result), how it was verified,
+and:
 
 - **Confidence and falsifier.** High, medium or low; the cheapest check that
   confirms or kills the finding (one-sentence unit test or browser

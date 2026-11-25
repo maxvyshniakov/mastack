@@ -76,29 +76,32 @@ judgment or design proposals to `scripts/role design`.
    [reviewer brief](../cross-review/references/reviewer-brief.md), and the
    report's `Least sure` places — never the lane report or conclusions. Triage
    finished reviews on arrival before later lands, sending check failures and
-   findings to the same implementer once; it fixes, final check runs once, and
-   you land. When fixing small findings yourself, run targeted local `lint` +
-   touched unit test (<10s) before `lanefather check`. Wait for completion
-   notices; never poll `lanefather list`.
+   findings once to the same implementer if still within step 3's
+   `[providers.<family>]` warm window (else a fresh agent with findings and
+   diff); it fixes, final check runs once, and you land. When fixing small
+   findings yourself, run targeted local `lint` + touched unit test (<10s)
+   before `lanefather check`. Wait for completion notices; never poll
+   `lanefather list`.
 6. **Land** when the check is green and every finding is marked fixed or
    rejected:
    - Merge integration tip into the lane before final check, then merge into
      integration. Route red smoke to the breaking lane; resolve trivial
      conflicts yourself, real ones in the lane.
-   - End the merge message with `Fixes #N`. After green smoke, label the ticket
-     `integrated` (create if missing) and comment merge SHA, branch, push status
-     (never link an unpushed SHA), checks passed, and preview (or read
-     Lanefather `[tickets]` output). Routine project-tracker bookkeeping
-     (evidence comments, follow-up tickets) needs no permission.
+   - End the merge message with `Fixes #N` so the ticket closes when it reaches
+     the default branch. After green smoke, label the ticket `integrated`
+     (create if missing) and comment merge SHA, branch, push status (never link
+     an unpushed SHA), checks passed, and preview (or read Lanefather
+     `[tickets]` output). Routine project-tracker bookkeeping (evidence
+     comments, follow-up tickets) needs no permission.
    - **Unreviewed landed lanes** with findings take one fix round via the
      fix-round path (`lanefather review <id> --fix-lane`, or
      `start <fix-id> --fix-of A,B,C`), never plain `start` (which loops
-     reviews); see [One round of fixes](../cross-review/SKILL.md#one-round-of-fixes).
-     Reuse the warm implementer per `[providers.<family>]`, else start fresh
-     with findings and diff. On any stray fix-round review, mark findings
-     `rejected: fix round, not reviewed again (one review per lane)` unless a
-     finding is a verified P0 with a failing falsifier (flag and fix before land
-     or promote).
+     reviews), reusing the warm implementer per `[providers.<family>]` else
+     starting fresh with findings and diff. On any stray fix-round review,
+     follow [One round of fixes](../cross-review/SKILL.md#one-round-of-fixes)
+     (reject findings as `fix round, not reviewed again (one review per lane)`;
+     only a coordinator-verified P0 with a failing falsifier gets a fix via the
+     fix-round path, with no further review).
    - Run `lanefather done` as soon as the last finding is marked so worktrees do
      not fill disk.
 7. **Recompute the frontier** after every land and launch ready tickets.
@@ -130,6 +133,8 @@ and clean up lanes and worktrees ([cleanup](../cleanup/SKILL.md)).
 Route non-code report lines before the batch report:
 
 - `Least sure`: to the lane's reviewer (step 5), else check yourself.
+- `Decisions` (`[owner-visible]`): surface every changed user-facing default in
+  the batch report so the owner sees it without hunting through commit bodies.
 - `Garden` and review `Follow-ups`: fold `small` same-root items into the fix
   round; deduplicate `lane` items against open issues and file with their
   `Proof / Direction / Verify` body; drop noise. Record `Garden yield` (kept vs

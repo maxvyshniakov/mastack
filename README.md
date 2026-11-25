@@ -1,10 +1,10 @@
 # mastack
 
-A concise, battle-tested skill pack, model router, and mechanical hook suite for
-coding agents (Claude Code, Codex CLI, Antigravity / T3 Code) that already know
-how to code. Each skill is a process with a trigger: when to start, what to
-check, what to report, and what never to do. Every rule earned its place — most
-through a real production incident.
+A concise skill pack, model router, and mechanical hook suite for coding agents
+(Claude Code, Codex CLI, Antigravity / T3 Code) that already know how to code.
+Each skill is a process with a trigger: when to start, what to check, what to
+report, and what never to do. Every rule earned its place — many of them
+through an incident.
 
 The design and thinking skills distil and sharpen ideas from
 [Matt Pocock's skills](https://github.com/mattpocock/skills). The delivery and
@@ -21,12 +21,12 @@ when an incident proves it wrong. Take what fits, adapt the rest.
 
 ## Why mastack
 
-- **Built for strong modern models — zero hand-holding.** Every line must pass
-  the *no-op test* ("would a strong model do this without being told?"),
-  verified with `--without-skill` evals. No textbook "what is Red-Green-Refactor"
-  filler: `tdd` goes straight to public seams, independent expected values, the
-  cheapest layer (`model` / `render` / `browser` / `process`), zero sleeps, and
-  non-tautological assertions.
+- **Built for strong modern models — zero hand-holding.** Lines are pruned by
+  the *no-op test* ("would a strong model do this without being told?"), backed
+  by scenario evals (6 skills, runnable with `--without-skill`). No textbook
+  "what is Red-Green-Refactor" filler: `tdd` goes straight to public seams,
+  independent expected values, the cheapest layer (`model` / `render` /
+  `browser` / `process`), zero sleeps, and non-tautological assertions.
 - **Warm-context "Garden" leads (~10–20% extra output, high leverage).** Standard
   agent loops wear blinders: implementers build strictly to spec, reviewers check
   strictly against spec. Here, both implementers (`Garden`, `Least sure`) and
@@ -38,12 +38,12 @@ when an incident proves it wrong. Take what fits, adapt the rest.
   finding carries a concrete **falsifier** (run first as a failing test; if it
   passes, auto-reject) and **fix direction without patch code** (preventing
   symptom-anchoring), capped at one fix round per lane.
-- **Architecture and design core (Pocock's best, sharpened).** `grill-me`
-  settles one decision at a time with a recommendation while updating the live
-  domain glossary and ADRs; `architecture` (deep modules, seams/adapters,
-  deletion test, explicit state machines, *design it twice*) puts boundaries in
-  the right place almost on autopilot; `to-spec` emits contract tickets;
-  `prototype` tests UI ideas as real-page `?variant=` variants.
+- **Architecture and design core (distilled from Matt Pocock's skills).**
+  `grill-me` settles one decision at a time with a recommendation while updating
+  the live domain glossary and ADRs; `architecture` (deep modules,
+  seams/adapters, deletion test, explicit state machines, *design it twice*)
+  draws clear module boundaries and testable seams; `to-spec` emits contract
+  tickets; `prototype` tests UI ideas as real-page `?variant=` variants.
 - **Closed-loop audits that keep the system sharp.** `retro` ("prove it bites",
   promoting recurring Judgment findings to Mechanical checks), `agent-docs`
   (keeping prompts lean and non-contradictory), `test-audit` (`runs × time`
@@ -61,27 +61,30 @@ when an incident proves it wrong. Take what fits, adapt the rest.
 
 ## Companion suite: `fathers`
 
-Every rule in `mastack` carries a one-line incident reason. For execution
-mechanics, guarded process teardown, and historical telemetry, pair `mastack`
-with the public [`fathers`](https://github.com/maxvyshniakov/fathers) CLI suite
+Non-obvious rules in `mastack` carry a one-line reason so future edits do not
+drop incident guards. For execution mechanics, guarded process teardown, and
+historical telemetry, pair `mastack` with the public
+[`fathers`](https://github.com/maxvyshniakov/fathers) CLI suite
 (standard-library Python 3.11+, macOS and Linux):
 
 | Tool | Role alongside `mastack` |
 |---|---|
 | [`slotfather`](https://github.com/maxvyshniakov/fathers/tree/main/slotfather) | Machine capacity queue and leases for heavy checks (`lease_guard`, `slot_label`) |
 | [`lanefather`](https://github.com/maxvyshniakov/fathers/tree/main/lanefather) | Worktree lanes, path claims, integration, review state, and `lanefather stats` |
-| [`spawnfather`](https://github.com/maxvyshniakov/fathers/tree/main/spawnfather) | Owned lifetimes and guarded teardown for long-lived processes and worktrees |
+| [`spawnfather`](https://github.com/maxvyshniakov/fathers/tree/main/spawnfather) | Owned lifetimes and guarded teardown for long-lived processes and worktrees (supersedes `junkfather`, which remains as a compatibility shim and is still the binary name matched by current `mastack` hooks) |
 | [`tokenfather`](https://github.com/maxvyshniakov/fathers/tree/main/tokenfather) | Multi-provider token usage and lane-attributed history for `orchestration-audit` |
 | [`godfather`](https://github.com/maxvyshniakov/fathers/tree/main/godfather) | Unified terminal dashboard across the suite |
 
-**`fathers` is public and optional.** Every `mastack` skill degrades cleanly
-without it, falling back to plain Git worktrees, branches, and `gh`.
+**`fathers` is public and optional.** Delivery and shipping skills degrade
+cleanly without it, falling back to plain Git worktrees, branches, and `gh`
+(`orchestration-audit` is the one skill that directly reads `tokenfather` and
+`lanefather stats`).
 
 ## Flow
 
 ```mermaid
 flowchart TD
-  subgraph design ["1. Design & Plan"]
+  subgraph design ["Design & Plan"]
     idea(["Idea"]) --> grill["grill-me"]
     grill <-.-> proto["prototype / research"]
     grill --> arch["architecture"]
@@ -89,26 +92,28 @@ flowchart TD
     roadmap["roadmap"] -.-> spec
   end
 
-  subgraph build ["2. Build & Check"]
+  subgraph build ["Build & Blind Review"]
     orch["orchestrate (parallel worktree lanes)"] --> loop["tdd / debug + Garden leads"]
-    loop --> review["cross-review (blind, other family)"]
+    loop --> lane_commit["commit on lane branch"]
+    lane_commit --> review["cross-review (blind, other family)"]
     review -.->|"1 fix round"| loop
-    review --> verify["browser-verify / rate"]
+    lane_commit -.->|"UI / explicit rating"| checks["browser-verify / rate"]
+    review --> land["land to integration + batch gate"]
   end
 
-  subgraph ship ["3. Ship"]
-    commit["commit"] --> push["push"] --> release["release"] --> cleanup["cleanup"]
+  subgraph ship ["Ship (finish)"]
+    push["push"] --> release["release"] --> cleanup["cleanup"]
     pr["babysit-pr"] -.-> push
   end
 
-  subgraph audit ["4. Closed-Loop Audits"]
+  subgraph audit ["Closed-Loop Audits"]
     env_audit["retro / agent-docs / friction-audit"]
     eng_audit["test-audit / orchestration-audit / deps-update"]
   end
 
   spec --> orch
   spec -.->|"single session"| loop
-  verify --> commit
+  land --> push
   ship -.->|"incidents, friction & telemetry"| audit
   audit -.->|"tighter skills, hooks & contracts"| design
   audit -.->|"gates, ratchets & model routing"| build
@@ -195,8 +200,9 @@ because the model matches requests against them.
   [`tokenfather`](https://github.com/maxvyshniakov/fathers/tree/main/tokenfather)
   for `orchestration-audit`, and
   [`godfather`](https://github.com/maxvyshniakov/fathers/tree/main/godfather)
-  for live visibility — every skill works without them via plain worktrees,
-  branches, and `gh`); `ffmpeg` and a local Whisper for `video-feedback`;
+  for live visibility — delivery and shipping skills work without them via plain
+  worktrees, branches, and `gh`, while `orchestration-audit` reads `tokenfather`
+  and `lanefather stats`); `ffmpeg` and a local Whisper for `video-feedback`;
   Playwright (and Safari Technology Preview on macOS) for `browser-verify`.
 
 ## Install

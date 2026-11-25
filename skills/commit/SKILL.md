@@ -33,7 +33,11 @@ The user may have local edits in the primary checkout.
 ## Validate and commit
 
 - Read the full staged diff. Run the checks `docs/agents/checks.md` names for
-  this change on the staged tree (reuse a result whose inputs have not changed).
+  this change on the staged tree — not a working tree whose untracked or
+  unstaged files can mask missing files or imports (when unfamiliar files in the
+  working tree could hide a gap, check the staged tree in a temporary detached
+  worktree under `.claude/worktrees/`, and reuse a result whose inputs have not
+  changed).
 - Message: behavior changed, in repo convention; for diagnosed bugs, name the
   verified root cause.
 

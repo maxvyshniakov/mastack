@@ -47,9 +47,13 @@ table), batch related cases or a parameterized table into one RED/GREEN cycle.
   FS only for unproducible OS errors like `ENOSPC`/`EACCES`), a `local
   stand-in` or contract-checked adapter for `owned remote`, and mocks/injection
   only for `true external` boundaries (third-party network, clock, randomness).
-- Never weaken or delete an existing assertion to get green, and never dismiss
-  a failure as "baseline red" without verifying it fails identically on the
-  base commit.
+- Never weaken or delete a new, edited, or existing assertion to get green or
+  satisfy a hygiene checker (such as `calls.length > 0` or asserting CSS class
+  names): when the spec genuinely changed the behavior, update the assertion
+  and cite the spec line. Never dismiss a failure as "baseline red" without
+  proving it fails identically on the base commit (check in a temporary detached
+  worktree under `.claude/worktrees/`, never `git stash` or `git checkout` over
+  dirty files).
 
 Pure styling and docs use visual, link, or lint checks, not TDD. When no stable
 automated test can observe the outcome, say so and use focused runtime or
@@ -71,11 +75,14 @@ Every test runs on every gate for as long as it exists, so its cost counts.
   it. A sleep is too slow idle, too short under load, and passes "nothing
   happened" whenever the system is slow.
 - **Timing asserts only in the perf suite.** Elsewhere assert event order or
-  injected values; a generous hang deadline is fine.
+  injected values (wall time tracks machine load, not code); a generous hang
+  deadline is fine.
 - **Snapshot/golden only if someone reads its diff.** Bulk-updated goldens pass
-  anything; compare goldens by name, not count.
+  anything; compare goldens by name, not count (a count passes when one golden
+  is swapped for another, and every new one edits the test).
 - **Fake checked against the real implementation.** Any double encoding rules
-  runs the same contract tests as the real thing.
+  runs the same contract tests as the real thing (a fake's own tests prove
+  nothing, and tests built on it assert unchecked rules).
 
 ## Checks
 

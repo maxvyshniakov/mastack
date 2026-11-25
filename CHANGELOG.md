@@ -12,12 +12,14 @@
     clean detached-worktree framing in `release`, and updated `hooks/git_guard.py`
     prose.
   - Streamlined `orchestrate` and `implementer.md`: cut the 15-line mandatory
-    footer to 6 core lines + 6 omit-when-empty optional fields, merged `Nearby`
-    into 4-line `Garden` (`Proof / Direction / Verify`), folded
-    `Owner-visible defaults changed` into `Decisions` (`[owner-visible]`),
-    removed coordinator-only lines from `implementer.md`, deduplicated
-    push/release authorization blocks, and added `bin/quiet-cap` and
-    `--harness` flags.
+    footer to 6 core lines + 6 omit-when-empty optional fields plus UI-required
+    `Screenshots`, merged `Nearby` into 4-line `Garden` (`Proof / Direction /
+    Verify`), folded `Owner-visible defaults changed` into `Decisions`
+    (`[owner-visible]`, surfaced in batch report), removed coordinator-only
+    lines from `implementer.md`, deduplicated push/release authorization blocks,
+    and wired skill-relative `scripts/quiet-cap`, `scripts/lane-receipt`,
+    `scripts/role`, and `scripts/friction` symlinks (enforced by
+    `tests/test_skill_lint.py`).
   - Refined `cross-review` and `reviewer-brief.md`: flipped `Owner's decisions`
     search order (`docs/ADRs` → `tracker/git` → `owner-turns.jsonl`, dropping
     raw session-dir trawling) with context/freshness gating; carved out verified

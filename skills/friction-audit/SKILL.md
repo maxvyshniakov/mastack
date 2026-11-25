@@ -11,11 +11,11 @@ getting wrong when they use this, and which layer would stop it.
 ## Sources
 
 Start with the **friction journal**, then inspect the rest with a read-only
-`scout` subagent (`bin/role scout`) and keep raw counts.
+`scout` subagent (`<this skill's directory>/scripts/role scout`) and keep raw counts.
 
 - **The journal** (`$XDG_STATE_HOME/friction/events.jsonl`; `hooks/friction_journal.py`):
-  run `bin/friction scan` first, then rank with
-  `bin/friction report [--package <name>] [--since <period>]` (separates
+  run `<this skill's directory>/scripts/friction scan` first, then rank with
+  `<this skill's directory>/scripts/friction report [--package <name>] [--since <period>]` (separates
   `large-bash-output` noise by default; `--include-tool-noise` ranks it inline)
   or `repo-kit friction report --package <name> --since <period>`. Include
   coworkers' `repo-kit friction export` bundles. Follow each event's `why`, file

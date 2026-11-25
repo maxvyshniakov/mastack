@@ -30,7 +30,8 @@ theirs: report them as waiting; do not add or ask for them in a comment.
 One table of what needs action, from [references/queries.md](references/queries.md):
 
 - each failing check with its failing step, and each pending check;
-- each unresolved review thread with author, file and line (GraphQL only);
+- each unresolved review thread with author, file and line (only GraphQL
+  reports whether a thread is resolved);
 - each unanswered PR-level comment asking for action;
 - the newest review bot summary;
 - metadata checks (title, labels, required description sections).
@@ -44,7 +45,9 @@ Done when every failing check and unresolved thread is a row.
 - **A real bug:** reproduce with a failing test ([tdd](../tdd/SKILL.md)), then
   fix. When the finding claims your PR altered existing behavior and the test
   applies cleanly on the base branch (no schema, symbol, or dependency drift),
-  run it against base too to confirm it passed before your change.
+  run it against base too (in a temporary detached worktree under
+  `.claude/worktrees/`, never `git stash` or `git checkout` over dirty files) to
+  confirm it passed before your change.
 - **Not a bug, or out of scope:** no change; give the reason in the reply.
 - **An optional suggestion:** take it when it simplifies; say why if not.
 - **A failing check:** read the log, name the step, and triage per

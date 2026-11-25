@@ -45,6 +45,21 @@ class SkillLintTests(unittest.TestCase):
                 resolved = (path.parent / target).resolve()
                 self.assertTrue(resolved.exists(), f"{path.relative_to(ROOT)} broken link -> {target}")
 
+    def test_skills_use_skill_relative_scripts_not_repo_bin(self):
+        repo_bin_re = re.compile(r"(?<![A-Za-z0-9_./-])bin/[a-z][a-z0-9-]*\b")
+        for path in sorted(SKILLS_DIR.rglob("*.md")):
+            for lineno, line in enumerate(path.read_text().splitlines(), 1):
+                m = repo_bin_re.search(line)
+                if m:
+                    self.fail(
+                        f"{path.relative_to(ROOT)}:{lineno}: repo-relative {m.group(0)!r} breaks in installed skills; use scripts/ symlink"
+                    )
+        for script in sorted(SKILLS_DIR.glob("*/scripts/*")):
+            if script.name == "__pycache__":
+                continue
+            resolved = script.resolve()
+            self.assertTrue(resolved.is_file(), f"broken skill script link: {script.relative_to(ROOT)}")
+
     def test_readme_skills_table_matches_skills_directory(self):
         readme = (ROOT / "README.md").read_text()
         linked = set(re.findall(r"\]\(skills/([^/]+)/SKILL\.md\)", readme))
