@@ -17,31 +17,27 @@ believed at that moment.
 
 ## Classify each finding
 
-- **Mechanical** (a wrong command, a banned pattern, a step skipped, a check not
-  run): it gets a hook, lint rule, test or tool change. First look for a check
-  that already exists but is not wired in, or is silently broken; wiring it is
-  the fix. A repository with no guard at all (no hook, no CI running its checks)
-  is itself a finding.
-- **Judgment** (the wrong trade-off, a misread spec): a rule for the reviewer,
-  in the project's standards. The reviewer has the least context pressure, so
-  standards are enforced in review, not loaded on the implementer. If the same
-  kind of review finding recurred across tasks in this session, promote it from
-  Judgment (reviewer rule) to Mechanical (lint, hygiene, or test check).
-- **Navigation**: the agent searched long for something. Add a pointer where it
+- **Mechanical** (wrong command, banned pattern, skipped step, unrun check):
+  hook, lint rule, test or tool change. First check for an existing unwired or
+  silently broken guard; wiring it is the fix. A repository with no guard at all
+  (no hook, no CI running checks) is itself a finding.
+- **Judgment** (wrong trade-off, misread spec): a reviewer rule in the project's
+  standards (reviewers have the least context pressure, not implementers). When
+  the same review finding recurs across tasks in this session, promote it from
+  Judgment to Mechanical (lint, hygiene, or test check).
+- **Navigation**: the agent searched long for something — add a pointer where it
   looked first.
-- **Information access**: the agent could not see something it needed (a log,
-  a service's state). Give it read access.
-- **Tool economy**: an expensive call that a cheaper command or a better tool
-  output would replace.
-- **Test** (a flake, a slow gate, a bug a test should have caught): run
-  `test-audit` on that suite; its findings become tickets, and the ratchet it
-  proposes is the check that must bite. One bad test is usually a pattern
-  repeated across the suite, and fixing only the instance leaves the rest. A
-  check that only runs on one OS/environment (e.g. macOS locally vs Linux in
-  CI) leaves the other branch untested; test OS-specific code against fake
-  inputs locally so the local gate catches it before push.
-- **Instructions**: an instruction that was ignored or misled. Fix it with
-  `agent-docs`.
+- **Information access**: the agent lacked visibility (log, service state) —
+  grant read access.
+- **Tool economy**: an expensive call replaceable by a cheaper command or
+  cleaner output.
+- **Test** (flake, slow gate, missed bug): run [test-audit](../test-audit/SKILL.md)
+  on that suite; turn findings into tickets and land the ratchet that bites (one
+  bad test is usually a suite-wide pattern). Test OS-specific checks locally
+  against fake inputs so local gates catch what otherwise runs only on another
+  OS in CI.
+- **Instructions**: ignored or misleading instruction — fix with
+  [agent-docs](../agent-docs/SKILL.md).
 
 ## Prove it bites
 

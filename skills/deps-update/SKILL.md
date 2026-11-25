@@ -10,47 +10,43 @@ made unnecessary). The second is the point; the first is routine.
 
 ## Inventory
 
-Everything with a version: package manifests and lockfiles, the runtime
-(engines fields, version files, CI setup steps), CI actions (pinned by SHA),
-container images, toolchains, generators. Also the workarounds:
+Everything versioned: manifests, lockfiles, runtime (`engines`, version files,
+CI setup), SHA-pinned CI actions, container images, toolchains, generators — plus
+every workaround:
 
-- `UPSTREAM(...)` marks (`CONTRACT.md`) and pins listed with reasons in
-  `docs/agents/checks.md`;
+- `UPSTREAM(...)` marks (`CONTRACT.md`) and pins with reasons in `docs/agents/checks.md`;
 - patches (`patches/`, patch-package, vendored forks), shims, polyfills,
-  `!important` and other overrides of a dependency's behavior;
-- code of ours that reimplements what a dependency may now provide.
+  `!important` and other dependency overrides;
+- local code reimplementing what a dependency may now provide.
 
 ## Forward
 
-- Read the changelog of every minor and major between the old and new version,
-  not just the latest. Note breaking changes, deprecations, and fixes that touch
-  our workarounds.
-- Update in groups that fail independently: runtime, build and test tooling,
-  runtime libraries, CI.
-- A pin with a recorded incident behind it stays until the incident is
-  re-checked on the new version. "It was long ago" is not a check.
-- Prefer the project's own range convention (exact, caret) over the tool's
-  default.
+- Read the changelog of every intermediate minor and major between old and new
+  versions, noting breaking changes, deprecations, and fixes touching our workarounds.
+- Update in independently failing groups: runtime, build/test tooling, runtime
+  libraries, CI.
+- Keep any pin backed by a recorded incident until that incident is re-checked
+  on the new version ("it was long ago" is not a check).
+- Follow the project's range convention (exact, caret) over the tool's default.
 
 ## Back
 
-For each workaround: find the upstream issue or release that it waits for, and
-check its state against the new version. Then:
+Check each workaround's upstream issue or release against the new version:
 
-- **Fixed upstream**: remove the workaround, with a test that fails if the
-  original bug returns, if the project has a seam for it.
-- **Still open**: keep it, update the mark's condition if it changed.
+- **Fixed upstream**: remove the workaround, with a regression test if a seam exists.
+- **Still open**: keep it and update the mark's condition if it changed.
 - **No link**: find one, or mark it as ours with a reason.
 
 ## Verify
 
-Run the full gate once on the result. For a package others consume, also
-install it the way consumers do, from the registry or a packed tarball, since a
-registry can rewrite metadata. Never weaken a check to make an update pass;
-an update that needs that is held back with a reason.
+Run the full gate once ([tdd](../tdd/SKILL.md#checks)). For a published package
+others consume, run a pre-publish smoke install from a packed tarball (`npm pack`
+into a consumer fixture; post-publish registry install checks belong to
+[release](../release/SKILL.md#publish)). Never weaken a check to make an update
+pass; hold back an update that needs that with a reason.
 
 ## Report
 
 Three lists: **updated** (from → to, notable changes), **removed** (workaround,
-why it is no longer needed, evidence), **kept** (workaround or pin, what it
-waits for). Then anything held back and why.
+why unneeded, evidence), **kept** (workaround or pin, what it waits for). Then
+anything held back and why.

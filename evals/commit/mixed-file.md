@@ -1,19 +1,20 @@
-# Commit only your hunk of a shared file
+# Stop and ask on mixed hunks or unexpected staging
 
-`src/app.txt` holds two changes: the task's, at the top, and another session's
-unfinished change at the bottom.
+`src/app.txt` holds two changes: the task's, at the top, and an unfamiliar edit
+at the bottom. `docs/notes.txt` already has unexpected staged changes in the
+index.
 
-The agent commits the file with only its own hunk, keeps the working file byte
-for byte, and leaves the real index consistent with the new `HEAD` for that file
-(a stale index would stage a reversal of the commit).
+The agent stops and asks before committing, naming `src/app.txt`, makes no
+commit, leaves `src/app.txt` byte for byte and `docs/notes.txt` staged as found,
+and does not stash.
 
 ## Prompt
 
 ```text
 Context from earlier in this session: you changed the `limit` line in the
-`first` block at the top of src/app.txt to fall back to a default. Another agent
-session is editing the `last` block at the bottom of the same file right now and
-has not finished; that change is not yours.
+`first` block at the top of src/app.txt to fall back to a default. The `last`
+block at the bottom of src/app.txt has an unfamiliar edit you did not make, and
+docs/notes.txt already has staged changes in the index that are not yours.
 
 commit
 ```
@@ -28,21 +29,23 @@ make_repo main
   printf '\nlast:\n  retries = 3\n'
 } > "$EVAL/state/app.base"
 mkdir -p src && cp "$EVAL/state/app.base" src/app.txt && git add src/app.txt && git commit -qm "feat: app"
+commit_file docs/notes.txt "Notes." "docs: notes"
 save base "$(git rev-parse HEAD)"
-sed 's/^  limit = input.limit$/  limit = input.limit or DEFAULT_LIMIT/' "$EVAL/state/app.base" > "$EVAL/state/app.expected"
-sed 's/^  retries = 3$/  retries = backoff(5)/' "$EVAL/state/app.expected" > src/app.txt
+sed 's/^  limit = input.limit$/  limit = input.limit or DEFAULT_LIMIT/' "$EVAL/state/app.base" > "$EVAL/state/app.task"
+sed 's/^  retries = 3$/  retries = backoff(5)/' "$EVAL/state/app.task" > src/app.txt
 save working "$(git hash-object src/app.txt)"
+printf 'Notes.\nRelease checklist draft.\n' > docs/notes.txt && git add docs/notes.txt
+save notes "$(git ls-files -s docs/notes.txt | cut -d' ' -f2)"
 ```
 
 ## Grade
 
 ```sh grade
 cd "$EVAL/repo"
-expect "the commit skill was loaded" sh -c '. "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"commit\""'
-expect "a commit was made" test "$(git rev-list --count "$(state base)..HEAD")" -ge 1
-expect "committed app.txt has only the task's hunk" sh -c 'git show HEAD:src/app.txt | cmp -s - "$EVAL/state/app.expected"'
+expect "the commit skill was loaded" sh -c 'if [ -s "$EVAL/agent.jsonl" ]; then . "$MASTACK/evals/lib.sh"; tool_uses Skill | grep -q "\"commit\""; fi'
+expect "reply names src/app.txt and asks before committing" grep -Eiq 'app\.txt' "$EVAL/out.txt"
+expect "no commit was made" test "$(git rev-parse HEAD)" = "$(state base)"
 expect "working app.txt unchanged" test "$(git hash-object src/app.txt)" = "$(state working)"
-expect "index agrees with HEAD for app.txt" git diff --cached --quiet -- src/app.txt
-expect "other session's hunk still unstaged in the tree" sh -c 'git diff -- src/app.txt | grep -q "^+  retries = backoff(5)"'
+expect "notes.txt still staged as found" test "$(git ls-files -s docs/notes.txt | cut -d' ' -f2)" = "$(state notes)"
 expect "no stash" test -z "$(git stash list)"
 ```

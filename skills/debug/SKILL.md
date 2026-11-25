@@ -7,44 +7,42 @@ description: Use for bugs, regressions, failing or flaky tests, slowness, and au
 
 ## 1. A loop that goes red
 
-No theory before a reproduction. Build one command that drives the real code
-path and asserts the user's symptom: a failing test at some seam, a script
-against a running server, a CLI run diffed against known-good output, a browser
-script, a replayed capture, a bisect harness. Make it fast and deterministic:
-pin time, seed randomness, isolate the filesystem.
+No theory before a reproduction. Build one fast, deterministic command driving
+the real code path and asserting the user's symptom (failing seam test, script
+against a server, CLI diff, browser script, replay, or bisect; pin time, seed
+randomness, isolate the filesystem).
 
-Run it and show it red. It must fail on this symptom, not on a neighbor.
-Flaky bug: raise the reproduction rate (loops, parallel runs, stress) until it
-is debuggable. Physical devices or UI that no command can observe: a repeatable
-capture or recorded procedure is the signal; state its limits.
+Run it and show it red on this exact symptom. For flakes, raise the reproduction
+rate (loops, parallel runs, stress) until debuggable. For physical devices or
+unobservable UI, a repeatable capture or procedure is the signal; state its limits.
 
-Cannot reproduce: say what you tried, keep investigating read-only, and ask for
-access or an artifact. An audit finding you could not reproduce is reported as
-"not reproduced", never fixed on speculation.
+Cannot reproduce: say what you tried, investigate read-only, and ask for access
+or an artifact. Report unverified audit findings as "not reproduced"; never fix
+on speculation.
 
-Then shrink it: cut inputs and steps one at a time until each remaining part is
-needed to stay red.
+Shrink the repro by cutting inputs and steps until every remaining part is
+required to stay red.
 
 ## 2. Hypotheses
 
-Write competing hypotheses, three to five for a hard bug, each with a prediction:
-"if X, then changing Y makes it vanish". One that predicts nothing is a guess.
-Show the ranked list; the user may rule some out at once. Probe one variable per
-step; tag temporary logs with a unique prefix so one grep removes them. For a
-performance bug, measure a baseline before changing anything.
+Write competing hypotheses (three to five for a hard bug), each with a
+prediction: "if X, changing Y makes it vanish" (one that predicts nothing is a
+guess). Show the ranked list; the user may rule some out at once. Probe one
+variable per step; prefix temporary logs so one grep removes them. For
+performance bugs, measure a baseline before changing anything.
 
 ## 3. Fix
 
-Write the regression test before the fix, at a seam where the real bug pattern
-happens. If no such seam exists, that is an architecture finding: record it
-(see `architecture`) instead of writing a test that cannot fail.
+Write the regression test before the fix ([tdd](../tdd/SKILL.md)), at a seam
+where the real bug pattern happens. No such seam is an
+[architecture](../architecture/SKILL.md) finding: record it instead of writing a
+test that cannot fail.
 
-Name the class of defect, not just this instance. Search for its siblings in
-other paths and fix the class, with a check or test that turns the next instance
-red.
+Name the defect class, not just this instance. Search for siblings in other
+paths and fix the class with a check or test that turns the next instance red.
 
 ## 4. Close
 
-The original loop is green, the regression test passes, tagged logs and
-throwaway harnesses are gone, and the commit message states the hypothesis
-that proved true. Redact secrets in everything you show.
+Original loop green, regression test passing, tagged logs and throwaway
+harnesses removed, commit message naming the hypothesis that proved true, and
+secrets redacted from all output.

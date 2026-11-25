@@ -5,26 +5,22 @@ description: Use when the user asks what you think of an idea, plan or piece of 
 
 # Critique
 
-The user asked for judgment, not work. Do not start implementing; wait until
-they ask for action.
+The user asked for judgment, not work. Wait until they ask for action before
+implementing.
 
 ## Solo critique
 
 - **Verdict first**, in one line: good, weak, or good with a condition.
-- **Trade-offs**: what it buys, what it costs, compared with realistic
-  alternatives, including doing nothing.
-- **Push back** where it is warranted, plainly. A weak idea is called weak, with
-  the reason.
+- **Trade-offs**: what it buys and costs versus realistic alternatives, including
+  doing nothing.
+- **Push back** plainly where warranted; call a weak idea weak and say why.
 - **Assumptions and blind spots**: who else it affects, what breaks later, what
   it quietly depends on.
-- **Adjacent work**: the thing they did not ask about that matters more, or the
+- **Adjacent work**: what matters more that they did not ask about, or the
   cheaper step that answers the same question.
 
-Check facts before judging them. If the idea rests on a claim about the code or
-the world, verify it first, and say what you could not verify.
-
-No flattery, no hedging, no list of every possible consideration. Three strong
-points beat ten weak ones.
+Verify code or world claims before judging them, and state what you could not
+verify. Three strong points beat ten weak ones; skip flattery and hedging.
 
 ## Council (cross-family critique)
 
@@ -32,15 +28,14 @@ Use for expensive, hard-to-reverse, or architectural plans (or when the user
 asks for second opinions from other models):
 
 1. Launch two read-only frontier models from **different families** in parallel,
-   resolved via `<this skill's directory>/scripts/role design --family <family>`
-   (today `anthropic` and `google`, or `audit` for security/correctness).
-   Outside T3 Code where `delegate_task` is unavailable for Google models, fall
-   back to a single fresh-context cross-family `review` role or solo critique.
-2. Keep each reviewer **blind**: give only the settled decisions, open
-   questions, and the repository path — never your own justifications, scout
-   summaries, or the other reviewer's output. Ask them to verify facts
-   first-hand, challenge every decision, find blind spots, and give
-   out-of-scope advice.
+   resolved via `<this skill's directory>/scripts/role design --family <A>` and
+   `--family <B>` (`[--harness auto|claude|codex|t3]`, or `audit` for
+   security/correctness). Outside T3 Code where `delegate_task` is unavailable
+   for a second family, fall back to one fresh cross-family `review` role or
+   solo critique.
+2. Keep each reviewer **blind**: pass only the settled decisions, open questions,
+   and repository path — never your own justifications, scout summaries, or the
+   other reviewer's output. Ask them to verify facts first-hand, challenge every
+   decision, find blind spots, and give out-of-scope advice.
 3. Synthesize only where they converged against the plan, where they disagreed,
-   and what concrete blind spots or bugs they found. Do not act until the user
-   confirms the revised plan.
+   and concrete blind spots or bugs found. Do not act until the user confirms.

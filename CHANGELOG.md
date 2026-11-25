@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- Skills pack cleanup and single-owner consolidation across all 29 skills and
+  references:
+  - Adopted `1 agent = 1 checkout (worktree)` invariant: removed
+    `skills/commit/references/shared-tree.md`, `GIT_INDEX_FILE` plumbing from
+    `commit` and `bin/eval`, and `evals/commit/shared-tree.md`; replaced with
+    explicit-path staging and stop-and-ask on mixed hunks or unexpected staged
+    changes (`evals/commit/mixed-file.md`, `evals/commit/unfamiliar-edits.md`),
+    clean detached-worktree framing in `release`, and updated `hooks/git_guard.py`
+    prose.
+  - Streamlined `orchestrate` and `implementer.md`: cut the 15-line mandatory
+    footer to 6 core lines + 6 omit-when-empty optional fields, merged `Nearby`
+    into 4-line `Garden` (`Proof / Direction / Verify`), folded
+    `Owner-visible defaults changed` into `Decisions` (`[owner-visible]`),
+    removed coordinator-only lines from `implementer.md`, deduplicated
+    push/release authorization blocks, and added `bin/quiet-cap` and
+    `--harness` flags.
+  - Refined `cross-review` and `reviewer-brief.md`: flipped `Owner's decisions`
+    search order (`docs/ADRs` → `tracker/git` → `owner-turns.jsonl`, dropping
+    raw session-dir trawling) with context/freshness gating; carved out verified
+    P0s with a failing falsifier from stray fix-round rejections; folded lead
+    kinds inline into `Follow-ups`.
+  - Refined `tdd`, `babysit-pr`, `architecture`, `rate`, `deps-update`,
+    `grill-me`, `friction-audit`, `browser-verify`, and `orchestration-audit`:
+    batched settled-interface cases/tables, durable-contract DB assertions, real
+    temp dirs aligned with `architecture` dependency tiers, injected-clock delay
+    rule, anti-weakening / base-verified red guard, base-branch PR re-run
+    scoping, 2–3 autonomous round cap in `rate`, packed-tarball pre-publish
+    smoke install in `deps-update`, `scout` routing for local scans, and
+    `Garden yield` tracking.
+  - Overhauled `README.md` (and `THIRD_PARTY_NOTICES.md`) to showcase core
+    design choices, add a clearer Mermaid workflow diagram, and link all five
+    public `fathers` companion tools.
 - `bin/install`: added `--pin <ref>` / `--update <ref>` (`--pin-dir`) to install
   from a dedicated tag-pinned worktree instead of the live working checkout.
 - `bin/role`: added `--harness <auto|claude|codex|t3>` (ready-to-use launch

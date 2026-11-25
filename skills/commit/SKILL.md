@@ -1,48 +1,44 @@
 ---
 name: commit
-description: Use when asked to commit, or when an authorized push needs commits first. Commits only this task's changes in a tree other agents share. Editing a skill named commit is not a commit request.
+description: Use when asked to commit, or when an authorized push needs commits first. Stages only this task's files explicitly without disturbing unfamiliar edits. Editing a skill named commit is not a commit request.
 ---
 
 # Commit
 
-A commit request is local only; publishing needs a push request (or an orchestrator pushing a green batch to the everyday branch).
+Local only; continue to [push](../push/SKILL.md) only when publication was asked
+for (or an orchestrator pushes a green batch to the everyday branch).
 
 ## Scope
 
-A bare request covers all uncommitted work of this task, recovered from the whole
-conversation: earlier accepted requirements, their tests, docs and changelog entry,
-not just the latest edit. Only an explicit limit from the user narrows it.
+A bare request covers all uncommitted work of this task from the whole
+conversation — earlier accepted requirements, tests, docs and changelog, not
+just the latest edit. Only an explicit limit from the user narrows it.
 
-Inventory before staging. For each requirement of the task, say whether it is
-already committed, in this candidate, or left out and why. Leave out work that
-belongs to another task, judged by purpose and owner, not by age.
+Inventory before staging: for each requirement, state whether it is already
+committed, in this candidate, or left out and why. Leave out other tasks' work
+by purpose and owner, not age.
 
-## The tree is shared
+## Checkout hygiene
 
-Other sessions may be editing this checkout right now.
+The user may have local edits in the primary checkout.
 
-- Never stash, reset, restore, or check out files you did not change; never
-  switch branches. Read a committed version with `git show HEAD:<path>`.
-- Stage explicit paths. Look at every untracked file before adding it.
-- A file that mixes your hunks with someone else's: stage only your hunks.
-- If the real index holds someone else's staging, build the commit in a temporary
-  index (`GIT_INDEX_FILE`) initialised from `HEAD`, and leave the real one as found.
-  Details: [references/shared-tree.md](references/shared-tree.md).
+- Stage explicit paths (`git add -- <paths>`); never `git add -A` or `git add .`.
+  Inspect every untracked file before adding it.
+- Never `stash`, `reset`, `restore`, or `checkout --` unfamiliar files, and never
+  switch branches over dirty files. Read committed versions via `git show HEAD:<path>`.
+- If the index already holds unexpected staged changes or a file mixes your hunks
+  with unfamiliar edits, stop and ask the user instead of building temporary
+  indexes or plumbing blobs (`GIT_INDEX_FILE`, `hash-object`, `update-index`).
 
 ## Validate and commit
 
 - Read the full staged diff. Run the checks `docs/agents/checks.md` names for
-  this change, on the staged tree, not a working tree that hides missing files.
-  Reuse a result whose inputs have not changed.
-- Before committing, confirm `HEAD` is still the parent you built on. If it moved,
-  rebuild on the new parent.
-- Message: what behavior changed, in the repository's convention. When a bug
-  was diagnosed, name the cause that turned out to be true.
+  this change on the staged tree (reuse a result whose inputs have not changed).
+- Message: behavior changed, in repo convention; for diagnosed bugs, name the
+  verified root cause.
 
 ## Report
 
-Hashes and subjects, what each covers, the checks run, and every change group
-left in the tree with its paths and why. Say so when the tree is clean. If task
-work remains uncommitted or unvalidated, call the request partial.
-
-Continue to `push` only when publication was asked for.
+Hashes and subjects, what each covers, checks run, and every change group left
+in the tree with paths and why (or note the tree is clean). Call the request
+partial if task work remains uncommitted or unvalidated.

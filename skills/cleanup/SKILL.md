@@ -11,65 +11,56 @@ Inventory first, delete second, ask about everything in between.
 
 Fetch with `--prune`, then list:
 
-- **Branches**, local and remote, with their state against the base branch
-  (`origin/<base>` from `docs/agents/publishing.md`, else the default branch):
-  merged by ancestry (`git branch --merged`), merged by content (`git cherry`
-  shows no `+` lines, the squash or rebase case), or unmerged with commit count
-  and last date.
+- **Branches** (local and remote) against `origin/<base>` (`docs/agents/publishing.md`,
+  else default branch): merged by ancestry (`git branch --merged`), merged by
+  content (`git cherry` has no `+` lines — squash/rebase case), or unmerged with
+  commit count and last date.
 - **Worktrees** (`git worktree list`): branch, merged state, uncommitted changes,
-  and whether a process is running inside it, including worktrees under
-  `<repo>/.claude/worktrees/` and any temp-dir worktrees (`/tmp`, `$TMPDIR`,
-  `/var/folders`) that git still lists. `docs/agents/publishing.md` says
-  where they live and who owns them; remove a tool's worktrees through that
-  tool. Also check `<repo>/.claude/worktrees/` for orphans (a `.git` file
-  pointing at a worktree git no longer knows) and leftover folders.
-- **Folders next to the repository**: every directory in its parent whose name
-  starts with the repository's name (`<repo>-*`). Classify each one:
-  - a worktree of this repository: treat it as above;
-  - an orphan: a `.git` file pointing at a worktree git no longer knows, or an
-    entry `git worktree prune --dry-run` would drop;
-  - a clone: its own `.git` directory; check for unpushed commits and changes;
-  - a plain folder (archives, screenshots, backups): size, last change, and
-    what is inside in one line.
+  and running processes inside them, including `<repo>/.claude/worktrees/` and
+  temp-dir worktrees (`/tmp`, `$TMPDIR`, `/var/folders`). Remove tool-owned
+  worktrees through the tool named in `docs/agents/publishing.md`. Also check
+  `<repo>/.claude/worktrees/` for orphans (`.git` file pointing at a worktree git
+  no longer knows) and leftover folders.
+- **Folders next to the repository** (`<repo>-*` in parent dir): classify each as
+  a repo worktree (treat as above), an orphan (dangling `.git` file or
+  `git worktree prune --dry-run` hit), a clone (own `.git` dir — check unpushed
+  commits and changes), or a plain folder (size, last change, 1-line contents).
 - **Archives** from earlier cleanups (see Keep) older than 30 days.
-- **Processes**: dev servers and background jobs this task started, with port
-  and command.
-- **Temporary directories** this task created.
+- **Processes** (port and command) and **temporary directories** this task started.
 
 ## Delete
 
 Safe without asking:
 
-- branches whose every commit is in `origin/<base>`, and their worktrees when
-  those are clean and idle;
+- branches whose every commit is in `origin/<base>`, and their clean, idle worktrees;
 - processes and temporary files this task started.
 
-Never, without the user's yes:
+Never without the user's yes:
 
 - anything with uncommitted changes or unpushed commits;
 - anything another session or agent may own: a worktree with a running process,
   a branch you did not create, a process you did not start;
-- machine-wide locks and leases (for example `slotfather` leases) held by
-  someone else, even if they look stale; the tool reaps dead holders itself.
+- machine-wide locks and leases (for example `slotfather` leases) held by someone
+  else, even if they look stale; the tool reaps dead holders itself.
 
-Plain folders and clones next to the repository are always asked about, never
-assumed to be leftovers. Remove worktrees with `git worktree remove`, never
-`rm -rf`. If git unregisters a worktree but leaves its folder behind (ignored
-files: dependencies, generated media), compare what is left with the main
-checkout and the branch; delete the folder only when nothing in it is unique,
-otherwise report it. Delete merged branches with `git branch -d`; reach for
-`-D` only for content-merged branches you just verified with `git cherry`.
+Always ask about plain folders and clones next to the repository. Remove
+worktrees with `git worktree remove`, never `rm -rf`. If git unregisters a
+worktree but leaves a folder behind (ignored files: dependencies, generated
+media), compare what remains against the main checkout and branch; delete only
+when nothing is unique, otherwise report it. Delete merged branches with
+`git branch -d`; use `-D` only for content-merged branches just verified with
+`git cherry`.
 
 ## Keep
 
-When the user agrees to remove something that holds unique work (uncommitted
-changes, unmerged branches), save it first: `git diff` as a patch and a
-`git bundle` of the branches, under
-`${XDG_STATE_HOME:-$HOME/.local/state}/cleanup/<repo>/<date>/`, never next to
-the repository. Say the path; a later cleanup offers to delete it after 30 days.
+When the user agrees to remove something with unique work (uncommitted changes,
+unmerged branches), save it first: `git diff` as a patch and a `git bundle` of
+the branches under `${XDG_STATE_HOME:-$HOME/.local/state}/cleanup/<repo>/<date>/`,
+never next to the repository. Report the path; a later cleanup offers to delete
+it after 30 days.
 
 ## Report
 
-A table of what was removed, then a table of what remains with the reason and
-a recommendation for each (delete, keep, merge first). Ask about those in one
+A table of what was removed, then a table of what remains with the reason and a
+recommendation for each (delete, keep, merge first). Ask about those in one
 question.

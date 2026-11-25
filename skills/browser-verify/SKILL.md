@@ -7,69 +7,64 @@ description: Use when checking a web UI change in a browser, when something look
 
 ## 1. The project's facts
 
-Read the "Browser and visual" section of `docs/agents/checks.md`: the launcher,
-the screenshot command, the server to point it at, the slot wrapper for browser
-runs. A missing section: say so, then launch as below. Run every browser
-through the machine slot wrapper the project names.
+Read "Browser and visual" in `docs/agents/checks.md`: launcher, screenshot
+command, target server, and slot wrapper. If missing, say so and launch as
+below. Run every browser through the project's machine slot wrapper.
 
 ## 2. Pick engines by the claim
 
-A claim about one engine needs that engine; "works everywhere" needs all four:
-Chromium, Firefox, WebKit and Safari. Layout and CSS changes get Chromium,
-Firefox and Playwright WebKit at the widths and themes the project names. Add
-real Safari for Safari-specific behavior through the project's verified background
-route; identify system WKWebView separately from the Safari application.
+A single-engine claim needs that engine; "works everywhere" needs Chromium,
+Firefox, WebKit and Safari. Layout and CSS changes get Chromium, Firefox and
+Playwright WebKit at the project's widths and themes. Add real Safari for
+Safari-specific behavior via the verified background route; identify system
+WKWebView separately from the Safari application.
 
 ## 3. Launch real engines, out of the owner's way
 
-- **Chromium**: Playwright's build, headless. For 2× pixels at full frame rate (video, frame
-  timing), use a real window on a Retina display instead. Headless 2× reaches only about
-  16 fps, and the page still reports DPR 1. The window keeps 60 fps behind the owner's apps
-  with `--disable-backgrounding-occluded-windows --disable-renderer-backgrounding`, a project-verified no-activation launcher and a focus guard.
-- **Firefox**: the installed Firefox through Playwright's BiDi channel,
-  `firefox.launch({ channel: "moz-firefox" })`, headless. Playwright's own
-  patched Firefox can fail on a new macOS with "Could not find profile folder",
-  and it is not the Firefox users run.
-- **WebKit** (Playwright): renders like Safari but has none of Safari's
-  scrolling physics or settings. Use it for static layout only.
-- **Safari**: use the project's focus-guarded background Safari Technology
-  Preview harness. Check its launch path before using a different screenshot
-  tool: `safaridriver` plus later focus handback is not the same route.
-  [references/safari.md](references/safari.md) describes the transport boundary.
+- **Chromium**: Playwright headless. For 2× pixels at 60 fps (video, frame
+  timing), use a real Retina window instead (headless 2× caps at ~16 fps and
+  DPR 1) with `--disable-backgrounding-occluded-windows --disable-renderer-backgrounding`,
+  a verified no-activation launcher, and a focus guard.
+- **Firefox**: installed Firefox via Playwright BiDi,
+  `firefox.launch({ channel: "moz-firefox" })`, headless (Playwright's patched
+  build can fail on new macOS with "Could not find profile folder" and differs
+  from user Firefox).
+- **WebKit** (Playwright): static layout only; lacks Safari scrolling physics.
+- **Safari**: project's focus-guarded background Safari Technology Preview
+  harness — inspect its launch path first (`safaridriver` + focus handback is
+  not the same route; see [references/safari.md](references/safari.md)).
 
-Keep the owner's focus unchanged. A native route must launch without activation,
-monitor frontmost state and abort if its app takes focus. Returning focus afterward
-is recovery, not evidence that the run left focus alone. Close only the browser,
-watcher and server owned by this run.
+Leave the owner's focus untouched: native routes launch without activation,
+monitor frontmost state, and abort on activation (returning focus afterward is
+recovery, not proof). Close only the browser, watcher and server owned by this run.
 
 ## 4. Wait for the page, not for time
 
-A screenshot or reading is valid after all three:
-- the page's own "rendered" signal (Storybook adds `sb-show-main` to `body`);
-- a short settle for mounted content;
-- every image in the viewport `complete` with a `naturalWidth`, then `decode()`d.
-
-Safari paints lazy, async-decoded images late. A wait over an empty list of
-images passes before content mounts, so the settle comes first.
+Valid only after: the rendered signal (Storybook's `sb-show-main` on `body`),
+a short mount settle (first, so an empty image list does not pass early), and
+every viewport image `complete` with `naturalWidth` and `decode()`d (Safari
+paints lazy images late).
 
 ## 5. Prove it
 
 Done means numbers and a picture from each engine:
-- computed values or geometry for what changed (`getComputedStyle`,
-  bounding boxes, a pixel read from a canvas);
+- computed values or geometry for what changed (`getComputedStyle`, bounding
+  boxes, canvas pixel read);
+- when driving parameterized URL `args=`, verify the resulting DOM state
+  (`data-side`, `dir`, `data-variant`) since Storybook drops mistyped args silently;
 - one screenshot per engine, width and theme.
 
 A difference with equal computed values is paint: isolate layers (hide a child,
-sample pixels) and check assets before CSS. A decoder can drop an image's alpha
-when its container metadata is off, and CSS gets the blame.
+sample pixels) and check assets before CSS — a decoder can drop alpha when
+container metadata is off.
 
 ## 6. What no driver reaches
 
-Elastic overscroll (rubber band) needs trackpad scroll phases. CDP gestures
-produce it in Chromium only; WebDriver, Playwright WebKit and Firefox cannot.
-Report it as unverified in those engines, or ask the owner for a manual check.
+Elastic overscroll (rubber band) needs trackpad scroll phases. CDP produces it
+in Chromium only; WebDriver, Playwright WebKit and Firefox cannot. Report it as
+unverified there, or ask the owner for a manual check.
 
 ## 7. Report
 
-Per engine: name and version, what was measured with its numbers, picture paths.
-Then what stayed unverified and why.
+Per engine: name and version, measured numbers, picture paths. Then what stayed
+unverified and why.

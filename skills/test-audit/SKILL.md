@@ -7,62 +7,55 @@ description: Use monthly, when gate time or flaky failures rise, or when asked t
 
 A retro on a test suite. The question: which tests cost the most time or
 confidence for what they prove, and what change fixes each class. Read-only:
-run no suites and change nothing, so the audit can run beside other agents;
-the fixes become tickets.
+run no suites and change nothing, so the audit takes no machine slots and leaves
+worktrees untouched; the fixes become tickets.
 
 ## Where to look
 
-1. **Run history first.** Per suite, from the stats of the slot and lane tools
-   that `docs/agents/checks.md` names, else CI history: runs, p50 and p90,
-   failure and retry share. Rank by runs × time; a fix pays
-   back in proportion to how often the suite runs. Name the source of each
-   number.
-2. **Size table.** Per suite: tests, test lines, code lines, and the fixed cost
-   of one test (a browser page, a subprocess, a fresh repository, a compiled
-   binary). A ratio alone is not a finding; where the lines go is.
+1. **Run history first.** Per suite, from slot/lane stats named in
+   `docs/agents/checks.md`, else CI history: runs, p50 and p90, failure and
+   retry share. Rank by `runs × time`; a fix pays back in proportion to run
+   frequency. Name each number's source.
+2. **Size table.** Per suite: tests, test lines, code lines, and fixed per-test
+   cost (browser page, subprocess, fresh repo, compiled binary). Where lines go
+   matters, not ratio alone.
 
 ## Classes
 
-Count each class with a search before reading files, then read the heaviest
-files. Every finding cites `file:line`.
+Count each class with a search before reading the heaviest files; cite
+`file:line` for every finding (layer and cost rules live in
+[tdd](../tdd/SKILL.md#cost-of-a-test)).
 
-- **Unchecked fake.** A double that encodes rules, under many
-  tests, checked only by its own tests. Count the methods it implements
-  against those a contract test runs on both it and the real implementation.
-- **Wrong layer.** Browser tests whose assertions are text or model state;
-  DOM-emulator tests that assert class names or CSS source text, which pass
-  when the cascade is wrong. Find the cheaper pattern the repository already
-  uses and cite it.
-- **Wall time as input.** Literal sleeps and settle waits (sum them), a sleep
-  before a "nothing happened" assert, `elapsed < N` outside a perf suite.
-  Note whether the code takes an injected clock; without one the tests cannot
-  stop sleeping.
-- **Setup per test.** A fresh repository, process or build per test where a
-  class fixture or an in-process call would do. Measured p50 divided by the
-  test count gives the cost per test.
+- **Unchecked fake.** A double encoding rules under many tests, checked only by
+  its own tests. Count its methods against those covered by a shared contract test.
+- **Wrong layer.** Browser tests asserting text or model state; DOM-emulator
+  tests asserting class names or CSS source text (which pass when the cascade is
+  wrong). Cite the cheaper pattern the repo already uses.
+- **Wall time as input.** Literal sleeps and settle waits (sum them), sleeps
+  before "nothing happened" asserts, `elapsed < N` outside a perf suite. Note
+  whether the code accepts an injected clock.
+- **Setup per test.** Fresh repo, process or build per test where a shared
+  fixture or in-process call suffices (`p50 / test count` gives per-test cost).
 - **Mock-call tests of internals.** Call assertions on the project's own
   modules; one rule tested through many entry points or files.
 - **Tests that outlived their purpose.** Finished migrations and conversions,
-  "removed shape is rejected" tombstones, near-copy files (compare them with
-  digits normalised).
-- **Tautologies and brittle counts.** An assert on a constant, an expected
-  value recomputed the way the code does, `len(goldens) == N`, snapshots
-  updated in bulk.
-- **Churn.** Test files edited in many recent commits. Read the commit kinds
-  first: features mean real behavior, refactors mean coupling to internals.
+  "removed shape is rejected" tombstones, near-copy files (compare with digits
+  normalised).
+- **Tautologies and brittle counts.** Asserts on constants, expected values
+  recomputed like the code under test, `len(goldens) == N`, bulk-updated snapshots.
+- **Churn.** Test files edited in many recent commits — check commit kinds first
+  (features = real behavior, refactors = coupling to internals).
 - **Gaps hidden by volume.** Large modules with no test beside them. Propose a
   coverage run as a ticket; its result is where to look, not a finding.
 - **Unexercised capability branches.** Platform or optional-feature branches
-  that tests never exercise because the test environment lacks the capability
-  and only runs the fallback.
-- **Duplicated scaffolding.** Multi-line mocks or test harnesses copy-pasted
-  across files with drift instead of one contract-checked test adapter.
-- **Silent or swallowed assertions.** Smoke-only checks, error spies that hide
-  real warnings, or assertions inside `if` guards or unawaited callbacks.
-- **Order-dependent global leaks.** Mutations to global state, env, files,
-  singletons, or fake timers without symmetric cleanup (propose shuffled-order
-  runs as a check). For web UI examples, see
-  [references/web-ui.md](references/web-ui.md).
+  skipped because the test environment lacks the capability and hits only the fallback.
+- **Duplicated scaffolding.** Multi-line mocks or harnesses copy-pasted across
+  files with drift instead of one contract-checked test adapter.
+- **Silent or swallowed assertions.** Smoke-only checks, error spies hiding real
+  warnings, or assertions inside `if` guards or unawaited callbacks.
+- **Order-dependent global leaks.** Mutations to globals, env, files, singletons,
+  or fake timers without symmetric cleanup (propose shuffled-order runs). For
+  web UI examples, see [references/web-ui.md](references/web-ui.md).
 
 Also list what is already done well, so a fix does not remove it.
 

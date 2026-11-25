@@ -9,57 +9,52 @@ Reach a shared understanding of the plan before anyone builds it.
 
 ## The tree
 
-Every decision branches into the decisions that depend on it. The **frontier**
-is the open decisions whose prerequisites are settled. Ask from the frontier
-only; a question whose answer depends on another open question waits.
+Every decision branches into dependent decisions. The **frontier** is the open
+decisions whose prerequisites are settled; ask only from the frontier.
 
 ## One question at a time
 
-Ask the most consequential frontier question, then stop and wait.
+Ask the most consequential frontier question, then stop and wait (batch only if
+the user asks):
 
 ```
 **Q3. <title>**
-<the question, options if there are any, what each one costs>
+<the question, options if any, what each costs>
 
-Recommendation: <your answer and the reason>
+Recommendation: <your answer and reason>
 ```
-
-Ask several at once only when the user asks for a batch.
 
 ## Facts are yours, decisions are theirs
 
 Look up anything the code, docs, tracker or tools can answer, using parallel
-read-only subagents when starting on an existing repository (code, open issues,
-recent history). Never ask the user a fact you could find. Put every real
-choice to them, with your recommendation. Do not reopen what they settled, and
-do not turn technical details they delegated to you into approval gates.
+read-only `scout` subagents (`bin/role scout`) when starting on an existing
+repository (code, open issues, recent history). Never ask the user a fact you
+could find. Put every real choice to them with your recommendation; do not
+reopen settled decisions or turn delegated technical details into approval gates.
 
-Test claims against the code. When the user says how something works and the
-code disagrees, say so with the file and line.
+Test claims against the code. When the user's description disagrees with the
+code, say so with `file:line`.
 
 ## Write it down as you go
 
-- **Terms.** When a fuzzy or overloaded word gets a precise meaning, add it to
-  the glossary named in `docs/agents/domain.md` at once. Definitions only, no
-  implementation detail.
-- **ADRs.** Offer one only when a decision is hard to reverse, surprising
-  without context, and the result of a real trade-off. One paragraph is enough:
-  context, decision, why.
+- **Terms.** Add precise meanings for fuzzy or overloaded words to the glossary
+  in `docs/agents/domain.md` at once — definitions only, no implementation detail.
+- **ADRs.** Offer one only for a hard-to-reverse, non-obvious trade-off; one
+  paragraph (context, decision, why) is enough.
 
-No repository to write into: keep the agreed terms and decisions in the
+No repository to write into: track agreed terms and decisions in the
 conversation and list them at the end.
 
 ## Questionnaire mode
 
-When the answers live in someone else's head, ask the user only who it goes to
-and what they need back. Then write a questionnaire for that person: purpose,
-short context, questions most important first, one idea each, an empty answer
-under each.
+When answers live with someone else, ask the user only the recipient and needed
+outcome, then write the questionnaire: purpose, brief context, questions most
+important first (one idea each) with an empty answer slot under each.
 
 ## Done
 
-When the decisions this scope needs are settled, summarise them and ask the user
-to confirm. For expensive or architectural plans, offer one blind cross-family
-`critique` (council mode) before `to-spec` so another model family checks the
-plan against the raw repository. Do not act on the result until the user
-confirms, unless they already asked for it to be built.
+When all decisions in scope are settled, summarize them and ask the user to
+confirm. For expensive or architectural plans, offer one blind cross-family
+[critique](../critique/SKILL.md#council-cross-family-critique) (council mode)
+before [to-spec](../to-spec/SKILL.md) so another model family checks the plan
+against the raw repository. Wait for confirmation unless building was already asked.

@@ -7,17 +7,13 @@ description: "Use whenever asked for a score or rating (\"rate X\", \"X out of 1
 
 ## 1. Rubric first
 
-Before looking for fixes, write six to eight criteria for what a 10 means for
-this kind of thing, each with:
-
-- what is judged, in one line;
-- the evidence that shows it (a command, a measurement, a file, a review);
-- what 0, 5 and 10 look like.
+Before looking for fixes, write six to eight criteria for what a 10 means here,
+each with: what is judged (one line), the evidence (command, measurement, file,
+or review), and what 0, 5 and 10 look like.
 
 Weight criteria only if some clearly matter more. Show the rubric. Once scoring
-starts it is fixed; moving the goalposts after seeing the work makes the score
-meaningless. A criterion found missing later is added for the next round and
-said so, never swapped in silently.
+starts it is fixed — moving goalposts invalidates the score. Add a missing
+criterion only for the next round, explicitly.
 
 ## 2. Score
 
@@ -32,30 +28,33 @@ If the user asked only for a rating, stop here.
 
 ## 3. Close the gaps
 
-Fix the largest gaps first. Each fix is ordinary work under its own skill
-(`tdd`, `debug`, `architecture`) and verified the way that skill says.
+Fix the largest gaps first, following the matching skill ([tdd](../tdd/SKILL.md),
+[debug](../debug/SKILL.md), [architecture](../architecture/SKILL.md)) and its
+verification.
 
 ## 4. Re-score blind
 
-The one who made the fixes does not grade them. A fresh agent, of another model
-family if available (what `<this skill's directory>/scripts/role review
---implementer-family <family>` prints), gets the artifact, the fixed rubric
-and the evidence commands, but not the list of fixes or the old scores. Its
-score is the result.
+The author of the fixes never grades them. A fresh cross-family agent (resolved
+via `<this skill's directory>/scripts/role review --implementer-family <family>`)
+gets only the artifact, the fixed rubric, and the evidence commands — never the
+fix list or old scores. Its score is the result.
 
 ## 5. Stop
 
-Stop when either holds:
+Stop when any of these holds:
 
 - every criterion is 10 by the blind re-score;
-- for each remaining point, the price is named (time, complexity, a trade-off
-  against another criterion) and the user decided it is not worth it.
+- for each remaining point, the price (time, complexity, trade-offs) is named
+  and the user decided it is not worth it;
+- two to three fix and blind re-score rounds have run — pause, report the
+  current blind score, per-criterion movement, and the concrete price of
+  remaining points so the user decides whether to continue.
 
 Any edit after the blind re-score, however small, voids it: re-score again.
-Repeat 3–4 otherwise. Three rounds without movement on a criterion means the
-problem is structural: say so and propose the larger change.
+Three rounds without movement on a criterion means the problem is structural:
+say so and propose the larger change.
 
 ## Report
 
-The rubric, the first score, the final blind score, per-criterion movement, the
-fixes, and the price of each point left on the table.
+The rubric, first score, final blind score, per-criterion movement, fixes, and
+the price of each point left on the table.

@@ -10,35 +10,27 @@ getting wrong when they use this, and which layer would stop it.
 
 ## Sources
 
-Start with the **friction journal**, then read the rest with a subagent
-(`research` role) and keep raw counts.
+Start with the **friction journal**, then inspect the rest with a read-only
+`scout` subagent (`bin/role scout`) and keep raw counts.
 
-- **The journal** (`$XDG_STATE_HOME/friction/events.jsonl`; see
-  `hooks/friction_journal.py`): lint findings beyond the baseline, type errors
-  on the package's types, the owner's `/friction` corrections, corrections and
-  misuse the session scanner found, vendored-copy patches. Rank it with
+- **The journal** (`$XDG_STATE_HOME/friction/events.jsonl`; `hooks/friction_journal.py`):
+  run `bin/friction scan` first, then rank with
   `bin/friction report [--package <name>] [--since <period>]` (separates
-  `large-bash-output` noise by default; pass `--include-tool-noise` to rank it
-  inline) or `repo-kit friction report --package <name> --since <period>`, or
-  read the JSONL. Run `bin/friction scan` first so the newest sessions are in. Each
-  event's `why`, file and session point at the evidence; read the transcript
-  only there and for the sources below that the journal does not cover.
-  Coworkers' `repo-kit friction export` bundles count the same way.
+  `large-bash-output` noise by default; `--include-tool-noise` ranks it inline)
+  or `repo-kit friction report --package <name> --since <period>`. Include
+  coworkers' `repo-kit friction export` bundles. Follow each event's `why`, file
+  and session into transcripts only where needed.
 - **Lint baselines**: structured entries (`category`, `component`, `remove`)
-  are a list of missing APIs and unclear docs by count.
-- **Agent transcripts** that touch the package: rule violations and the lint
-  messages agents ignored, suppressions they added, questions they asked,
-  things they rebuilt by hand that the package already has, corrections from
-  the user.
-- **Consumer code**: overrides and `!important`, selectors into internals,
-  wrappers around components, local copies of package code, suppression
-  comments, workarounds without an `UPSTREAM(...)` mark.
-- **Bug history**: fixed entries in the changelog and closed issues, grouped by
-  kind. A kind that recurs is a missing guard, not bad luck.
+  count missing APIs and unclear docs.
+- **Agent transcripts** touching the package: ignored lint messages, added
+  suppressions, questions asked, hand-rebuilt features, and user corrections.
+- **Consumer code**: overrides and `!important`, internal selectors, component
+  wrappers, local copies, suppressions, unmarked `UPSTREAM(...)` workarounds.
+- **Bug history**: fixed changelog entries and closed issues grouped by kind — a
+  recurring kind is a missing guard, not bad luck.
 
-Check every finding against the current version before counting it; some are
-already fixed. A class the transcripts show but the journal missed is a gap in
-a producer (hook, scanner, lint): name it in the report.
+Verify every finding against the current version before counting it. Name any
+producer gap (hook, scanner, lint) when transcripts show a class the journal missed.
 
 ## Classify
 

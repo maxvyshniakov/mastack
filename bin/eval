@@ -63,8 +63,8 @@ def model_id(alias):
 
 # What the agent may do in the scratch repository: file tools, Git, and the
 # fixture's own scripts pass at once; anything else goes to the auto-mode classifier.
-CLAUDE_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Skill", "Agent", "Bash(git *)", "Bash(GIT_INDEX_FILE=*)",
-                "Bash(export GIT_INDEX_FILE=*)", "Bash(tools/*)", "Bash(./check.sh*)", "Bash(ls *)", "Bash(cat *)",
+CLAUDE_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Skill", "Agent", "Bash(git *)",
+                "Bash(tools/*)", "Bash(./check.sh*)", "Bash(ls *)", "Bash(cat *)",
                 "Bash(diff *)", "Bash(mktemp *)", "Bash(mkdir *)", "Bash(cp *)"]
 
 

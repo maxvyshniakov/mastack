@@ -10,8 +10,6 @@ callers cross the same surface.
 
 ## Vocabulary
 
-Use these words exactly; do not drift into component, service, API or boundary.
-
 - **Module**: anything with an interface and an implementation, at any scale.
 - **Interface**: everything a caller must know: types, invariants, ordering,
   errors, configuration, performance.
@@ -38,42 +36,40 @@ Use these words exactly; do not drift into component, service, API or boundary.
    pass-through; complexity reappearing across callers means it earns its keep.
 5. **Implicit state machines.** A lifecycle encoded as booleans or optionals
    with unstated valid combinations (`loading`, `ready`, `error?`), status
-   strings set from many places, guards like `if state == X and flag` scattered
-   across files, phases driven by timers, retries or file presence, or one
-   lifecycle mirrored in two places (two languages, a store and its view, a
-   file and its reader) with different rules. Write down the states and
-   transitions as the code actually behaves, then look for:
+   strings set from many places, scattered `if state == X and flag` guards,
+   phases driven by timers, retries or file presence, or one lifecycle mirrored
+   in two places (two languages, store and view, file and reader) with different
+   rules. Write down the states and transitions as the code behaves, then look for:
    - impossible combinations it can reach;
    - one transition done in two places;
-   - stale events overwriting newer state, e.g. a late completion or a replay
-     after a rise in rights;
+   - stale events overwriting newer state (late completion, replay after privilege rise);
    - transitions with no test.
 
-   The usual fix is one enum carrying data per state, plus one transition
-   function or a table-driven reducer, with the transitions tested as a table.
-   Not every flag is a machine: a single field with one writer is fine.
+   Fix with one enum carrying data per state plus one transition function or
+   table-driven reducer, tested as a table. Not every flag is a machine: a
+   single field with one writer is fine.
 6. **Single-owner writes and leaked seams.** Flag two modules writing the same
    external sink without a single owner or lease, or reaching into another
    module's private state instead of an explicit interface. For web UI code,
    also check [references/web-ui.md](references/web-ui.md).
 7. **Resource symmetry and hot-path cost.** Every acquired resource (listener,
-   observer, timer, subprocess, lock, abort handle) must tear down
-   symmetrically on close, re-entry, and interruption. On hot paths, flag
-   hidden O(N) scans or expensive synchronous reads behind a cheap-looking
-   interface.
+   observer, timer, subprocess, lock, abort handle) tears down symmetrically on
+   close, re-entry, and interruption. On hot paths, flag hidden O(N) scans or
+   expensive synchronous reads behind a cheap-looking interface.
 
-Present candidates: files, problem, proposed change, benefit in locality,
-leverage and tests, strength (strong, worth exploring, speculative). Do not
-propose interfaces yet. Ask which one to explore. Findings are hypotheses;
-whether to refactor is the owner's decision.
+Present candidates: files, problem, proposed change, benefit (locality, leverage,
+tests), strength (strong, worth exploring, speculative). Ask which to explore
+before proposing interfaces; findings are hypotheses and refactoring is the owner's call.
 
 ## Design it twice
 
-For the chosen candidate, classify its dependencies: in-process, local
-stand-in available, owned remote (port plus adapters), true external (injected,
-mocked in tests). Then have two or three subagents each design a radically
-different interface: minimal entry points; most common caller trivial; ports and
-adapters. Compare on depth, locality and seam placement, and recommend one,
-hybrid if it is better. Tests move to the new interface; delete the old
-shallow tests they replace. A rejected candidate with a lasting reason becomes
-an ADR, so the next survey does not suggest it again.
+For the chosen candidate, classify its dependencies: `in-process`, `local stand-in`,
+`owned remote` (port plus adapters), `true external` (injected, mocked in tests).
+Design two or three radically different interfaces (minimal entry points; most
+common caller trivial; ports and adapters): spawn parallel `design` subagents
+(`bin/role design`) for public, persistent, or core cross-cutting seams, and
+sketch the contrasts inline yourself for local internal seams (parallel frontier
+subagents reread the repo per launch). Compare on depth, locality and seam
+placement, and recommend one, hybrid if better. Tests move to the new interface;
+delete the old shallow tests they replace. A rejected candidate with a lasting
+reason becomes an ADR, so the next survey does not suggest it again.

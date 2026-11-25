@@ -9,21 +9,18 @@ Read only. Change nothing, start nothing, kill nothing.
 
 ## Gather
 
-Collect what exists; skip a source that is not set up and say it was skipped.
+Scope: current repo unless more are named ("everything" = all user repos visible
+from here). Skip unset sources and report what was skipped.
 
 - **Tracker**: open and in-progress items assigned to the user or to agents, via
   `docs/agents/issue-tracker.md`. Note items waiting on the owner.
-- **Git**: for each repository in scope, current branch, ahead/behind against
-  its upstream, uncommitted changes, unpushed commits, stashes, branches not
-  merged into the base, worktrees.
-- **Lanes**: if a lane tool is installed (for example `lanefather list`), its
-  running and queued lanes with their claims.
+- **Git**: per repo in scope — branch, ahead/behind upstream, uncommitted
+  changes, unpushed commits, stashes, unmerged branches, worktrees.
+- **Lanes**: if a lane tool is installed (e.g. `lanefather list`), running and
+  queued lanes with their claims.
 - **Machine**: `slotfather status` for who holds and who waits for slots.
 - **CI**: the latest run on each published branch and its result.
 - **Sessions**: other agent sessions you can list, and what each is doing.
-
-Scope: the current repository unless the user names more. "Everything" means
-every repository the user works in that you can find from here.
 
 ## Report
 

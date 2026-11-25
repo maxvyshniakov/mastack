@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 """git-guard, a Claude Code PreToolUse[Bash] check.
 
-Denies the git shapes behind incidents of parallel agents sharing one machine (audit 2026-10-21):
+Denies the git shapes behind incidents of parallel agents on one machine (audit 2026-10-21):
   pipe-mask        a mutating git step piped into tail/head/grep/sed/awk inside a
                    chain that continues with &&, || or ; and no `set -o pipefail`
   protected-branch git branch -c/-C/--copy/-m/-M/--move targeting main or dev
                    (or renaming main/dev away), which bypasses or races the
                    reference-transaction hook
-  push-by-name     pushing main, dev or HEAD by name in a shared checkout's repository
+  push-by-name     pushing main, dev or HEAD by name in a configured repository
                    (the `checkouts` setting) instead of `<sha>:refs/heads/<branch>`
   push-force       --force, --force-with-lease, +refspec or --no-verify on push
   shared-checkout  reset --hard, checkout -- <paths>, restore, clean -f in a
-                   shared main checkout (its .claude/worktrees lanes are fine)
+                   configured primary checkout (its .claude/worktrees lanes are fine)
   stash            bare stash, a stash without -m <tag>, implicit pop/apply/drop, clear
   worktree-location git worktree add whose target path is outside
                    <repo>/.claude/worktrees/ and the session scratchpad (/tmp, $TMPDIR)
 
-push-by-name applies in the shared checkouts and in every worktree of their repositories, found through
-`git rev-parse --git-common-dir`; shared-checkout applies to the checkouts themselves, not to their
+push-by-name applies in the configured primary checkouts and in every worktree of their repositories, found through
+`git rev-parse --git-common-dir`; shared-checkout applies to the primary checkouts themselves, not to their
 .claude/worktrees/; the other rules apply everywhere.
 
 A command prefixed with GIT_GUARD_OK="<reason>" passes and is logged to
@@ -294,8 +294,8 @@ class Guard:
     def destructive(self, verb, rest, directory):
         repo = shared_checkout(directory)
         if repo:
-            self.deny("shared-checkout", f"`git {verb} {' '.join(rest)}` discards uncommitted work in the shared "
-                                         f"checkout {repo}, where other sessions keep theirs.", repo=repo)
+            self.deny("shared-checkout", f"`git {verb} {' '.join(rest)}` discards uncommitted work in the primary "
+                                         f"checkout {repo}, where the owner may have local edits.", repo=repo)
 
     def verb_reset(self, rest, directory):
         if "--hard" in rest:

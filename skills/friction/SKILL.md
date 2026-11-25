@@ -6,8 +6,8 @@ disable-model-invocation: true
 
 # /friction
 
-The owner corrects how an agent used one of their packages. Record it as one
-event in the local friction journal, so a later friction audit counts it.
+Record the owner's correction of how an agent used a package as one event in the
+local friction journal so a later friction audit counts it.
 
 1. Run, with the owner's text as given (quote it for the shell):
 

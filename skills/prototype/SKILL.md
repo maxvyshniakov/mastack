@@ -12,39 +12,32 @@ prototype, visibly, so the answer can be checked against it.
 
 "Does this model handle X then Y?"
 
-- Put the logic in one pure module: a reducer `(state, action) => state`, a
-  state machine with explicit transitions, or pure functions over a data type.
-  No DOM inside it; it should lift into the real code unchanged.
-- Wrap it in one self-contained HTML file that opens by double-click: no build,
-  no server, no dependencies.
-- Labels in domain language, readable by someone who does not code.
-- Layout: the question; the full current state as labelled fields, re-rendered
-  after every action with the change marked; one button per action; tabs of
-  guided scenarios (happy path, the awkward edge case, an attempt at something
-  that must be illegal), each starting from a known state.
+- Put logic in one pure module (reducer `(state, action) => state`, explicit
+  state machine, or pure functions — no DOM) so it lifts into real code unchanged.
+- Wrap in one self-contained HTML file that opens by double-click (no build,
+  server, or dependencies), using non-coder domain labels.
+- Layout: the question; full current state as labelled fields re-rendered after
+  every action with changes marked; one button per action; guided scenario tabs
+  (happy path, awkward edge case, attempted illegal action) from known states.
 
 ## UI
 
 "What should this look like?"
 
-- Three variants by default, five at most, each radically different, not three
-  shades of one idea.
-- Mount them on the real page they belong to, with real data, header and
-  density, switched by a `?variant=` search parameter and a small floating bar.
-  A new throwaway route is the last resort; an empty page hides problems.
-- Follow the project's routing and component conventions; reuse its components.
+- Three radically different variants by default (five max), not shades of one idea.
+- Mount on the real page with real data, header and density, switched by
+  `?variant=` and a small floating bar (a throwaway route is last resort; an
+  empty page hides problems). Reuse the project's routing and components.
 
 ## Rules for both
 
 - Named so nobody mistakes it for production; next to the code it explores.
-- One command to start it.
-- State in memory. If persistence is the question, a scratch store whose name
-  says to wipe it.
-- No tests, no error handling beyond what keeps it running, no abstractions.
+- One command or double-click to open it.
+- State in memory (or a clearly named scratch store if persistence is the question).
+- No tests, no error handling beyond keeping it running, no abstractions.
 
 ## When it has answered
 
-Record the verdict and the question it settled on the issue. Move the
-validated decision into the real code through `tdd`. Commit the prototype to its
-own branch, out of the main line, and link that branch from the issue, so it
-stays a primary source without living in the product.
+Record the verdict and settled question on the issue. Rebuild the validated
+decision into real code via [tdd](../tdd/SKILL.md). Archive the prototype on its
+own branch linked from the issue so it stays a primary source outside the product.
