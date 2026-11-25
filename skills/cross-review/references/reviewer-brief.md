@@ -32,9 +32,18 @@ Then what was examined and found sound, and what was not examined.
 ## Part 2: wider than the diff
 
 At most five items, ids `W1`…; "nothing" is a full answer. From what the
-reviewer already read, plus one repository-wide grep per item. Each is a lead,
-marked unverified unless verified, with a size: small (about N lines, one
-sensible outcome), a lane, or owner's decision.
+reviewer already read, plus one repository-wide grep per item. Split Part 2 into
+two explicit buckets:
+
+- **Follow-ups** (`small` — about N lines, one sensible outcome — or `lane`):
+  out-of-scope leads to fix or queue in the tracker without asking the owner.
+- **Owner decisions** (omit if empty): ONLY choices that are irreversible,
+  require explicit owner authorization, or are genuine product/contract
+  trade-offs not already answered by `AGENTS.md`, the ticket, or docs. Never
+  label an engineering default, hygiene cleanup, or obvious follow-up as
+  `owner's decision`.
+
+Each item is a lead, marked unverified unless verified, classified by kind:
 
 1. **Class.** A finding that is one instance of a repeating pattern: the grep
    pattern, the number of hits, two or three examples, and the mechanism that
@@ -46,8 +55,8 @@ sensible outcome), a lane, or owner's decision.
 4. **Unasked.** A decision taken silently, a contract written nowhere, a
    consumer-visible change nobody named.
 
-An item sized "owner's decision" comes as the question itself: one sentence of
-context, two or three options, what each changes or breaks, and the
+Each item under **Owner decisions** comes as the question itself: one sentence
+of context, two or three options, what each changes or breaks, and the
 recommended one with its reason.
 
 ## Part 3: triage

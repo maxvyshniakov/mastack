@@ -113,11 +113,15 @@ judgment or design proposals to `scripts/role design`.
    releases, and guarded publishes stay the owner's command unless `publishing.md`
    grants standing permission (`release` skill). Cross-cutting migrations use
    [collect-all verification](references/batch-verification.md#cross-cutting-verification).
-9. **Questions** first go through `cross-review`'s "Owner's decisions" (search
-   session histories, tracker, and blame). Send only what remains to the owner
-   queue (or one numbered message with implemented defaults); record answers on
-   the spec issue. Settle cheap, reversible in-scope defaults yourself and
-   report in one line.
+9. **Questions** must pass an explicit escalation gate before reaching the
+   owner — never copy reviewer `W*` leads mechanically into a questions list.
+   First run `cross-review`'s "Owner's decisions" (search session histories,
+   `owner-turns.jsonl`, tracker, `AGENTS.md`, and git blame). Settle every
+   cheap, reversible in-scope default or obvious follow-up yourself (apply or
+   queue it and report in one line under **Decided**). Escalate to the owner
+   ONLY when the choice is irreversible, requires explicit owner authorization,
+   or is an expensive product/contract trade-off with no answer in docs or
+   history; record answers on the spec issue.
 10. **After a limit stop**, resume only agents one step from done; commit the
     rest as WIP on their branch and restart fresh.
 
