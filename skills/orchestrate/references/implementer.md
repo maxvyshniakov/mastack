@@ -46,10 +46,12 @@ help or status call is a turn that rereads your whole context.
    never weaken a test (e.g., to `calls.length > 0`) just to satisfy hygiene.
 4. The brief says whose the lane's full check is. `Check: mine`: the
    orchestrator runs it beside the review once you hand back, so stop at
-   green focused checks. `Check: yours`: run the brief's check command once on
-   the committed tree. A red check: fix and verify with focused checks first,
-   and `--rerun` only after they pass. Investigate a timeout alone before
-   blaming load.
+   green focused checks (Antigravity implementers always use `Check: mine` and
+   must run focused checks synchronously before ending their turn, because
+   ending a turn terminates child background shell commands). `Check: yours`:
+   run the brief's check command once on the committed tree. A red check: fix
+   and verify with focused checks first, and `--rerun` only after they pass.
+   Investigate a timeout alone before blaming load.
 5. Stop servers and background processes you started, including every loop
    that waits on a command you stopped. Report only once `ps`
    shows nothing of yours running in your worktree or scratch. A wait loop on

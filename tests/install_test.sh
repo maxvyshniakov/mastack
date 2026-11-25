@@ -284,6 +284,17 @@ check "--update resets dirty edits in --pin-dir" test -z "$(git -C "$pin_dir" st
 "$pin_repo/bin/install" --target "$t" --pin-dir "$pin_dir" --uninstall --only rate >/dev/null 2>&1
 check "--uninstall removes pinned skill link" absent rate
 
+# Antigravity global skills directory (~/.gemini/config/skills) is added when ~/.gemini/config exists
+# and ~/.gemini/config/skills is not already a symlink (e.g. to ~/.agents/skills).
+ag_home=$scratch/ag-home
+mkdir -p "$ag_home/.gemini/config"
+HOME="$ag_home" MASTACK_SCAN_ROOT="$ag_home/empty" "$root/bin/install" --only rate >/dev/null 2>&1
+check "default install links into ~/.gemini/config/skills when ~/.gemini/config exists" test "$(readlink "$ag_home/.gemini/config/skills/rate")" = "$root/skills/rate"
+rm -rf "$ag_home/.gemini/config/skills"
+ln -s "$ag_home/.agents/skills" "$ag_home/.gemini/config/skills"
+HOME="$ag_home" MASTACK_SCAN_ROOT="$ag_home/empty" "$root/bin/install" --only rate >/dev/null 2>&1
+check "symlinked ~/.gemini/config/skills is preserved without duplicating target" test -L "$ag_home/.gemini/config/skills"
+
 if ((failures)); then
   echo "install_test: $failures failure(s)" >&2
   exit 1

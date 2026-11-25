@@ -6,7 +6,9 @@ questions cost output only (10–20% in the runs that set them) and return what
 the orchestrator would otherwise rebuild by rereading the same code.
 
 Tell the reviewer to finish Part 1 before starting Part 2: asked together, the
-wider questions dilute the defect hunt.
+wider questions dilute the defect hunt. Read source files with the `Read` tool
+(line ranges) rather than `cat`/`sed` in bash, and scope `git diff` per file so
+review sessions do not flood the friction journal with `large-bash-output`.
 
 ## Part 1: each finding
 

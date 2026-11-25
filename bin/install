@@ -5,7 +5,8 @@
 #   bin/install [--dry-run] [--force] [--uninstall] [--only a,b] [--skip a,b]
 #               [--pin REF] [--pin-dir DIR] [--target DIR]... [--project DIR]... [--settings FILE]
 #
-# Without --target it installs into ~/.claude/skills and ~/.agents/skills.
+# Without --target it installs into ~/.claude/skills, ~/.agents/skills, and
+# (when ~/.gemini/config exists and skills is not already symlinked) ~/.gemini/config/skills.
 # --pin REF (alias --update REF) checks out REF into a dedicated worktree
 # (--pin-dir, default ~/.local/share/mastack/installed) and links skills and
 # hooks there instead of the live working checkout.
@@ -67,7 +68,12 @@ if [[ -n $pin ]]; then
   fi
   export MASTACK_HOOKS_FROM_WORKTREE=1
 fi
-((${#targets[@]})) || targets=("$HOME/.claude/skills" "$HOME/.agents/skills")
+if ((!${#targets[@]})); then
+  targets=("$HOME/.claude/skills" "$HOME/.agents/skills")
+  if [[ -d $HOME/.gemini/config && ! -L $HOME/.gemini/config/skills ]]; then
+    targets+=("$HOME/.gemini/config/skills")
+  fi
+fi
 
 # Comma lists: "has LIST NAME" is true when NAME is in LIST.
 has() { [[ ,$1, == *,"$2",* ]]; }
