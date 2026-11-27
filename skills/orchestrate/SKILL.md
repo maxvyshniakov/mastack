@@ -45,15 +45,34 @@ launch (implement, fix rounds, scouting):
   Claude Code hooks only fire on Claude-backed sessions (not Antigravity or
   Codex), so enforce model/option selection and bounded output via the brief.
 
-**Scouting.** Use `scripts/role scout` for read-only mapping/grepping; send
-judgment or design proposals to `scripts/role design`.
+**Scouting.** Use `scripts/role scout` for read-only mapping and grepping.
+
+**Specifier / Advisor (read-only).** Run `scripts/role design` (pass
+`--exclude-family <implementer-family>` when available for a second family's
+lens; no file edits):
+- **Pre-lane Specifier (just-in-time on the live tree):** Single-module,
+  well-bounded tickets go straight to `implement`. Run a Specifier first when a
+  ticket spans multiple files/layers, changes a public/browser/a11y contract,
+  or has unclear acceptance criteria (prevents wasted lane slots and review
+  churn). Output ≤1 page: target files & seams, invariants & edge cases,
+  verification plan, and checkable done criteria.
+- **Mid-flight Advisor:** Consult read-only when a lane hits a stubborn failure
+  after one failed hypothesis or a non-obvious architectural trade-off, instead
+  of brute-forcing trial edits. Output ≤1 page: root-cause or trade-off call,
+  recommended direction, and the single check that settles it.
+
+**Long or remote commands.** Detach any remote/SSH or provisioning command
+expected to exceed ~5–10 minutes on the target host (`nohup <cmd> > /tmp/<job>.log 2>&1 < /dev/null &!`
+in zsh, or `&` in sh/bash) and check progress via `tail` / `pgrep -f` (harness
+turn limits ~15 min and SSH drops kill foreground commands mid-flight).
 
 ## Run
 
-4. **Launch lanes.** Register each lane with `--ticket` first so the brief names
-   its worktree. Point at spec and tickets; do not paste them. Pre-fill every
-   command with lane id and paths so implementers never spend turns on `--help`
-   or polling `lanefather list`.
+4. **Launch lanes.** Run a just-in-time **Specifier** first when the ticket
+   meets the threshold in `## Launch`, then register each lane with `--ticket`
+   so the brief names its worktree. Point at spec, Specifier note (if any), and
+   tickets; do not paste them. Pre-fill every command with lane id and paths so
+   implementers never spend turns on `--help` or polling `lanefather list`.
 
    ```text
    Role: implement
