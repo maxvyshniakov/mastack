@@ -5,8 +5,12 @@ surrounding code, and engine; these questions cost output only (10–20%) and
 avoid forcing the orchestrator to reread the same code.
 
 Finish Part 1 before starting Part 2 (mixing them dilutes the defect hunt).
-Read source files with `Read` (line ranges) rather than `cat`/`sed` in bash,
-and scope `git diff` per file to avoid `large-bash-output` friction entries.
+**Tier 1 (`0` scouts, `depth <= 1`):** never spawn child subagents; verify every
+changed file and immediate caller first-hand. Batch parallel whole-file reads
+(`Read` / `read_file` up to the ~800-line tool cap, or complete structural
+blocks) rather than sequential narrow line slices or shell `cat`/`sed`/`head`/`tail`
+slicing, and scope `git diff` per file to avoid `large-bash-output` friction
+entries.
 
 ## Part 1: each finding
 
@@ -69,3 +73,30 @@ unverified unless verified, and split into two buckets:
 
 End with counts by severity, the top three, and the share of effort Parts 2 and
 3 took.
+
+## Part 4: Structured JSON trailer
+
+End every review pass (headless or T3 `delegate_task`) with **one** fenced
+`json` block as the final block of the report so the coordinator can save it to
+a file and record it via `lanefather review <id> --record <file> --reviewer <alias>`:
+
+```json
+{
+  "tip": "<reviewed HEAD commit SHA>",
+  "tree": "<reviewed HEAD tree SHA>",
+  "verdict": "approve | changes_requested",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P0 | P1 | P2 | P3",
+      "file": "path/to/file.ext",
+      "line": 42,
+      "summary": "concise defect statement",
+      "falsifier": "cheapest test or command that confirms or kills the finding"
+    }
+  ]
+}
+```
+
+Use `"findings": []` when `"verdict"` is `"approve"`. Include `"P0"`–`"P3"`
+severities only (omit `W*` leads from `findings`).

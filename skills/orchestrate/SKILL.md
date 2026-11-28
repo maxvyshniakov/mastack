@@ -23,33 +23,45 @@ worktrees, branches, `gh`, and a notes file. Default worktree path when
 2. Create an integration branch in its own worktree. Only you write to it, and
    only you move the main branches (via the promote tool if one exists).
 3. **Budget lanes.** Run fewer lanes when usage limits are low. Reuse a warm
-   agent when idle time and context stay within `warm_idle_minutes` and
-   `warm_context_tokens` under `[providers.<family>]` in `models.toml` and the
-   next task touches the same code; otherwise start fresh from a WIP commit.
+   agent only when idle time stays within `warm_idle_minutes` (`50m`), last-turn
+   context stays at or below `reset_context_tokens` (`150K` Anthropic, `185K`
+   Google) under `[providers.<family>]` in `models.toml`, total turns stay below
+   `max_turns_before_handoff` (`80`), and the next task touches the same code;
+   beyond either ceiling, commit WIP and hand off to a fresh session.
    Sequence overlapping claims; land a prefactor before lanes editing around it.
 
 ## Launch
 
 Run `<this skill's directory>/scripts/role <role>` (with
-`[--harness auto|claude|codex|t3]`, `--family`, or `--exclude-family` to route
-around exhausted providers) and pass its model and reasoning option on **every**
-launch (implement, fix rounds, scouting):
+`[--harness auto|claude|t3]`, `--family`, `--exclude-family`, or `--pair` for
+two-family panels) and pass its model and reasoning option on **every** launch
+(implement, fix rounds, scouting):
 
 - **Claude Code (`Agent`)**: pass `model` and `effort`; include `Role: <role>`
   so `hooks/agent_role.py` fills them if omitted.
-- **Codex (`codex exec`)**: use `[cli.codex].run`; for read-only scouting add
-  `-s read-only -C <repo> --output-last-message <file> "<task>" < /dev/null`
-  in the background (`< /dev/null` prevents stdin hang).
 - **T3 Code / Antigravity (`delegate_task`)**: set `target.model` to `id`,
   `target.options.<option>` to `effort`, and include `Role: <role>` in `task`.
-  Claude Code hooks only fire on Claude-backed sessions (not Antigravity or
-  Codex), so enforce model/option selection and bounded output via the brief.
+  Claude Code hooks only fire on Claude-backed sessions (not Antigravity), so
+  enforce model/option selection, batched whole-file reads, and bounded output
+  via the brief.
 
-**Scouting.** Use `scripts/role scout` for read-only mapping and grepping.
+**Scouting (3-Tier Judgment Scout Policy).** Use `scripts/role scout`
+(`sonnet`/`flash`, `<= 15` tool calls and `<= 2,500` chars output each,
+`depth <= 1` — scouts never spawn children):
+- **Tier 1 (`review`, mid-flight Advisor):** `0` scouts; read diff and callers
+  first-hand in batched whole-file reads. Coordinator runs any doc/changelog
+  `scout` sibling flat beside the reviewer.
+- **Tier 2 (delegated Council `critique`):** `0` sub-scouts (`depth <= 1`);
+  verify claims first-hand.
+- **Tier 3 (wide `specify` / `design` / `audit` across `>= 2` repos or `> 25`
+  unknown files, or brief grants `Scout budget: 1..3`):** `1–3` parallel
+  pointer-only scouts returning `file:line` & symbol manifests only (no
+  verdicts/proposals); judgment lead must batch-read load-bearing seams
+  first-hand before writing decisions or findings.
 
-**Specifier / Advisor (read-only).** Run `scripts/role design` (pass
-`--exclude-family <implementer-family>` when available for a second family's
-lens; no file edits):
+**Specifier / Advisor (read-only).** Run `scripts/role specify` (or `design`;
+pass `--exclude-family <implementer-family>` when available for a second
+family's lens; no file edits):
 - **Pre-lane Specifier (just-in-time on the live tree):** Single-module,
   well-bounded tickets go straight to `implement`. Run a Specifier first when a
   ticket spans multiple files/layers, changes a public/browser/a11y contract,
@@ -93,9 +105,11 @@ turn limits ~15 min and SSH drops kill foreground commands mid-flight).
    [cross-review](../cross-review/SKILL.md#one-round-of-fixes) together: give
    the reviewer only the diff, ticket, standards,
    [reviewer brief](../cross-review/references/reviewer-brief.md), and the
-   report's `Least sure` places — never the lane report or conclusions. Triage
-   finished reviews on arrival before later lands, sending check failures and
-   findings once to the same implementer if still within step 3's
+   report's `Least sure` places — never the lane report or conclusions. Save the
+   reviewer's output (ending in the canonical `json` findings trailer) to a file
+   and record it via `lanefather review <id> --record <file> --reviewer <alias>`.
+   Triage finished reviews on arrival before later lands, sending check failures
+   and findings once to the same implementer if still within step 3's
    `[providers.<family>]` warm window (else a fresh agent with findings and
    diff); it fixes, final check runs once, and you land. When fixing small
    findings yourself, run targeted local `lint` + touched unit test (<10s)

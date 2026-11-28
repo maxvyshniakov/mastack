@@ -59,6 +59,35 @@ unless `MASTACK_ALLOW_CREDITS=1` is prefixed.
   `max_turns_before_handoff` per active provider instead of assuming one
   provider's TTL or compaction ceiling.
 
+## Judgment scout policy
+
+Judgment models (`carbon`, `fable`) follow a three-tier boundary for spawning
+economy `scout` subagents (`sonnet`/`flash`, `0.1–0.2×`):
+
+- **Tier 1 — Single-lane `review` and mid-flight Advisor (`0` scouts):**
+  Reviewers and mid-flight Advisors never spawn child subagents (`scout_budget = 0`,
+  `depth <= 1`). They read every changed file and immediate caller first-hand
+  in batched parallel whole-file reads (up to the ~800-line tool cap). When a
+  `cross-review` needs mechanical doc or changelog verification, the coordinator
+  spawns that `scout` sibling flat beside the reviewer.
+- **Tier 2 — Delegated Council `critique` (`0` sub-scouts by default):**
+  Blind Council reviewers (`bin/role critique --pair`) execute flat (`depth <= 1`,
+  `0` child subagents) and verify codebase claims first-hand in batched reads so
+  two Council members never duplicate scouting passes or filter subtle seams
+  through lossy summaries.
+- **Tier 3 — Wide `specify` / `design` / `audit` (`1–3` pointer-only scouts):**
+  Only when target files are unknown across `>= 2` repositories or `> 25`
+  candidate files (or when a brief explicitly grants `Scout budget: 1..3`), a
+  judgment lead may dispatch `1–3` parallel `scout` subagents (`bin/role scout`,
+  `<= 15` tool calls and `<= 2,500` chars output each, `depth <= 1` — scouts
+  never spawn children):
+  - **Pointer-only output:** scouts return fact manifests (`file:line` pointers,
+    symbol/call-site lists, config keys, raw counts) — never defect verdicts,
+    severity ratings, or design proposals.
+  - **Mandatory first-hand verification:** the judgment model must batch-read
+    every load-bearing `file:line` seam first-hand before writing a spec
+    contract, architectural decision, or audit finding.
+
 ## Running a role
 
 `bin/role <role> [--implementer-family F] [--family F] [--exclude-family F] [--pair] [--json]`

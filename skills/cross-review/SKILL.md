@@ -22,10 +22,10 @@ description: Use when asked for a review, or before shipping a large change. A m
      asserts outside perf suites, duplicate rule tests.
 4. **Reviewer.** Use the Review model in `docs/agents/checks.md`, else run
    `<this skill's directory>/scripts/role review --implementer-family <family>`
-   (never read `models.toml` by eye; only `role` checks live quotas). Launch per
-   [orchestrate Launch](../orchestrate/SKILL.md#launch) (standalone `codex exec`
-   needs `-s read-only` and `< /dev/null`) and include its note/caution in the
-   report.
+   (or `--pair` for two-family panels; never read `models.toml` by eye; only
+   `role` checks live quotas). Launch per
+   [orchestrate Launch](../orchestrate/SKILL.md#launch) and include its
+   note/caution in the report.
 5. **Depth.** Choose at lane start, tell the lane tool, and state depth + why in
    the report (`docs/agents/checks.md` overrides):
    - **None (exempt):** mechanical docs/renames/generated files; owner-decided
@@ -38,13 +38,16 @@ description: Use when asked for a review, or before shipping a large change. A m
 6. **Unit.** One contract per review: one subsystem, <= ~20 files or 1,500
    changed lines. Split larger diffs by subsystem into parallel reviews (each
    gets full file list and shared seams). Batch small unreviewed lanes of one
-   subsystem into one diff. Verify doc/changelog claims in a separate `scout`
-   pass. A second reviewer must be another family, not a repeat run.
+   subsystem into one diff. When doc/changelog claims need mechanical
+   verification, the **coordinator** spawns a flat sibling `scout` pass beside
+   the reviewer. A second reviewer must be another family, not a repeat run.
 
 ## Review blind
 
 Pass only the diff command, spec, and standards — never the implementer's report
-or self-assessment. Reviewers are read-only and run no gates. Run required
+or self-assessment. Reviewers are read-only, run no gates, and follow **Tier 1
+(`0` scouts, `depth <= 1`)**: never spawn child subagents; batch parallel
+whole-file reads of changed files and immediate callers first-hand. Run required
 passes in separate contexts, never merged or reranked:
 
 - **Standards:** each violation with its rule, separating hard violations from
@@ -53,6 +56,9 @@ passes in separate contexts, never merged or reranked:
 
 Include [references/reviewer-brief.md](references/reviewer-brief.md) in every
 brief. With both passes, only the spec pass writes leads and the triage table.
+Every review pass (headless or T3 `delegate_task`) must end with the brief's
+canonical fenced `json` findings trailer; save the review output to a file and
+record it via `lanefather review <id> --record <file> --reviewer <alias>`.
 
 ## One round of fixes
 

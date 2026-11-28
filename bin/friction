@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fill the friction journal from ordinary sessions, vendored copies and the owner's corrections.
 
+    bin/friction init [--workspace DIR...] [--force] [--dry-run] [--quiet]
     bin/friction log [--package P] [--component C] [--kind K] [--session S] [--project P] TEXT...
     bin/friction report [--package P] [--since YYYY-MM-DD] [--limit N] [--include-tool-noise] [--json]
     bin/friction scan [--dry-run] [--quiet] [--all] [--since YYYY-MM-DD]
@@ -165,7 +166,11 @@ class Scanner:
 
     # ---- the detectors, shared by both transcript formats ----------------------------------------------------
 
-    def tool_output(self, ctx: dict, text: str, cwd, ts) -> None:
+    def tool_output(self, ctx: dict, text: str, cwd, ts, command: str | None = None) -> None:
+        if command is not None:
+            large = fj.large_bash_output(text, command, cwd, session=ctx["session"], source="mastack-scan", ts=ts)
+            if large:
+                self.emit(large)
         if "error TS" not in text:
             return
         for item in fj.type_errors(text, cwd, self.config, session=ctx["session"], source="mastack-scan", ts=ts):
@@ -280,6 +285,7 @@ class Scanner:
 
     def claude(self, path: Path, session: str, subagent: bool) -> None:
         ctx = self.context(path, session)
+        pending = ctx.setdefault("pending_bash", {})
         for line in self.lines(path):
             if b'"type":"user"' not in line and b'"type":"assistant"' not in line \
                     and b'"type": "user"' not in line and b'"type": "assistant"' not in line:
@@ -300,7 +306,12 @@ class Scanner:
                     elif block.get("type") == "tool_use":
                         tool = block.get("input") or {}
                         ctx["agent"] = (ctx["agent"] + "\n" + json.dumps(tool)[:4000])[-AGENT_CONTEXT:]
-                        if block.get("name") in ("Edit", "MultiEdit"):
+                        name = block.get("name")
+                        if name == "Bash":
+                            tool_id = block.get("id")
+                            if isinstance(tool_id, str) and tool_id:
+                                pending[tool_id] = str(tool.get("command") or "")
+                        elif name in ("Edit", "MultiEdit"):
                             edits = tool.get("edits") if isinstance(tool.get("edits"), list) else [tool]
                             for change in edits:
                                 self.edit(ctx, str(tool.get("file_path") or ""), str(change.get("old_string") or ""),
@@ -312,7 +323,9 @@ class Scanner:
                         inner = block.get("content")
                         text = inner if isinstance(inner, str) else "\n".join(
                             str(b.get("text") or "") for b in inner if isinstance(b, dict)) if isinstance(inner, list) else ""
-                        self.tool_output(ctx, text, cwd, ts)
+                        tool_use_id = block.get("tool_use_id")
+                        cmd = pending.pop(tool_use_id, None) if isinstance(tool_use_id, str) else None
+                        self.tool_output(ctx, text, cwd, ts, command=cmd)
                 continue
             if subagent or item.get("isSidechain") or item.get("isMeta"):
                 continue
@@ -324,6 +337,7 @@ class Scanner:
     def codex(self, path: Path) -> None:
         entry = self.state.setdefault("files", {}).setdefault(str(path), {})
         ctx = self.context(path, entry.get("session") or path.stem)
+        pending = ctx.setdefault("pending_codex", {})
         for line in self.lines(path):
             head = line[:300]
             if b'"session_meta"' in head or b'"turn_context"' in head:
@@ -353,12 +367,18 @@ class Scanner:
                     self.agent_text(ctx, text, cwd, ts)
                 elif payload.get("role") == "user" and not entry.get("child"):
                     self.human(ctx, text, cwd, ts)
-            elif kind in ("function_call_output", "custom_tool_call_output"):
+            elif kind in ("function_call_output", "custom_tool_call_output", "local_shell_call_output"):
                 output = payload.get("output")
                 text = output if isinstance(output, str) else "\n".join(
                     str(o.get("text") or "") for o in output if isinstance(o, dict)) if isinstance(output, list) else ""
-                self.tool_output(ctx, text, cwd, ts)
-            elif kind in ("function_call", "custom_tool_call"):
+                call_id = payload.get("call_id")
+                cmd = pending.pop(call_id, None) if isinstance(call_id, str) else None
+                self.tool_output(ctx, text, cwd, ts, command=cmd)
+            elif kind in ("function_call", "custom_tool_call", "local_shell_call"):
+                call_id = payload.get("call_id")
+                shell_cmd = _codex_shell_command(payload)
+                if isinstance(call_id, str) and call_id and shell_cmd is not None:
+                    pending[call_id] = shell_cmd
                 body = str(payload.get("input") or payload.get("arguments") or "")
                 ctx["agent"] = (ctx["agent"] + "\n" + body[:4000])[-AGENT_CONTEXT:]
                 for file, removed, added in patches(body):
@@ -386,7 +406,8 @@ class Scanner:
                 cwd = inferred
                 ctx["cwd"] = cwd
 
-        after_run_command = False
+        pending_calls: list[tuple[str, str | None]] = []
+        pending_commands: list[str] = []
         for item in records:
             ts = item.get("created_at") or item.get("timestamp")
             if self.since and ts and str(ts) < self.since:
@@ -395,7 +416,8 @@ class Scanner:
             raw_content = item.get("content")
             content = raw_content if isinstance(raw_content, str) else ""
             if kind == "USER_INPUT" and item.get("source") == "USER_EXPLICIT":
-                after_run_command = False
+                pending_calls.clear()
+                pending_commands.clear()
                 text = unwrap_t3_user(content)
                 if text:
                     self.human(ctx, text, cwd, ts)
@@ -403,23 +425,81 @@ class Scanner:
                 if content:
                     self.agent_text(ctx, content, cwd, ts)
                 tool_calls = item.get("tool_calls") or []
-                after_run_command = any(isinstance(tc, dict) and tc.get("name") == "run_command" for tc in tool_calls)
+                pending_calls = []
+                pending_commands = []
                 for tc in tool_calls:
                     if not isinstance(tc, dict):
                         continue
+                    tc_name = str(tc.get("name") or "")
                     raw_args = tc.get("args")
                     tool_args = _parse_t3_tool_args(raw_args)
+                    if tc_name == "run_command":
+                        cmd_str = str((tool_args or {}).get("CommandLine") or (tool_args or {}).get("command") or "")
+                        pending_calls.append(("run_command", cmd_str))
+                        pending_commands.append(cmd_str)
+                    else:
+                        pending_calls.append((tc_name, None))
                     if tool_args is not None:
                         ctx["agent"] = (ctx["agent"] + "\n" + json.dumps(tool_args)[:4000])[-AGENT_CONTEXT:]
-                        if tc.get("name") == "edit_file":
+                        if tc_name == "edit_file":
                             self.edit(ctx, str(tool_args.get("Path") or ""), str(tool_args.get("Target") or ""),
                                       str(tool_args.get("Replacement") or ""), cwd, ts)
                     elif raw_args:
                         ctx["agent"] = (ctx["agent"] + "\n" + str(raw_args)[:4000])[-AGENT_CONTEXT:]
             elif kind == "GENERIC" and content:
-                if _is_t3_command_output(content, after_run_command):
-                    self.tool_output(ctx, content, cwd, ts)
-                after_run_command = False
+                explicit_cmd = "Command exited with code" in content or "Command output:" in content
+                is_file_read = bool(re.search(r"(?:^|\n)Showing lines \d+-\d+ of \d+", content))
+                if explicit_cmd:
+                    cmd = pending_commands.pop(0) if pending_commands else ""
+                    for idx, (call_name, _) in enumerate(pending_calls):
+                        if call_name == "run_command":
+                            pending_calls.pop(idx)
+                            break
+                    self.tool_output(ctx, content, cwd, ts, command=cmd)
+                elif pending_calls:
+                    head_name, head_cmd = pending_calls.pop(0)
+                    if head_name == "run_command" and not is_file_read:
+                        if pending_commands:
+                            pending_commands.pop(0)
+                        self.tool_output(ctx, content, cwd, ts, command=head_cmd if head_cmd is not None else "")
+                elif pending_commands and not is_file_read:
+                    cmd = pending_commands.pop(0)
+                    self.tool_output(ctx, content, cwd, ts, command=cmd)
+
+
+CODEX_SHELL_TOOLS = frozenset({
+    "shell", "shell_command", "exec_command", "bash", "local_shell", "container.exec",
+})
+
+
+def _codex_shell_command(payload: dict) -> str | None:
+    """Extract the shell command string from a Codex tool call payload, or None if not a shell tool."""
+    kind = payload.get("type")
+    if kind == "local_shell_call":
+        action = payload.get("action")
+        if isinstance(action, dict):
+            cmd = action.get("command")
+            if isinstance(cmd, list):
+                return " ".join(str(x) for x in cmd)
+            if isinstance(cmd, str):
+                return cmd
+        return ""
+    name = str(payload.get("name") or "")
+    if name not in CODEX_SHELL_TOOLS:
+        return None
+    raw = payload.get("arguments") or payload.get("input")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return raw
+    if isinstance(raw, dict):
+        cmd = raw.get("command") or raw.get("cmd")
+        if isinstance(cmd, list):
+            return " ".join(str(x) for x in cmd)
+        if isinstance(cmd, str):
+            return cmd
+    return ""
 
 
 T3_SKIP_CWD_PARTS = (
@@ -582,8 +662,11 @@ def print_events(events: list[dict]) -> None:
 def run_scan(args) -> int:
     config = fj.load_config()
     if not fj.packages(config) and not fj.scopes(config):
-        print(f"friction scan: no packages in {fj.config_dir() / 'friction.json'}; nothing to look for", file=sys.stderr)
-        return 1
+        print(
+            f"friction scan: warning: no packages in {fj.config_dir() / 'friction.json'}; "
+            f"scanning tool-level notes and owner turns only (run `bin/friction init` to configure packages)",
+            file=sys.stderr,
+        )
     state = load_state()
     if args.all:
         state["files"] = {}
@@ -884,6 +967,167 @@ def run_report(args) -> int:
     return 0
 
 
+def _format_config_path(path: Path) -> str:
+    resolved = path.resolve()
+    home = Path.home().resolve()
+    try:
+        rel = resolved.relative_to(home)
+        return f"~/{rel.as_posix()}"
+    except ValueError:
+        return str(resolved)
+
+
+def _extract_dts_entries(manifest: dict, pkg_dir: Path) -> list[str]:
+    candidates: list[str] = []
+    for key in ("types", "typings"):
+        val = manifest.get(key)
+        if isinstance(val, str) and val.endswith(".d.ts"):
+            candidates.append(val)
+    exports = manifest.get("exports")
+    if isinstance(exports, dict):
+        root_exp = exports.get(".")
+        if isinstance(root_exp, dict) and isinstance(root_exp.get("types"), str) and root_exp["types"].endswith(".d.ts"):
+            candidates.append(root_exp["types"])
+        elif isinstance(root_exp, str) and root_exp.endswith(".d.ts"):
+            candidates.append(root_exp)
+        if not candidates:
+            for sub in exports.values():
+                if isinstance(sub, dict) and isinstance(sub.get("types"), str) and sub["types"].endswith(".d.ts"):
+                    candidates.append(sub["types"])
+                    break
+    seen: list[str] = []
+    for rel in candidates:
+        formatted = _format_config_path(pkg_dir / rel)
+        if formatted not in seen:
+            seen.append(formatted)
+    return seen
+
+
+def _default_aliases(package_name: str) -> list[str]:
+    short = package_name.split("/", 1)[-1]
+    parts = [p for p in re.split(r"[-_]+", short) if p]
+    if len(parts) > 1:
+        spaced = " ".join(p.capitalize() for p in parts)
+        return [spaced]
+    return []
+
+
+def _discover_workspace_packages(workspaces: list[Path]) -> tuple[list[str], dict[str, dict]]:
+    """Discover scoped library packages with .d.ts entrypoints across workspace directories."""
+    candidate_dirs: list[Path] = []
+    seen_dirs: set[Path] = set()
+    for ws in workspaces:
+        root = ws.expanduser()
+        if not root.is_dir():
+            continue
+        for entry in [root, *(sorted(root.iterdir()))]:
+            if not entry.is_dir() or entry.name.startswith(".") or entry.name in SKIP_DIRS:
+                continue
+            resolved = entry.resolve()
+            if resolved in seen_dirs:
+                continue
+            seen_dirs.add(resolved)
+            candidate_dirs.append(entry)
+
+    manifests: list[Path] = []
+    seen_manifests: set[Path] = set()
+    for repo in candidate_dirs:
+        paths = [repo / "package.json"]
+        pkgs_dir = repo / "packages"
+        if pkgs_dir.is_dir():
+            paths.extend(sorted(pkgs_dir.glob("*/package.json")))
+        for manifest_path in paths:
+            if not manifest_path.is_file():
+                continue
+            resolved = manifest_path.resolve()
+            if resolved in seen_manifests:
+                continue
+            seen_manifests.add(resolved)
+            manifests.append(manifest_path)
+
+    scopes_set: set[str] = set()
+    packages: dict[str, dict] = {}
+    for manifest_path in manifests:
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(manifest, dict) or manifest.get("private") is True:
+            continue
+        name = manifest.get("name")
+        if not isinstance(name, str) or not name.startswith("@") or "/" not in name:
+            continue
+        dts = _extract_dts_entries(manifest, manifest_path.parent)
+        if not dts:
+            continue
+        scope = name.split("/", 1)[0] + "/"
+        scopes_set.add(scope)
+        entry = packages.get(name)
+        if entry is None:
+            spec: dict = {}
+            aliases = _default_aliases(name)
+            if aliases:
+                spec["aliases"] = aliases
+            spec["types"] = dts
+            packages[name] = spec
+        else:
+            for item in dts:
+                if item not in entry["types"]:
+                    entry["types"].append(item)
+
+    return sorted(scopes_set), dict(sorted(packages.items()))
+
+
+def run_init(args) -> int:
+    if args.workspace:
+        workspaces = [Path(w) for w in args.workspace]
+    else:
+        default_root = os.environ.get("MASTACK_SCAN_ROOT") or str(Path.home())
+        workspaces = [Path(default_root)]
+
+    discovered_scopes, discovered_packages = _discover_workspace_packages(workspaces)
+    if args.if_found and not discovered_packages:
+        return 0
+
+    cfg_path = fj.config_dir() / "friction.json"
+    existing = fj.load_config() if cfg_path.is_file() else {}
+
+    if args.force or not existing:
+        merged: dict = {
+            "scopes": discovered_scopes,
+            "packages": discovered_packages,
+        }
+        for key in ("sources", "vendored"):
+            if key in existing:
+                merged[key] = existing[key]
+    else:
+        merged = json.loads(json.dumps(existing))
+        existing_scopes = [s for s in merged.get("scopes", []) if isinstance(s, str)]
+        for scope in discovered_scopes:
+            if scope not in existing_scopes:
+                existing_scopes.append(scope)
+        merged["scopes"] = existing_scopes
+        existing_pkgs = merged.get("packages") if isinstance(merged.get("packages"), dict) else {}
+        for pkg_name, spec in discovered_packages.items():
+            if pkg_name not in existing_pkgs:
+                existing_pkgs[pkg_name] = spec
+        merged["packages"] = existing_pkgs
+
+    rendered = json.dumps(merged, indent=2, ensure_ascii=False) + "\n"
+    if args.dry_run:
+        sys.stdout.write(rendered)
+        return 0
+
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = cfg_path.with_name(f".{cfg_path.name}.{os.getpid()}")
+    temporary.write_text(rendered, encoding="utf-8")
+    os.replace(temporary, cfg_path)
+    if not args.quiet:
+        print(f"friction init: wrote {cfg_path} ({len(merged.get('packages', {}))} packages, "
+              f"{len(merged.get('scopes', []))} scopes)")
+    return 0
+
+
 def run_plist(args) -> int:
     state = state_path().parent
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}
@@ -909,6 +1153,12 @@ def run_plist(args) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
+    init = sub.add_parser("init", help="discover local scoped packages and write friction.json")
+    init.add_argument("--workspace", action="append", help="workspace or repository directory to scan (repeatable)")
+    init.add_argument("--force", action="store_true", help="overwrite existing package entries instead of preserving customizations")
+    init.add_argument("--dry-run", action="store_true", help="print resulting config without writing")
+    init.add_argument("--quiet", action="store_true")
+    init.add_argument("--if-found", action="store_true", help=argparse.SUPPRESS)
     log = sub.add_parser("log", help="log one correction")
     log.add_argument("--package")
     log.add_argument("--component")
@@ -935,7 +1185,8 @@ def main() -> int:
     plist = sub.add_parser("plist", help="print the launchd agent")
     plist.add_argument("--interval", type=int, default=86400)
     args = parser.parse_args()
-    return {"log": run_log, "report": run_report, "scan": run_scan, "vendor": run_vendor, "plist": run_plist}[args.command](args)
+    return {"init": run_init, "log": run_log, "report": run_report, "scan": run_scan, "vendor": run_vendor,
+            "plist": run_plist}[args.command](args)
 
 
 if __name__ == "__main__":

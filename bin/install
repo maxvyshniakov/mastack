@@ -211,6 +211,9 @@ if ((hooks)); then
   ((uninstall)) && flags+=(--uninstall)
   [[ -n ${MASTACK_HOOKS_FROM_WORKTREE:-} ]] && flags+=(--from-worktree)
   python3 "$root/hooks/register.py" --settings "$settings" --config "$config" ${flags[@]+"${flags[@]}"} || status=1
+  if ((!uninstall && !dry)) && [[ ! -f $config/friction.json ]]; then
+    MASTACK_CONFIG="$config" python3 "$root/bin/friction" init --if-found --quiet || true
+  fi
 fi
 if [[ -n $held ]]; then
   echo "held back: ${held#,} (remove the project's copy first, or --force)" >&2
