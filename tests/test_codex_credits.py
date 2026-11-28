@@ -152,11 +152,30 @@ class CodexCreditsTests(HookCase):
         self.assertIsNone(self.decide({"command": "codex exec 'again'"}))
         self.assertEqual(self.reads(), 1)
 
+    def test_invalid_table_with_stray_openai_entry_fails_closed(self):
+        table = self.write_table(
+            'schema = 1\n'
+            'active_families = ["anthropic", "google"]\n'
+            '[models.opus]\nid = "claude-opus-test"\nfamily = "anthropic"\ncli = "claude"\n'
+            '[models.carbon]\nid = "gemini-carbon-test"\nfamily = "google"\ncli = "antigravity"\n'
+            '[models.sol]\nid = "gpt-test"\nfamily = "openai"\ncli = "codex"\n'
+            '[roles.review]\nchoices = [{ model = "sol", effort = "medium" }]\n'
+        )
+        self.stand_in(used=0, MASTACK_MODELS=table)
+        reason = self.denied(self.decide({"command": "codex exec 'review'"}))
+        self.assertIn("codex-credits denied", reason)
+        self.assertIn("retired", reason)
+        self.assertIn("inactive family `openai`", reason)
+        self.assertIn(f"`{ROOT / 'bin' / 'role'} <role>`", reason)
+        self.assertIn("MASTACK_ALLOW_CREDITS=1", reason)
+        self.assertEqual(self.reads(), 0)
+
     def test_legacy_table_without_codex_threshold_reads_no_quota(self):
         table = self.write_table(
             'schema = 1\n'
             'active_families = ["anthropic", "openai"]\n'
             '[models.opus]\nid = "claude-opus-test"\nfamily = "anthropic"\ncli = "claude"\n'
+            '[models.sol]\nid = "gpt-test"\nfamily = "openai"\ncli = "codex"\n'
             '[cli.codex]\nrun = ["codex", "exec"]\n'
             '[roles.review]\nchoices = [{ model = "opus" }]\n'
         )

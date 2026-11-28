@@ -78,11 +78,13 @@ def main() -> int:
         print(f"role: {error}", file=sys.stderr)
         return 2
     if args.pair:
+        families = model_roles.active_families(table)
         if args.json:
             print(json.dumps(model_roles.as_pair_json(args.role, primary, partner, skipped, quotas,
-                                                      harness=args.harness), indent=2))
+                                                      harness=args.harness, families=families), indent=2))
         else:
-            print(model_roles.describe_pair(args.role, primary, partner, skipped, harness=args.harness))
+            print(model_roles.describe_pair(args.role, primary, partner, skipped,
+                                            harness=args.harness, families=families))
         return 0 if (primary and partner) else 1
     if args.json:
         print(json.dumps(model_roles.as_json(args.role, choice, skipped, quotas, harness=args.harness), indent=2))

@@ -145,6 +145,15 @@ class ResolveTests(RoleCase):
         self.assertEqual(pair_t3["primary"]["launch"]["target"]["driverKind"], "antigravity")
         self.assertEqual(pair_t3["partner"]["launch"]["target"]["driverKind"], "claudeAgent")
 
+        # --family applies to primary only; partner still resolves from a distinct active family.
+        pair_google = self.answer("critique", "--pair", "--family", "google")
+        self.assertEqual((pair_google["primary"]["model"], pair_google["primary"]["family"]), ("carbon", "google"))
+        self.assertEqual((pair_google["partner"]["model"], pair_google["partner"]["family"]), ("fable", "anthropic"))
+
+        pair_anth = self.answer("critique", "--pair", "--family", "anthropic")
+        self.assertEqual((pair_anth["primary"]["model"], pair_anth["primary"]["family"]), ("fable", "anthropic"))
+        self.assertEqual((pair_anth["partner"]["model"], pair_anth["partner"]["family"]), ("carbon", "google"))
+
         # Excluding google leaves only anthropic -> exit 1 naming missing second family.
         proc_missing = self.role("critique", "--pair", "--exclude-family", "google", "--json")
         self.assertEqual(proc_missing.returncode, 1)
@@ -152,11 +161,12 @@ class ResolveTests(RoleCase):
         self.assertEqual(missing["primary"]["model"], "fable")
         self.assertIsNone(missing["partner"])
         self.assertIn("no second family qualifies", missing["error"])
+        self.assertIn("missing google", missing["error"])
         self.assertIn("anthropic", missing["error"])
 
         proc_missing_text = self.role("critique", "--pair", "--exclude-family", "google")
         self.assertEqual(proc_missing_text.returncode, 1)
-        self.assertIn("no second family qualifies", proc_missing_text.stdout)
+        self.assertIn("missing google", proc_missing_text.stdout)
 
         # Review --pair with implementer-family pairs cross-family primary + fresh-context partner.
         rev_pair = self.answer("review", "--pair", "--implementer-family", "google")
@@ -170,7 +180,7 @@ class ResolveTests(RoleCase):
         # Forbidden model in an economy role raises TableError (exit 2) at load time, even for another role.
         bad_forbid = self.table(
             'schema = 1\n'
-            'active_families = ["anthropic", "google"]\n'
+            'active_families = ["anthropic"]\n'
             '[models.opus]\nid = "claude-opus-test"\nfamily = "anthropic"\ncli = "claude"\n'
             '[models.sonnet]\nid = "claude-sonnet-test"\nfamily = "anthropic"\ncli = "claude"\n'
             '[roles.implement]\nchoices = [{ model = "opus", effort = "medium" }]\n'
@@ -185,6 +195,8 @@ class ResolveTests(RoleCase):
         bad_family = self.table(
             'schema = 1\n'
             'active_families = ["anthropic", "google"]\n'
+            '[models.opus]\nid = "claude-opus-test"\nfamily = "anthropic"\ncli = "claude"\n'
+            '[models.neon]\nid = "gemini-neon-test"\nfamily = "google"\ncli = "antigravity"\n'
             '[models.sol]\nid = "gpt-test"\nfamily = "openai"\ncli = "codex"\n'
             '[roles.implement]\nchoices = [{ model = "sol", effort = "medium" }]\n'
         )
@@ -192,15 +204,41 @@ class ResolveTests(RoleCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("inactive family `openai`", proc.stderr)
 
-        # Empty active_families is rejected.
-        bad_active = self.table(
-            'schema = 1\nactive_families = []\n'
-            '[models.opus]\nid = "claude-opus-test"\nfamily = "anthropic"\ncli = "claude"\n'
-            '[roles.implement]\nchoices = [{ model = "opus", effort = "medium" }]\n'
+        # Empty, duplicate, or unknown active_families is rejected.
+        for label, bad_line in (
+            ("empty", "active_families = []"),
+            ("duplicate", 'active_families = ["anthropic", "anthropic"]'),
+            ("unknown", 'active_families = ["anthropic", "antropic"]'),
+        ):
+            with self.subTest(active_families=label):
+                bad_active = self.table(
+                    f'schema = 1\n{bad_line}\n'
+                    '[models.opus]\nid = "claude-opus-test"\nfamily = "anthropic"\ncli = "claude"\n'
+                    '[roles.implement]\nchoices = [{ model = "opus", effort = "medium" }]\n'
+                )
+                proc = self.role("implement", MASTACK_MODELS=bad_active)
+                self.assertEqual(proc.returncode, 2)
+                self.assertIn("active_families", proc.stderr)
+
+        # Unknown model in forbid_models is rejected.
+        bad_forbid_name = self.table(
+            'schema = 1\nactive_families = ["anthropic"]\n'
+            '[models.sonnet]\nid = "claude-sonnet-test"\nfamily = "anthropic"\ncli = "claude"\n'
+            '[roles.scout]\nforbid_models = ["opsu"]\nchoices = [{ model = "sonnet", effort = "medium" }]\n'
         )
-        proc = self.role("implement", MASTACK_MODELS=bad_active)
+        proc = self.role("scout", MASTACK_MODELS=bad_forbid_name)
         self.assertEqual(proc.returncode, 2)
-        self.assertIn("active_families", proc.stderr)
+        self.assertIn("unknown model", proc.stderr)
+
+        # only_families disjoint from active_families is rejected.
+        bad_only = self.table(
+            'schema = 1\nactive_families = ["anthropic"]\n'
+            '[models.opus]\nid = "claude-opus-test"\nfamily = "anthropic"\ncli = "claude"\n'
+            '[roles.visual]\nonly_families = ["google"]\nchoices = [{ model = "opus", effort = "high" }]\n'
+        )
+        proc = self.role("visual", MASTACK_MODELS=bad_only)
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("only_families", proc.stderr)
 
     def test_schema_is_1_and_has_no_retired_codex_or_inert_prose_fields(self):
         self.assertEqual(TABLE["schema"], 1)

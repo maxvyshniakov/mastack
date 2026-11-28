@@ -96,26 +96,49 @@ def active_families(table: dict) -> list[str] | None:
     raw = table["active_families"]
     if not isinstance(raw, list) or not raw or not all(isinstance(f, str) and f.strip() for f in raw):
         raise TableError("`active_families` must be a non-empty list of family names")
+    if len(set(raw)) != len(raw):
+        raise TableError(f"`active_families` contains duplicate families: {raw!r}")
+    model_families = {m.get("family") for m in table.get("models", {}).values() if isinstance(m, dict)}
+    unknown = [f for f in raw if f not in model_families]
+    if unknown:
+        raise TableError(
+            f"`active_families` names unknown family {', '.join(unknown)} "
+            f"(defined in [models]: {', '.join(sorted(k for k in model_families if isinstance(k, str)))})"
+        )
     return list(raw)
 
 
-def forbid_models(role: str, entry: dict) -> set[str]:
+def forbid_models(role: str, entry: dict, table: dict | None = None) -> set[str]:
     """Per-role `forbid_models` set when declared on the role, else empty set."""
     if "forbid_models" not in entry:
         return set()
     raw = entry["forbid_models"]
     if not isinstance(raw, list) or not all(isinstance(m, str) and m.strip() for m in raw):
         raise TableError(f"`forbid_models` in role `{role}` must be a list of model names")
+    if table is not None:
+        known = set(table.get("models") or {})
+        unknown = [m for m in raw if m not in known]
+        if unknown:
+            raise TableError(f"`forbid_models` in role `{role}` names unknown model(s): {', '.join(unknown)}")
     return set(raw)
 
 
 def validate(table: dict) -> None:
-    """Validate active_families, forbid_models, and role choice references at load time."""
+    """Validate active_families, forbid_models, only_families, and role choice references at load time."""
     active = active_families(table)
     for role_name, entry in table["roles"].items():
         if not isinstance(entry, dict) or not isinstance(entry.get("choices"), list):
             raise TableError(f"role `{role_name}` must be a table with a `choices` list")
-        forbidden = forbid_models(role_name, entry)
+        if "only_families" in entry:
+            only = entry["only_families"]
+            if not isinstance(only, list) or not only or not all(isinstance(f, str) and f.strip() for f in only):
+                raise TableError(f"`only_families` in role `{role_name}` must be a non-empty list of family names")
+            if active is not None and not (set(only) & set(active)):
+                raise TableError(
+                    f"`only_families` in role `{role_name}` ({', '.join(only)}) has no overlap with "
+                    f"active_families ({', '.join(active)})"
+                )
+        forbidden = forbid_models(role_name, entry, table)
         for choice in entry["choices"]:
             if not isinstance(choice, dict):
                 raise TableError(f"a choice of `{role_name}` is not a table: {choice!r}")
@@ -324,7 +347,7 @@ def resolve_pair(table: dict, role: str, implementer_family: str | None = None, 
         return None, None, primary_skipped, quotas
     partner, partner_skipped, _ = resolve(
         table, role, implementer_family=implementer_family, read=cached_read,
-        family=family, exclude_families=caller_excluded | {primary.family}, harness=harness,
+        family=None, exclude_families=caller_excluded | {primary.family}, harness=harness,
     )
     seen = {(s["model"], s["reason"]) for s in primary_skipped}
     skipped = list(primary_skipped)
@@ -400,8 +423,15 @@ def describe(role: str, choice: Choice | None, skipped: list, harness: str = "au
     return "\n".join(lines)
 
 
+def _missing_family_error(primary: Choice, families: list[str] | None = None) -> str:
+    missing = [f for f in (families or []) if f != primary.family]
+    if missing:
+        return f"no second family qualifies (missing {', '.join(missing)}; only {primary.family} available)"
+    return f"no second family qualifies (only {primary.family} available)"
+
+
 def describe_pair(role: str, primary: Choice | None, partner: Choice | None, skipped: list,
-                  harness: str = "auto") -> str:
+                  harness: str = "auto", families: list[str] | None = None) -> str:
     lines = []
     if primary and partner:
         lines.append(f"{role} (pair):")
@@ -412,10 +442,7 @@ def describe_pair(role: str, primary: Choice | None, partner: Choice | None, ski
         if caution(skipped):
             lines.append(f"  caution: {caution(skipped)}")
     elif primary:
-        lines.append(
-            f"{role} (pair): no second family qualifies (only {primary.family} available; "
-            "need two distinct active families)"
-        )
+        lines.append(f"{role} (pair): {_missing_family_error(primary, families)}; need two distinct active families")
         lines.append(f"  primary: {primary.model} ({primary.id}, {primary.family}), effort {primary.effort}")
         lines += _choice_lines(primary, harness=harness, indent="    ")
     else:
@@ -443,7 +470,7 @@ def as_json(role: str, choice: Choice | None, skipped: list, quotas: dict, harne
 
 
 def as_pair_json(role: str, primary: Choice | None, partner: Choice | None, skipped: list, quotas: dict,
-                 harness: str = "auto") -> dict:
+                 harness: str = "auto", families: list[str] | None = None) -> dict:
     result: dict = {
         "role": role,
         "primary": _choice_json(primary, harness),
@@ -452,7 +479,7 @@ def as_pair_json(role: str, primary: Choice | None, partner: Choice | None, skip
     if primary is None:
         result["error"] = "no choice qualifies"
     elif partner is None:
-        result["error"] = f"no second family qualifies (only {primary.family} available)"
+        result["error"] = _missing_family_error(primary, families)
     result["caution"] = caution(skipped)
     result["skipped"] = skipped
     result["quotas"] = {name: {k: v for k, v in asdict(q).items() if k != "read_at"} for name, q in quotas.items()}
