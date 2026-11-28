@@ -58,11 +58,17 @@ class AgentRoleTests(unittest.TestCase):
         self.assertEqual(updated["description"], "Build lane alpha")
         self.assertNotIn("permissionDecision", out["hookSpecificOutput"])
 
-    def test_fills_design_scout_and_review_roles_with_claude_choices(self):
+    def test_fills_design_scout_review_specify_and_critique_roles_with_claude_choices(self):
         cases = [
             ("[role: design] Architecture plan", "Plan the API", model_id("fable"), "high"),
+            ("[role: specify] Write ticket contract", "Specify invariants", model_id("fable"), "high"),
+            ("specifier: pre-lane note", "Write pre-lane note", model_id("fable"), "high"),
+            ("advisor: mid-flight check", "Check architecture", model_id("fable"), "high"),
+            ("critique: review spec", "Challenge the plan", model_id("fable"), "high"),
+            ("critic: blind council", "Review proposal", model_id("fable"), "high"),
             ("scout: find callers of parse()", "List call sites", model_id("sonnet"), "medium"),
-            ("Review lane beta", "Check diff", model_id("opus"), "medium"),
+            ("routine: mirror docs", "Sync docs", model_id("sonnet"), "medium"),
+            ("Review lane beta", "Check diff", model_id("fable"), "high"),
             ("implementer: fix-lane alpha", "Fix findings", model_id("opus"), "medium"),
         ]
         for description, prompt, expected_model, expected_effort in cases:
@@ -75,7 +81,9 @@ class AgentRoleTests(unittest.TestCase):
     def test_explicit_prompt_markers_apply_aliases_and_prefer_earliest_match(self):
         cases = [
             ("Build lane", "Role: implementer\nTickets: acme/app#1", model_id("opus"), "medium"),
-            ("Check diff", "[role: reviewer] Inspect changes", model_id("opus"), "medium"),
+            ("Check diff", "[role: reviewer] Inspect changes", model_id("fable"), "high"),
+            ("Write spec", "Role: specify\nScope: models", model_id("fable"), "high"),
+            ("Council", "[role: critique] Challenge spec", model_id("fable"), "high"),
             ("Fix parser", "Role: implement\nNote: fix how [role: scout] is parsed", model_id("opus"), "medium"),
             ("Plan API", "[role: design]\nRole: implement", model_id("fable"), "high"),
         ]

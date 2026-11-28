@@ -24,6 +24,9 @@ HOOK_TIMEOUT = 10  # seconds, as bin/install registers the hook
 ROLE_ALIASES = {
     "implementer": "implement",
     "reviewer": "review",
+    "specifier": "specify",
+    "advisor": "specify",
+    "critic": "critique",
 }
 
 TAG_ROLE_RE = re.compile(r"(?i)\[role\s*:\s*([a-z][a-z0-9_-]*)\]")

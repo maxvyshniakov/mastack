@@ -200,6 +200,13 @@ def check(data: dict):
     import model_roles
     try:
         table = model_roles.load()
+    except model_roles.TableError:
+        return None
+    active = model_roles.active_families(table)
+    cli_table = table.get("cli") if isinstance(table.get("cli"), dict) else {}
+    if (active is not None and "openai" not in active) or "codex" not in cli_table:
+        return hook_io.deny(retired_refusal(table, blocked))
+    try:
         need = model_roles.codex_threshold(table, "review")
     except model_roles.TableError:
         return None
@@ -215,17 +222,43 @@ def check(data: dict):
     return hook_io.deny(refusal(table, quota, why, blocked))
 
 
+def _format_fallback(table: dict, quota=None) -> str:
+    import model_roles
+    role = str(model_roles.ROOT / "bin" / "role")
+    reader = (lambda name: quota if (quota is not None and name == "codex_weekly")
+              else model_roles.Quota(error="not read by the hook"))
+    try:
+        choice, _, _ = model_roles.resolve(table, "review", None, read=reader)
+    except model_roles.TableError:
+        choice = None
+    if not choice:
+        return f"`{role} review` finds no other choice"
+    cmd = next(iter(choice.argv.values()), [])
+    if cmd:
+        via = f": `{shlex.join(cmd)}`"
+    elif choice.cli == "antigravity":
+        via = f' via delegate_task (target.model="{choice.id}", target.options.{choice.option}="{choice.effort}")'
+    else:
+        via = ""
+    return (f"`{role} review` picks {choice.model} ({choice.id}), effort {choice.effort}{via}; "
+            "with `--implementer-family <family>` it may pick another")
+
+
+def retired_refusal(table: dict, blocked: list[str]) -> str:
+    import model_roles
+    role = str(model_roles.ROOT / "bin" / "role")
+    fallback = _format_fallback(table)
+    return ("codex-credits denied this command: Codex/OpenAI is retired in models.toml "
+            "(not in active_families or [cli.codex] absent).\n"
+            + "\n".join(f"- `{shown}`" for shown in dict.fromkeys(blocked)) + "\n"
+            f"Instead: {fallback}. For another role: `{role} <role>`.\n"
+            f"Only when the owner explicitly asks to spend Codex credits: prefix the command with `{OVERRIDE}`.")
+
+
 def refusal(table: dict, quota, why: str, blocked: list[str]) -> str:
     import model_roles
     role = str(model_roles.ROOT / "bin" / "role")
-    choice, _, _ = model_roles.resolve(table, "review", None, read=lambda name: quota if name == "codex_weekly"
-                                       else model_roles.Quota(error="not read by the hook"))
-    if choice:
-        fallback = (f"`{role} review` picks {choice.model} ({choice.id}), effort {choice.effort}: "
-                    f"`{shlex.join(next(iter(choice.argv.values()), []))}`; with `--implementer-family <family>` it "
-                    "may pick another")
-    else:
-        fallback = f"`{role} review` finds no other choice"
+    fallback = _format_fallback(table, quota=quota)
     minutes = max(0, round((time.time() - quota.read_at) / 60))
     return ("codex-credits denied this command: past the weekly Codex limit every run is billed to credits.\n"
             + "\n".join(f"- `{shown}`" for shown in dict.fromkeys(blocked)) + "\n"

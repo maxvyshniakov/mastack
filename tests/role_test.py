@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""`bin/role`: which model takes a role now, by models.toml and the live quotas its conditions name.
+"""`bin/role`: which model takes a role now, by models.toml and any live quotas its conditions name.
 
-A stand-in `codex` (tests/fake_codex.py) answers the quota read; the state directory is scratch. Nothing reads the
-real quota or starts the real CLI.
+A stand-in `codex` (tests/fake_codex.py) answers quota reads for custom-table tests; the state directory is scratch.
+Nothing reads the real quota or starts the real CLI.
 """
 from __future__ import annotations
 
@@ -67,71 +67,276 @@ class RoleCase(unittest.TestCase):
 
 
 class ResolveTests(RoleCase):
-    def test_an_exhausted_weekly_limit_moves_review_to_another_family_then_same_family_fallback(self):
-        cross = self.answer("review", "--implementer-family", "anthropic", used=100)
-        self.assertEqual((cross["model"], cross["family"], cross["note"]), ("carbon", "google", None))
-        self.assertIn("sol: codex_weekly 0% left, needs 15%", cross["skipped"][0]["reason"])
-        self.assertIn("opus: same family as the implementer (anthropic)", cross["skipped"][1]["reason"])
+    def test_real_table_routes_every_role_with_zero_codex_spawns(self):
+        expected = [
+            ("implement", [], ("neon", "google", "medium", "thought_level")),
+            ("implement", ["--exclude-family", "google"], ("opus", "anthropic", "medium", "effort")),
+            ("visual", [], ("opus", "anthropic", "high", "effort")),
+            ("visual", ["--exclude-family", "anthropic"], ("neon", "google", "high", "thought_level")),
+            ("review", ["--implementer-family", "google"], ("fable", "anthropic", "high", "effort")),
+            ("review", ["--implementer-family", "anthropic"], ("carbon", "google", "medium", "thought_level")),
+            ("critique", [], ("carbon", "google", "high", "thought_level")),
+            ("critique", ["--exclude-family", "google"], ("fable", "anthropic", "high", "effort")),
+            ("specify", [], ("carbon", "google", "high", "thought_level")),
+            ("specify", ["--exclude-family", "google"], ("fable", "anthropic", "high", "effort")),
+            ("design", [], ("carbon", "google", "high", "thought_level")),
+            ("audit", [], ("carbon", "google", "high", "thought_level")),
+            ("scout", [], ("sonnet", "anthropic", "medium", "effort")),
+            ("scout", ["--exclude-family", "anthropic"], ("flash", "google", "medium", "thought_level")),
+            ("routine", [], ("sonnet", "anthropic", "medium", "effort")),
+            ("routine", ["--exclude-family", "anthropic"], ("argon", "google", "medium", "thought_level")),
+            ("research", [], ("argon", "google", "medium", "thought_level")),
+            ("research", ["--exclude-family", "google"], ("sonnet", "anthropic", "medium", "effort")),
+        ]
+        for role_name, extra_args, want in expected:
+            with self.subTest(role=role_name, extra=extra_args):
+                ans = self.answer(role_name, *extra_args, used=100)
+                self.assertEqual((ans["model"], ans["family"], ans["effort"], ans["option"]), want)
+        self.assertEqual(self.spawns(), 0)
 
-        proc = self.role("review", "--implementer-family", "anthropic", "--exclude-family", "google", used=100)
+    def test_cross_family_review_and_same_family_fallback(self):
+        # Google implementer -> plain Fable (high), no note.
+        ans_google = self.answer("review", "--implementer-family", "google")
+        self.assertEqual((ans_google["model"], ans_google["id"], ans_google["family"], ans_google["effort"],
+                          ans_google["note"]),
+                         ("fable", model_id("fable"), "anthropic", "high", None))
+        self.assertIn("carbon: same family as the implementer (google)", ans_google["skipped"][0]["reason"])
+        self.assertEqual(ans_google["argv"]["review"],
+                         ["claude", "-p", "--model", model_id("fable"), "--effort", "high"])
+
+        # Anthropic implementer -> Carbon (medium), no note.
+        ans_anth = self.answer("review", "--implementer-family", "anthropic")
+        self.assertEqual((ans_anth["model"], ans_anth["id"], ans_anth["family"], ans_anth["effort"],
+                          ans_anth["note"]),
+                         ("carbon", model_id("carbon"), "google", "medium", None))
+
+        # Anthropic implementer with Google excluded -> same-family Fable with fresh-context note.
+        proc = self.role("review", "--implementer-family", "anthropic", "--exclude-family", "google")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         out = proc.stdout
-        self.assertIn(model_id("opus"), out)
+        self.assertIn(model_id("fable"), out)
         self.assertIn("same family as the implementer: fresh context only", out)
-        self.assertIn("sol: codex_weekly 0% left, needs 15%", out)
-        self.assertIn("opus: same family as the implementer (anthropic)", out)
-        self.assertIn(f"claude -p --model {model_id('opus')} --effort medium", out)
+        self.assertIn(f"claude -p --model {model_id('fable')} --effort high", out)
 
-    def test_a_weekly_limit_with_room_gives_review_to_sol_with_its_command(self):
-        answer = self.answer("review", "--implementer-family", "anthropic", used=50)
-        self.assertEqual((answer["model"], answer["id"], answer["family"], answer["effort"]),
-                         ("sol", model_id("sol"), "openai", "medium"))
-        self.assertEqual(answer["argv"]["run"][:2], ["codex", "exec"])
-        self.assertIn(f'model="{model_id("sol")}"', answer["argv"]["run"])
-        self.assertIn('model_reasoning_effort="medium"', answer["argv"]["run"])
-        self.assertEqual(answer["argv"]["review"][:2], ["codex", "review"])
-        self.assertEqual(answer["skipped"], [])
-        self.assertEqual(answer["quotas"]["codex_weekly"]["left"], 50)
-        self.assertIsNone(answer["note"])
+        # Google implementer with Anthropic excluded -> same-family Carbon with fresh-context note.
+        ans_same_google = self.answer("review", "--implementer-family", "google", "--exclude-family", "anthropic")
+        self.assertEqual(ans_same_google["model"], "carbon")
+        self.assertIn("same family as the implementer", ans_same_google["note"])
+        self.assertEqual(self.spawns(), 0)
 
-    def test_the_other_family_takes_the_second_choice_without_the_note(self):
-        answer = self.answer("review", "--implementer-family", "openai", used=100)
-        self.assertEqual((answer["model"], answer["note"]), ("opus", None))
-        self.assertEqual([s["model"] for s in answer["skipped"]], ["sol"])
+    def test_pair_resolves_two_distinct_active_families_and_exits_1_when_only_one_remains(self):
+        pair = self.answer("critique", "--pair")
+        self.assertEqual((pair["primary"]["model"], pair["primary"]["effort"], pair["primary"]["family"]),
+                         ("carbon", "high", "google"))
+        self.assertEqual((pair["partner"]["model"], pair["partner"]["effort"], pair["partner"]["family"]),
+                         ("fable", "high", "anthropic"))
+        self.assertEqual(pair["skipped"], [])
+        self.assertNotIn("error", pair)
 
-    def test_the_threshold_itself_qualifies(self):
-        self.assertEqual(self.answer("routine", used=85)["model"], "sol")
-        self.assertEqual(self.answer("routine", used=85.5)["model"], "opus")
+        # Text format names both primary and partner.
+        proc_text = self.role("critique", "--pair")
+        self.assertEqual(proc_text.returncode, 0, proc_text.stderr)
+        self.assertIn("critique (pair):", proc_text.stdout)
+        self.assertIn("primary: carbon", proc_text.stdout)
+        self.assertIn("partner: fable", proc_text.stdout)
 
-    def test_scouting_goes_to_sol_while_codex_has_its_threshold_left_then_to_sonnet(self):
-        answer = self.answer("scout", used=85)
-        self.assertEqual((answer["model"], answer["effort"]), ("sol", "medium"))
-        self.assertEqual(answer["argv"]["run"][:2], ["codex", "exec"])
-        answer = self.answer("scout", used=86)
-        self.assertEqual((answer["model"], answer["id"], answer["effort"]), ("sonnet", model_id("sonnet"), "medium"))
-        self.assertIn("sol: codex_weekly 14% left, needs 15%", answer["skipped"][0]["reason"])
+        # T3 harness includes launch targets for both members.
+        pair_t3 = self.answer("critique", "--pair", "--harness", "t3")
+        self.assertEqual(pair_t3["primary"]["launch"]["target"]["driverKind"], "antigravity")
+        self.assertEqual(pair_t3["partner"]["launch"]["target"]["driverKind"], "claudeAgent")
 
-    def test_a_missing_codex_counts_as_not_met_and_is_named(self):
-        answer = self.answer("routine", PATH="/usr/bin:/bin")
-        self.assertEqual(answer["model"], "opus")
-        self.assertIn("sol: codex_weekly unreadable (codex is not on PATH), needs 15%", answer["skipped"][0]["reason"])
+        # Excluding google leaves only anthropic -> exit 1 naming missing second family.
+        proc_missing = self.role("critique", "--pair", "--exclude-family", "google", "--json")
+        self.assertEqual(proc_missing.returncode, 1)
+        missing = json.loads(proc_missing.stdout)
+        self.assertEqual(missing["primary"]["model"], "fable")
+        self.assertIsNone(missing["partner"])
+        self.assertIn("no second family qualifies", missing["error"])
+        self.assertIn("anthropic", missing["error"])
 
-    def test_a_silent_or_failing_codex_counts_as_not_met_and_is_named(self):
+        proc_missing_text = self.role("critique", "--pair", "--exclude-family", "google")
+        self.assertEqual(proc_missing_text.returncode, 1)
+        self.assertIn("no second family qualifies", proc_missing_text.stdout)
+
+        # Review --pair with implementer-family pairs cross-family primary + fresh-context partner.
+        rev_pair = self.answer("review", "--pair", "--implementer-family", "google")
+        self.assertEqual((rev_pair["primary"]["model"], rev_pair["primary"]["family"], rev_pair["primary"]["note"]),
+                         ("fable", "anthropic", None))
+        self.assertEqual((rev_pair["partner"]["model"], rev_pair["partner"]["family"]), ("carbon", "google"))
+        self.assertIn("same family as the implementer", rev_pair["partner"]["note"])
+        self.assertEqual(self.spawns(), 0)
+
+    def test_load_time_validation_enforces_active_families_and_forbid_models(self):
+        # Forbidden model in an economy role raises TableError (exit 2) at load time, even for another role.
+        bad_forbid = self.table(
+            'schema = 1\n'
+            'active_families = ["anthropic", "google"]\n'
+            '[models.opus]\nid = "claude-opus-test"\nfamily = "anthropic"\ncli = "claude"\n'
+            '[models.sonnet]\nid = "claude-sonnet-test"\nfamily = "anthropic"\ncli = "claude"\n'
+            '[roles.implement]\nchoices = [{ model = "opus", effort = "medium" }]\n'
+            '[roles.scout]\nforbid_models = ["opus"]\n'
+            'choices = [{ model = "opus", effort = "medium" }, { model = "sonnet", effort = "medium" }]\n'
+        )
+        proc = self.role("implement", MASTACK_MODELS=bad_forbid)
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("forbidden model `opus`", proc.stderr)
+
+        # Inactive family in a role choice raises TableError (exit 2) at load time.
+        bad_family = self.table(
+            'schema = 1\n'
+            'active_families = ["anthropic", "google"]\n'
+            '[models.sol]\nid = "gpt-test"\nfamily = "openai"\ncli = "codex"\n'
+            '[roles.implement]\nchoices = [{ model = "sol", effort = "medium" }]\n'
+        )
+        proc = self.role("implement", MASTACK_MODELS=bad_family)
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("inactive family `openai`", proc.stderr)
+
+        # Empty active_families is rejected.
+        bad_active = self.table(
+            'schema = 1\nactive_families = []\n'
+            '[models.opus]\nid = "claude-opus-test"\nfamily = "anthropic"\ncli = "claude"\n'
+            '[roles.implement]\nchoices = [{ model = "opus", effort = "medium" }]\n'
+        )
+        proc = self.role("implement", MASTACK_MODELS=bad_active)
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("active_families", proc.stderr)
+
+    def test_schema_is_1_and_has_no_retired_codex_or_inert_prose_fields(self):
+        self.assertEqual(TABLE["schema"], 1)
+        self.assertEqual(TABLE["active_families"], ["anthropic", "google"])
+        self.assertNotIn("sol", TABLE["models"])
+        self.assertNotIn("codex", TABLE.get("cli", {}))
+        self.assertNotIn("openai", TABLE.get("providers", {}))
+        self.assertNotIn("limits", TABLE)
+        self.assertNotIn("sol", TABLE.get("pricing", {}))
+        self.assertNotIn("clusters", TABLE)
+        for model in TABLE["models"].values():
+            for forbidden_key in ("brief_guard", "competencies", "strengths", "caveats"):
+                self.assertNotIn(forbidden_key, model)
+        for role_name in ("scout", "routine", "research"):
+            self.assertEqual(set(TABLE["roles"][role_name]["forbid_models"]),
+                             {"opus", "neon", "fable", "carbon"})
+
+    def test_an_unknown_implementer_family_does_not_meet_not_family(self):
+        answer = self.answer("review")
+        self.assertEqual(answer["model"], "carbon")
+        self.assertIsNotNone(answer["note"])
+        self.assertIn("--implementer-family", answer["skipped"][0]["reason"])
+        proc = self.role("review")
+        self.assertIn("implementer family not given", proc.stdout)
+        self.assertIn("implementer family not given", answer["caution"])
+        self.assertIsNone(self.answer("review", "--implementer-family", "google")["caution"])
+
+    def test_harness_output_and_provider_cooldown(self):
+        t3 = self.answer("implement", "--harness", "t3")
+        self.assertEqual(t3["launch"]["tool"], "delegate_task")
+        self.assertEqual(t3["launch"]["target"]["model"], model_id("neon"))
+        self.assertEqual(t3["launch"]["target"]["driverKind"], "antigravity")
+        self.assertIn("thought_level", t3["launch"]["target"]["options"])
+
+        claude = self.answer("review", "--implementer-family", "anthropic", "--harness", "claude")
+        self.assertEqual(claude["model"], "fable")
+        self.assertEqual(claude["launch"]["model"], "fable")
+        self.assertTrue(any("requires delegate_task" in s["reason"] for s in claude["skipped"]))
+
+        bad = self.role("--cooldown", "openai", "2h")
+        self.assertEqual(bad.returncode, 2)
+
+        proc = self.role("--cooldown", "google", "2h")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        after = self.answer("implement")
+        self.assertEqual(after["model"], "opus")
+        self.assertTrue(any("in cooldown" in s["reason"] for s in after["skipped"]))
+
+        # With google in cooldown, --pair cannot find a second family.
+        pair_proc = self.role("critique", "--pair")
+        self.assertEqual(pair_proc.returncode, 1)
+        self.assertIn("no second family qualifies", pair_proc.stdout)
+
+        proc = self.role("--cooldown", "google", "0")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(self.answer("implement")["model"], "neon")
+
+    def test_antigravity_models_resolve_with_thought_level_and_delegate_task(self):
+        for role, expected_model, expected_effort in (
+            ("implement", "neon", "medium"),
+            ("visual", "neon", "high"),
+            ("critique", "carbon", "high"),
+            ("specify", "carbon", "high"),
+            ("design", "carbon", "high"),
+            ("audit", "carbon", "high"),
+            ("scout", "flash", "medium"),
+            ("routine", "argon", "medium"),
+            ("research", "argon", "medium"),
+        ):
+            with self.subTest(role=role):
+                answer = self.answer(role, "--family", "google")
+                self.assertEqual((answer["model"], answer["id"], answer["family"], answer["cli"], answer["effort"],
+                                  answer["option"]),
+                                 (expected_model, model_id(expected_model), "google", "antigravity", expected_effort,
+                                  "thought_level"))
+                proc = self.role(role, "--family", "google")
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertIn(
+                    f'delegate_task: target.model="{model_id(expected_model)}", '
+                    f'target.options.thought_level="{expected_effort}"',
+                    proc.stdout,
+                )
+
+    def test_visual_allows_anthropic_and_google_but_rejects_openai(self):
+        self.assertEqual(self.answer("visual")["model"], "opus")
+        self.assertEqual(self.answer("visual", "--family", "google")["model"], "neon")
+        self.assertEqual(self.answer("visual", "--exclude-family", "anthropic")["model"], "neon")
+        proc = self.role("visual", "--family", "openai")
+        self.assertEqual(proc.returncode, 1)
+
+    def test_provider_options_and_cache_metadata_are_defined_for_active_families(self):
+        table = model_roles.load()
+        expected = {
+            "anthropic": ("effort", 5, 150000, 80),
+            "google": ("thought_level", 60, 185000, 80),
+        }
+        for family, (opt, sub_ttl, reset_tok, max_turns) in expected.items():
+            meta = model_roles.provider_metadata(table, family)
+            self.assertEqual(meta.get("option"), opt)
+            self.assertEqual(meta.get("subagent_cache_ttl_minutes"), sub_ttl)
+            self.assertEqual(meta.get("reset_context_tokens"), reset_tok)
+            self.assertEqual(meta.get("max_turns_before_handoff"), max_turns)
+            for key in ("cache_ttl_minutes", "warm_idle_minutes", "compact_window_tokens", "warm_context_tokens"):
+                self.assertIsInstance(meta.get(key), int, f"{family}.{key}")
+                self.assertGreater(meta[key], 0)
+
+    def test_custom_table_quota_conditions_and_failures(self):
+        path = self.table(
+            TABLE_HEAD + '[roles.routine]\nchoices = [\n'
+            '  { model = "sol", effort = "medium", when = { limit = { codex_weekly = 15 } } },\n'
+            '  { model = "opus", effort = "medium" },\n]\n'
+        )
+        self.assertEqual(self.answer("routine", MASTACK_MODELS=path, used=85)["model"], "sol")
+        self.assertEqual(self.answer("routine", MASTACK_MODELS=path, used=85.5)["model"], "opus")
+
+        missing = self.answer("routine", MASTACK_MODELS=path, PATH="/usr/bin:/bin")
+        self.assertEqual(missing["model"], "opus")
+        self.assertIn("sol: codex_weekly unreadable (codex is not on PATH), needs 15%", missing["skipped"][0]["reason"])
+
         for mode, says in (("silent", "codex app-server gave no rate limits"), ("error", "not logged in")):
             with self.subTest(mode):
-                reason = self.answer("routine", FAKE_CODEX_MODE=mode)["skipped"][0]["reason"]
+                reason = self.answer("routine", MASTACK_MODELS=path, FAKE_CODEX_MODE=mode)["skipped"][0]["reason"]
                 self.assertIn("codex_weekly unreadable", reason)
                 self.assertIn(says, reason)
 
-    def test_a_reached_limit_is_not_met_even_with_room_left(self):
-        answer = self.answer("routine", used=40, FAKE_CODEX_REACHED="rate_limit_reached")
-        self.assertEqual(answer["model"], "opus")
-        self.assertIn("Codex reports rate_limit_reached", answer["skipped"][0]["reason"])
+        reached = self.answer("routine", MASTACK_MODELS=path, used=40, FAKE_CODEX_REACHED="rate_limit_reached")
+        self.assertEqual(reached["model"], "opus")
+        self.assertIn("Codex reports rate_limit_reached", reached["skipped"][0]["reason"])
 
-    def test_a_first_choice_without_conditions_reads_no_quota(self):
-        answer = self.answer("implement", used=100)
-        self.assertEqual((answer["model"], answer["effort"]), ("opus", "medium"))
-        self.assertEqual(self.spawns(), 0)
+        malformed = self.role("routine", MASTACK_MODELS=path, FAKE_CODEX_MODE="malformed")
+        self.assertEqual(malformed.returncode, 0, malformed.stderr)
+        self.assertNotIn("Traceback", malformed.stderr)
+        self.assertIn("codex_weekly unreadable", malformed.stdout)
+
+        stored = json.loads((self.tmp / "state" / "codex-limit.json").read_text())
+        self.assertIn("error", stored)
 
     def test_each_quota_is_read_once(self):
         path = self.table(TABLE_HEAD + '[roles.r]\nchoices = [\n'
@@ -141,49 +346,6 @@ class ResolveTests(RoleCase):
         answer = self.answer("r", MASTACK_MODELS=path, used=80)
         self.assertEqual((answer["model"], answer["effort"]), ("sol", "low"))
         self.assertEqual(self.spawns(), 1)
-
-    def test_an_unknown_implementer_family_does_not_meet_not_family(self):
-        answer = self.answer("review", used=50)
-        self.assertEqual(answer["model"], "opus")
-        self.assertIsNotNone(answer["note"])
-        self.assertIn("--implementer-family", answer["skipped"][0]["reason"])
-
-    def test_without_the_implementer_family_the_answer_says_so(self):
-        proc = self.role("review", used=50)
-        self.assertIn("implementer family not given", proc.stdout)
-        self.assertIn("implementer family not given", self.answer("review", used=50)["caution"])
-        self.assertIsNone(self.answer("review", "--implementer-family", "openai", used=50)["caution"])
-
-    def test_a_malformed_answer_is_named_without_a_traceback(self):
-        proc = self.role("routine", FAKE_CODEX_MODE="malformed")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertNotIn("Traceback", proc.stderr)
-        self.assertIn("codex_weekly unreadable", proc.stdout)
-
-    def test_harness_output_and_provider_cooldown(self):
-        t3 = self.answer("scout", "--harness", "t3", used=50)
-        self.assertEqual(t3["launch"]["tool"], "delegate_task")
-        self.assertEqual(t3["launch"]["target"]["model"], model_id("sol"))
-        self.assertEqual(t3["launch"]["target"]["driverKind"], "codex")
-        self.assertIn("reasoningEffort", t3["launch"]["target"]["options"])
-
-        claude = self.answer("review", "--implementer-family", "anthropic", "--harness", "claude", used=100)
-        self.assertEqual(claude["model"], "opus")
-        self.assertEqual(claude["launch"]["model"], "opus")
-        self.assertTrue(any("requires delegate_task" in s["reason"] for s in claude["skipped"]))
-
-        bad = self.role("--cooldown", "antropic", "2h")
-        self.assertEqual(bad.returncode, 2)
-
-        proc = self.role("--cooldown", "anthropic", "2h")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        after = self.answer("implement", used=50)
-        self.assertEqual(after["model"], "sol")
-        self.assertTrue(any("in cooldown" in s["reason"] for s in after["skipped"]))
-
-        proc = self.role("--cooldown", "anthropic", "0")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(self.answer("implement", used=50)["model"], "opus")
 
     def test_only_families_skips_the_other_family(self):
         path = self.table(TABLE_HEAD + '[roles.visual]\nonly_families = ["anthropic"]\n'
@@ -213,79 +375,6 @@ class ResolveTests(RoleCase):
                 proc = self.role(role, MASTACK_MODELS=path)
                 self.assertEqual(proc.returncode, 2, proc.stdout)
                 self.assertTrue(proc.stderr.strip())
-
-    def test_the_read_is_stored_for_the_hook(self):
-        self.answer("routine", used=90)
-        stored = json.loads((self.tmp / "state" / "codex-limit.json").read_text())
-        self.assertEqual(stored["left"], 10)
-
-    def test_antigravity_models_resolve_with_thought_level_and_delegate_task(self):
-        for role, expected_model, expected_effort in (
-            ("design", "neon", "high"),
-            ("implement", "neon", "medium"),
-            ("visual", "neon", "high"),
-            ("scout", "flash", "medium"),
-            ("routine", "flash", "medium"),
-            ("research", "argon", "medium"),
-            ("audit", "carbon", "high"),
-        ):
-            with self.subTest(role=role):
-                answer = self.answer(role, "--family", "google")
-                self.assertEqual((answer["model"], answer["id"], answer["family"], answer["cli"], answer["effort"],
-                                  answer["option"]),
-                                 (expected_model, model_id(expected_model), "google", "antigravity", expected_effort,
-                                  "thought_level"))
-                proc = self.role(role, "--family", "google")
-                self.assertEqual(proc.returncode, 0, proc.stderr)
-                self.assertIn(
-                    f'delegate_task: target.model="{model_id(expected_model)}", '
-                    f'target.options.thought_level="{expected_effort}"',
-                    proc.stdout,
-                )
-
-    def test_cross_family_review_routes_across_all_three_families(self):
-        # Google implementer -> Sol when Codex has quota, Opus when Codex is exhausted.
-        self.assertEqual(self.answer("review", "--implementer-family", "google", used=50)["model"], "sol")
-        ans_exhausted = self.answer("review", "--implementer-family", "google", used=100)
-        self.assertEqual((ans_exhausted["model"], ans_exhausted["note"]), ("opus", None))
-
-        # Anthropic implementer -> Carbon when Google is selected or Anthropic is excluded and Codex is exhausted.
-        ans_google = self.answer("review", "--implementer-family", "anthropic", "--family", "google", used=100)
-        self.assertEqual((ans_google["model"], ans_google["family"], ans_google["option"], ans_google["note"]),
-                         ("carbon", "google", "thought_level", None))
-        ans_excl = self.answer("review", "--implementer-family", "anthropic", "--exclude-family", "anthropic", used=100)
-        self.assertEqual((ans_excl["model"], ans_excl["family"], ans_excl["note"]), ("carbon", "google", None))
-
-        # Google implementer cannot be reviewed by Google under not_family = true.
-        proc = self.role("review", "--implementer-family", "google", "--family", "google", used=50)
-        self.assertEqual(proc.returncode, 1)
-        self.assertIn("same family as the implementer (google)", proc.stdout)
-
-    def test_visual_allows_anthropic_and_google_but_rejects_openai(self):
-        self.assertEqual(self.answer("visual")["model"], "opus")
-        self.assertEqual(self.answer("visual", "--family", "google")["model"], "neon")
-        self.assertEqual(self.answer("visual", "--exclude-family", "anthropic")["model"], "neon")
-        proc = self.role("visual", "--family", "openai")
-        self.assertEqual(proc.returncode, 1)
-
-    def test_implement_and_scout_fall_back_to_google_when_other_families_unavailable(self):
-        impl = self.answer("implement", "--exclude-family", "anthropic", used=100)
-        self.assertEqual((impl["model"], impl["family"], impl["option"]), ("neon", "google", "thought_level"))
-        scout = self.answer("scout", "--exclude-family", "anthropic", used=100)
-        self.assertEqual((scout["model"], scout["family"], scout["option"]), ("flash", "google", "thought_level"))
-
-    def test_provider_options_and_cache_metadata_are_defined_for_all_three_families(self):
-        self.assertEqual(self.answer("implement")["option"], "effort")
-        self.assertEqual(self.answer("scout", used=50)["option"], "model_reasoning_effort")
-        self.assertEqual(self.answer("scout", "--family", "google")["option"], "thought_level")
-        table = model_roles.load()
-        for family, expected_opt in (("anthropic", "effort"), ("openai", "model_reasoning_effort"),
-                                     ("google", "thought_level")):
-            meta = model_roles.provider_metadata(table, family)
-            self.assertEqual(meta.get("option"), expected_opt)
-            for key in ("cache_ttl_minutes", "warm_idle_minutes", "compact_window_tokens", "warm_context_tokens"):
-                self.assertIsInstance(meta.get(key), int, f"{family}.{key}")
-                self.assertGreater(meta[key], 0)
 
 
 class QuotaReadTests(RoleCase):

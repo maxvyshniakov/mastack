@@ -85,7 +85,53 @@ def load(path: Path | None = None) -> dict:
         raise TableError(f"{path} is not valid TOML: {error}") from None
     if not isinstance(data.get("models"), dict) or not isinstance(data.get("roles"), dict):
         raise TableError(f"{path} has no [models] or [roles]")
+    validate(data)
     return data
+
+
+def active_families(table: dict) -> list[str] | None:
+    """Top-level `active_families` list when declared on the table, else None."""
+    if "active_families" not in table:
+        return None
+    raw = table["active_families"]
+    if not isinstance(raw, list) or not raw or not all(isinstance(f, str) and f.strip() for f in raw):
+        raise TableError("`active_families` must be a non-empty list of family names")
+    return list(raw)
+
+
+def forbid_models(role: str, entry: dict) -> set[str]:
+    """Per-role `forbid_models` set when declared on the role, else empty set."""
+    if "forbid_models" not in entry:
+        return set()
+    raw = entry["forbid_models"]
+    if not isinstance(raw, list) or not all(isinstance(m, str) and m.strip() for m in raw):
+        raise TableError(f"`forbid_models` in role `{role}` must be a list of model names")
+    return set(raw)
+
+
+def validate(table: dict) -> None:
+    """Validate active_families, forbid_models, and role choice references at load time."""
+    active = active_families(table)
+    for role_name, entry in table["roles"].items():
+        if not isinstance(entry, dict) or not isinstance(entry.get("choices"), list):
+            raise TableError(f"role `{role_name}` must be a table with a `choices` list")
+        forbidden = forbid_models(role_name, entry)
+        for choice in entry["choices"]:
+            if not isinstance(choice, dict):
+                raise TableError(f"a choice of `{role_name}` is not a table: {choice!r}")
+            name = choice.get("model")
+            model = model_of(table, name)
+            conditions(choice)
+            if active is not None and model["family"] not in active:
+                raise TableError(
+                    f"role `{role_name}` names model `{name}` in inactive family `{model['family']}` "
+                    f"(active_families: {', '.join(active)})"
+                )
+            if name in forbidden:
+                raise TableError(
+                    f"role `{role_name}` names forbidden model `{name}` "
+                    f"(forbid_models: {', '.join(sorted(forbidden))})"
+                )
 
 
 def role_of(table: dict, role: str) -> dict:
@@ -182,7 +228,9 @@ def load_cooldowns(now: float | None = None) -> dict[str, float]:
 def set_cooldown(family: str, duration: str, now: float | None = None, table: dict | None = None) -> float | None:
     now = time.time() if now is None else now
     if table is not None:
-        known = {m.get("family") for m in table.get("models", {}).values() if isinstance(m, dict)}
+        active = active_families(table)
+        known = (set(active) if active is not None
+                 else {m.get("family") for m in table.get("models", {}).values() if isinstance(m, dict)})
         if family not in known:
             raise ValueError(f"unknown family {family!r} (known: {', '.join(sorted(k for k in known if k))})")
     seconds = parse_duration(duration)
@@ -253,6 +301,43 @@ def resolve(table: dict, role: str, implementer_family: str | None = None, read=
     return None, skipped, quotas
 
 
+def resolve_pair(table: dict, role: str, implementer_family: str | None = None, read=None,
+                 family: str | None = None, exclude_families: set[str] | list[str] | tuple[str, ...] | None = None,
+                 harness: str = "auto"):
+    """Resolve (primary, partner, skipped, quotas) from two distinct active families.
+
+    `partner` is None when cooldowns, exclusions, or table choices leave fewer than two qualifying families."""
+    read_fn = read or read_quota
+    quotas: dict[str, Quota] = {}
+
+    def cached_read(name: str) -> Quota:
+        if name not in quotas:
+            quotas[name] = read_fn(name)
+        return quotas[name]
+
+    caller_excluded = set(exclude_families or ())
+    primary, primary_skipped, _ = resolve(
+        table, role, implementer_family=implementer_family, read=cached_read,
+        family=family, exclude_families=caller_excluded, harness=harness,
+    )
+    if primary is None:
+        return None, None, primary_skipped, quotas
+    partner, partner_skipped, _ = resolve(
+        table, role, implementer_family=implementer_family, read=cached_read,
+        family=family, exclude_families=caller_excluded | {primary.family}, harness=harness,
+    )
+    seen = {(s["model"], s["reason"]) for s in primary_skipped}
+    skipped = list(primary_skipped)
+    for item in partner_skipped:
+        if primary.family not in caller_excluded and item["reason"] == f"{item['model']}: family {primary.family} excluded":
+            continue
+        key = (item["model"], item["reason"])
+        if key not in seen:
+            seen.add(key)
+            skipped.append(item)
+    return primary, partner, skipped, quotas
+
+
 def caution(skipped: list) -> str | None:
     """A warning when a choice was skipped only because the implementer's family is unknown: the winner's note
     (such as "same family as the implementer") may then not hold."""
@@ -281,21 +366,30 @@ def launch_payload(choice: Choice, harness: str) -> dict | None:
     return None
 
 
+def _choice_lines(choice: Choice, harness: str = "auto", indent: str = "  ") -> list[str]:
+    lines: list[str] = []
+    if harness == "t3":
+        payload = launch_payload(choice, "t3")
+        lines.append(f"{indent}delegate_task: {json.dumps(payload['target'])}")
+    else:
+        lines += [f"{indent}{name}: {shlex.join(argv)}" for name, argv in choice.argv.items()]
+        if choice.cli == "antigravity":
+            lines.append(
+                f'{indent}delegate_task: target.model="{choice.id}", '
+                f'target.options.{choice.option}="{choice.effort}"'
+            )
+        elif not choice.argv and choice.option:
+            lines.append(f"{indent}option: {choice.option}={choice.effort}")
+    if choice.note:
+        lines.append(f"{indent}note: {choice.note}")
+    return lines
+
+
 def describe(role: str, choice: Choice | None, skipped: list, harness: str = "auto") -> str:
     lines = []
     if choice:
         lines.append(f"{role}: {choice.model} ({choice.id}, {choice.family}), effort {choice.effort}")
-        if harness == "t3":
-            payload = launch_payload(choice, "t3")
-            lines.append(f"  delegate_task: {json.dumps(payload['target'])}")
-        else:
-            lines += [f"  {name}: {shlex.join(argv)}" for name, argv in choice.argv.items()]
-            if choice.cli == "antigravity":
-                lines.append(f'  delegate_task: target.model="{choice.id}", target.options.{choice.option}="{choice.effort}"')
-            elif not choice.argv and choice.option:
-                lines.append(f"  option: {choice.option}={choice.effort}")
-        if choice.note:
-            lines.append(f"  note: {choice.note}")
+        lines += _choice_lines(choice, harness=harness, indent="  ")
         if caution(skipped):
             lines.append(f"  caution: {caution(skipped)}")
     else:
@@ -306,11 +400,63 @@ def describe(role: str, choice: Choice | None, skipped: list, harness: str = "au
     return "\n".join(lines)
 
 
+def describe_pair(role: str, primary: Choice | None, partner: Choice | None, skipped: list,
+                  harness: str = "auto") -> str:
+    lines = []
+    if primary and partner:
+        lines.append(f"{role} (pair):")
+        lines.append(f"  primary: {primary.model} ({primary.id}, {primary.family}), effort {primary.effort}")
+        lines += _choice_lines(primary, harness=harness, indent="    ")
+        lines.append(f"  partner: {partner.model} ({partner.id}, {partner.family}), effort {partner.effort}")
+        lines += _choice_lines(partner, harness=harness, indent="    ")
+        if caution(skipped):
+            lines.append(f"  caution: {caution(skipped)}")
+    elif primary:
+        lines.append(
+            f"{role} (pair): no second family qualifies (only {primary.family} available; "
+            "need two distinct active families)"
+        )
+        lines.append(f"  primary: {primary.model} ({primary.id}, {primary.family}), effort {primary.effort}")
+        lines += _choice_lines(primary, harness=harness, indent="    ")
+    else:
+        lines.append(f"{role} (pair): no choice qualifies (need two distinct active families)")
+    if skipped:
+        lines.append("skipped:")
+        lines += [f"  {entry['reason']}" for entry in skipped]
+    return "\n".join(lines)
+
+
+def _choice_json(choice: Choice | None, harness: str = "auto") -> dict | None:
+    if choice is None:
+        return None
+    data = asdict(choice)
+    if harness != "auto":
+        data["launch"] = launch_payload(choice, harness)
+    return data
+
+
 def as_json(role: str, choice: Choice | None, skipped: list, quotas: dict, harness: str = "auto") -> dict:
     answer = asdict(choice) if choice else {"error": "no choice qualifies"}
     extra = {"launch": launch_payload(choice, harness)} if choice and harness != "auto" else {}
     return {"role": role, **answer, **extra, "caution": caution(skipped), "skipped": skipped,
             "quotas": {name: {k: v for k, v in asdict(q).items() if k != "read_at"} for name, q in quotas.items()}}
+
+
+def as_pair_json(role: str, primary: Choice | None, partner: Choice | None, skipped: list, quotas: dict,
+                 harness: str = "auto") -> dict:
+    result: dict = {
+        "role": role,
+        "primary": _choice_json(primary, harness),
+        "partner": _choice_json(partner, harness),
+    }
+    if primary is None:
+        result["error"] = "no choice qualifies"
+    elif partner is None:
+        result["error"] = f"no second family qualifies (only {primary.family} available)"
+    result["caution"] = caution(skipped)
+    result["skipped"] = skipped
+    result["quotas"] = {name: {k: v for k, v in asdict(q).items() if k != "read_at"} for name, q in quotas.items()}
+    return result
 
 
 # ---- quotas -------------------------------------------------------------------------------------------------------
