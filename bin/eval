@@ -203,7 +203,7 @@ def main():
     parser.add_argument("skill", nargs="?")
     parser.add_argument("scenarios", nargs="*")
     parser.add_argument("--agent", choices=("claude", "codex", "agy", "none"), default="claude")
-    parser.add_argument("--model", help="model id or a models.toml alias (default: opus for claude, sol for codex, neon for agy)")
+    parser.add_argument("--model", help="model id or a models.toml alias (default: opus for claude, neon for agy; required for codex)")
     parser.add_argument("--keep", action="store_true", help="keep scratch directories of passing scenarios")
     parser.add_argument("--without-skill", action="store_true",
                         help="do not link the target skill (checks whether the model passes without it)")
@@ -222,7 +222,9 @@ def main():
         sys.exit(f"eval: no scenario {', '.join(map(str, missing)) or 'in ' + str(EVALS / args.skill)}")
     if args.agent != "none" and not shutil.which(args.agent):
         sys.exit(f"eval: {args.agent} not on PATH")
-    default_alias = {"claude": "opus", "codex": "sol", "agy": "neon"}.get(args.agent, "")
+    default_alias = {"claude": "opus", "agy": "neon"}.get(args.agent, "")
+    if args.agent == "codex" and not args.model:
+        sys.exit("eval: --agent codex requires an explicit --model (sol is retired in models.toml)")
     model = "-" if args.agent == "none" else model_id(args.model or default_alias)
 
     failed = 0

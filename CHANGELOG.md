@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `models.toml`, `bin/role`, `hooks/model_roles.py`, `hooks/agent_role.py`,
+  `hooks/codex_credits.py`, `models.md`: simplified model routing to two active
+  families (`anthropic`, `google`) on `schema = 1`, retiring `sol` / `codex`
+  with zero `codex app-server` polling; added `active_families` and economy-role
+  `forbid_models` load-time validation, provider warm/reset metadata
+  (`subagent_cache_ttl_minutes`, `reset_context_tokens`,
+  `max_turns_before_handoff`), `specify` and `critique` roles, `bin/role --pair`
+  for distinct-family pairs, and immediate zero-subprocess denial of headless
+  `codex` runs in `codex_credits` (unless `MASTACK_ALLOW_CREDITS=1`).
+
 ## 0.6.0
 
 - Skills pack cleanup and single-owner consolidation across all 29 skills and

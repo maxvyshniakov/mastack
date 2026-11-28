@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Which model takes a role now, by models.toml and the live quotas its conditions name.
+"""Which model takes a role now, by models.toml and any live quotas its conditions name.
 
-    bin/role <role> [--implementer-family F] [--family F] [--exclude-family F] [--json]
+    bin/role <role> [--implementer-family F] [--family F] [--exclude-family F] [--pair] [--json]
 
 Takes the role's first choice whose conditions hold (`when.limit`, `when.not_family`, the role's `only_families`)
 and prints its model, id, family and effort, each headless command of its `[cli.*]` with {id} and {effort} filled
 (or its `delegate_task` target and option for Antigravity / T3 Code), its note, and why every earlier choice was
-skipped. A quota that cannot be read counts as not met and says why.
+skipped. With `--pair`, resolves a `(primary, partner)` pair from two distinct active families (exiting 1 if fewer
+than two families qualify).
 `--implementer-family` is the family of the model whose work is reviewed; `not_family` is not met without it.
-`--family` restricts selection to one provider family (e.g. `google`, `anthropic`, `openai`); `--exclude-family`
+`--family` restricts selection to one provider family (e.g. `google`, `anthropic`); `--exclude-family`
 (repeatable) skips families whose quota is exhausted or unavailable.
 
-MASTACK_MODELS names another table; MASTACK_CODEX another Codex CLI than `codex` on PATH. The quota read is stored
-in the hook's state directory for the codex_credits check.
+MASTACK_MODELS names another table; MASTACK_CODEX another Codex CLI than `codex` on PATH.
 
-Exit 0 with a choice, 1 when no choice qualifies, 2 when the table or the role cannot be read.
+Exit 0 with a choice (or pair), 1 when no choice (or second family for `--pair`) qualifies, 2 when the table or the
+role cannot be read.
 """
 from __future__ import annotations
 
@@ -39,6 +40,8 @@ def main() -> int:
                         help="target harness for launch output (filters incompatible choices)")
     parser.add_argument("--cooldown", nargs=2, metavar=("FAMILY", "DURATION"),
                         help="mark FAMILY unavailable for DURATION (e.g. 2h, 30m, 0 to clear)")
+    parser.add_argument("--pair", action="store_true",
+                        help="resolve a (primary, partner) pair from two distinct active families")
     parser.add_argument("--json", action="store_true", help="print the answer as JSON")
     args = parser.parse_args()
     if args.cooldown:
@@ -59,12 +62,30 @@ def main() -> int:
         parser.error("the following arguments are required: role")
     try:
         table = model_roles.load()
-        choice, skipped, quotas = model_roles.resolve(table, args.role, args.implementer_family,
-                                                      family=args.family, exclude_families=args.exclude_family,
-                                                      harness=args.harness)
+        if args.pair:
+            primary, partner, skipped, quotas = model_roles.resolve_pair(
+                table, args.role, args.implementer_family,
+                family=args.family, exclude_families=args.exclude_family,
+                harness=args.harness,
+            )
+        else:
+            choice, skipped, quotas = model_roles.resolve(
+                table, args.role, args.implementer_family,
+                family=args.family, exclude_families=args.exclude_family,
+                harness=args.harness,
+            )
     except model_roles.TableError as error:
         print(f"role: {error}", file=sys.stderr)
         return 2
+    if args.pair:
+        families = model_roles.active_families(table)
+        if args.json:
+            print(json.dumps(model_roles.as_pair_json(args.role, primary, partner, skipped, quotas,
+                                                      harness=args.harness, families=families), indent=2))
+        else:
+            print(model_roles.describe_pair(args.role, primary, partner, skipped,
+                                            harness=args.harness, families=families))
+        return 0 if (primary and partner) else 1
     if args.json:
         print(json.dumps(model_roles.as_json(args.role, choice, skipped, quotas, harness=args.harness), indent=2))
     else:

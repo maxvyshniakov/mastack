@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
 """Codex credits guard, a Claude Code PreToolUse[Bash] check.
 
-Once the weekly Codex limit is used up, every Codex run is billed to credits. On 2026-11-13 an orchestrating session
-ran four `codex exec` reviews with Sol at 100% used: models.toml said the review role needs 15% left, and nothing
-checked it.
+Denies headless Codex runs — `codex exec` (or `codex e`) and `codex review` — in two modes:
+- Retired Codex (current models.toml): whenever `openai` is absent from `active_families` or `[cli.codex]` is
+  absent, headless Codex runs are denied immediately with zero subprocess latency, naming `bin/role <role>` as
+  the replacement. If `models.toml` fails validation (`TableError`), the guard fails closed on headless Codex
+  runs rather than silently allowing them.
+- Legacy custom tables with active Codex: denies headless Codex runs while the weekly limit has less left than
+  the review role's `when.limit.codex_weekly` threshold, or Codex reports the limit reached (cached for
+  CACHE_SECONDS or until the window resets).
 
-Denies a headless Codex run, `codex exec` (or `codex e`) and `codex review`, while the weekly limit has less left
-than the review role's Codex choice needs in models.toml (`when.limit.codex_weekly`), or Codex reports the limit
-reached. It finds the run by name or path, after Codex's global options (an unknown option's value or a variable
-is looked past), in chains, pipes, compound commands, command substitutions, `sh|bash|zsh -c` scripts and `eval`,
-and behind wrappers: env, nohup and the others unguarded_sequence.unwrap knows, `timeout`/`gtimeout`, `xargs`,
+It finds the run by name or path, after Codex's global options (an unknown option's value or a variable is looked
+past), in chains, pipes, compound commands, command substitutions, `sh|bash|zsh -c` scripts and `eval`, and
+behind wrappers: env, nohup and the others unguarded_sequence.unwrap knows, `timeout`/`gtimeout`, `xargs`,
 `npx`/`bunx`/`pnpx` of `codex` or `@openai/codex`, and the leased command after `--` of `slotfather run`,
-`spawnfather own`, and `junkfather own`. It cannot see a run behind a shell alias or function, a program name in a variable (`$CODEX
-exec`), or inside a script the command starts.
+`spawnfather own`, and `junkfather own`. It cannot see a run behind a shell alias or function, a program name in
+a variable (`$CODEX exec`), or inside a script the command starts.
 
-The refusal names the share left, the threshold, what `bin/role review` picks instead, how to read the limit again,
-and the owner's override: `MASTACK_ALLOW_CREDITS=1` before the run in that same command (`MASTACK_ALLOW_CREDITS=1
-codex exec ...`, through `env` or before a wrapper), which passes and logs the program and subcommand to guard.log.
-
-The limit is read as `bin/role` reads it (hooks/model_roles.py) and the read is reused for CACHE_SECONDS, or until
-the window's reset time. A command that runs no model passes without a read: `which codex`, `codex --version`,
-`codex exec --help`, `codex app-server`, `codex login`, a path or text containing "codex". Without a codex on PATH, a
-table without a Codex threshold, a read that fails or takes longer than the hook's budget allows, the command passes
-and nothing is said.
+The owner's override is `MASTACK_ALLOW_CREDITS=1` before the run in that same command (`MASTACK_ALLOW_CREDITS=1
+codex exec ...`, through `env` or before a wrapper), which passes and logs the program and subcommand to
+guard.log. A command that runs no model passes without reading models.toml or spawning Codex: `which codex`,
+`codex --version`, `codex exec --help`, `codex app-server`, `codex login`, or a path/text containing "codex".
 """
 from __future__ import annotations
 
@@ -200,9 +198,16 @@ def check(data: dict):
     import model_roles
     try:
         table = model_roles.load()
+    except model_roles.TableError as error:
+        return hook_io.deny(invalid_table_refusal(str(error), blocked, retired=_raw_codex_retired(model_roles)))
+    active = model_roles.active_families(table)
+    cli_table = table.get("cli") if isinstance(table.get("cli"), dict) else {}
+    if (active is not None and "openai" not in active) or "codex" not in cli_table:
+        return hook_io.deny(retired_refusal(table, blocked))
+    try:
         need = model_roles.codex_threshold(table, "review")
-    except model_roles.TableError:
-        return None
+    except model_roles.TableError as error:
+        return hook_io.deny(invalid_table_refusal(str(error), blocked, retired=False))
     if need is None:
         return None
     try:
@@ -215,17 +220,70 @@ def check(data: dict):
     return hook_io.deny(refusal(table, quota, why, blocked))
 
 
+def _raw_codex_retired(model_roles) -> bool:
+    """Best-effort raw TOML check when model_roles.load() raises TableError."""
+    try:
+        import tomllib
+        raw = tomllib.loads(model_roles.table_path().read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    active = raw.get("active_families")
+    cli = raw.get("cli") if isinstance(raw.get("cli"), dict) else {}
+    return (isinstance(active, list) and "openai" not in active) or "codex" not in cli
+
+
+def invalid_table_refusal(error: str, blocked: list[str], retired: bool = False) -> str:
+    import model_roles
+    role = str(model_roles.ROOT / "bin" / "role")
+    header = (
+        f"codex-credits denied this command: Codex/OpenAI is retired in models.toml, and models.toml failed "
+        f"validation ({error})."
+        if retired else
+        f"codex-credits denied this command: models.toml failed validation ({error}), so headless Codex runs are blocked."
+    )
+    return (f"{header}\n"
+            + "\n".join(f"- `{shown}`" for shown in dict.fromkeys(blocked)) + "\n"
+            f"Fix models.toml and use `{role} <role>` to pick an active model.\n"
+            f"Only when the owner explicitly asks to spend Codex credits: prefix the command with `{OVERRIDE}`.")
+
+
+def _format_fallback(table: dict, quota=None) -> str:
+    import model_roles
+    role = str(model_roles.ROOT / "bin" / "role")
+    reader = (lambda name: quota if (quota is not None and name == "codex_weekly")
+              else model_roles.Quota(error="not read by the hook"))
+    try:
+        choice, _, _ = model_roles.resolve(table, "review", None, read=reader)
+    except model_roles.TableError:
+        choice = None
+    if not choice:
+        return f"`{role} review` finds no other choice"
+    cmd = next(iter(choice.argv.values()), [])
+    if cmd:
+        via = f": `{shlex.join(cmd)}`"
+    elif choice.cli == "antigravity":
+        via = f' via delegate_task (target.model="{choice.id}", target.options.{choice.option}="{choice.effort}")'
+    else:
+        via = ""
+    return (f"`{role} review` picks {choice.model} ({choice.id}), effort {choice.effort}{via}; "
+            "with `--implementer-family <family>` it may pick another")
+
+
+def retired_refusal(table: dict, blocked: list[str]) -> str:
+    import model_roles
+    role = str(model_roles.ROOT / "bin" / "role")
+    fallback = _format_fallback(table)
+    return ("codex-credits denied this command: Codex/OpenAI is retired in models.toml "
+            "(not in active_families or [cli.codex] absent).\n"
+            + "\n".join(f"- `{shown}`" for shown in dict.fromkeys(blocked)) + "\n"
+            f"Instead: {fallback}. For another role: `{role} <role>`.\n"
+            f"Only when the owner explicitly asks to spend Codex credits: prefix the command with `{OVERRIDE}`.")
+
+
 def refusal(table: dict, quota, why: str, blocked: list[str]) -> str:
     import model_roles
     role = str(model_roles.ROOT / "bin" / "role")
-    choice, _, _ = model_roles.resolve(table, "review", None, read=lambda name: quota if name == "codex_weekly"
-                                       else model_roles.Quota(error="not read by the hook"))
-    if choice:
-        fallback = (f"`{role} review` picks {choice.model} ({choice.id}), effort {choice.effort}: "
-                    f"`{shlex.join(next(iter(choice.argv.values()), []))}`; with `--implementer-family <family>` it "
-                    "may pick another")
-    else:
-        fallback = f"`{role} review` finds no other choice"
+    fallback = _format_fallback(table, quota=quota)
     minutes = max(0, round((time.time() - quota.read_at) / 60))
     return ("codex-credits denied this command: past the weekly Codex limit every run is billed to credits.\n"
             + "\n".join(f"- `{shown}`" for shown in dict.fromkeys(blocked)) + "\n"

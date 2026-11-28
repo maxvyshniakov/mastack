@@ -1,20 +1,22 @@
-# Which model takes which role. `bin/role <role>` evaluates it with the live
-# quotas; skills run that, and the Bash hook's codex_credits check reads the
-# review threshold from it. models.md explains the choices. When models change, edit only this file.
+# Which model takes which role. `bin/role <role>` evaluates it; skills run that,
+# and the Bash hook's codex_credits check reads active_families / [cli.*] from it.
+# models.md explains the choices. When models change, edit only this file.
 # A project overrides the reviewer in docs/agents/checks.md, under Review.
 #
 # A role lists choices in order. The first choice whose conditions hold wins:
 #   when.limit      remaining share of a quota, in percent, at least this value
 #   when.not_family the choice must not be of the implementer's family
 #   only_families   the role never goes to other families
+#   forbid_models   models that must never appear in this role's choices
 # A choice may carry `note`, shown to the person reading the plan.
 
 schema = 1
+active_families = ["anthropic", "google"]
 
-[models.fable]
-id = "claude-fable-5-2"
-family = "anthropic"
-cli = "claude"
+[models.neon]
+id = "gemini-4-neon"
+family = "google"
+cli = "antigravity"
 tier = "frontier"
 
 [models.opus]
@@ -23,35 +25,29 @@ family = "anthropic"
 cli = "claude"
 tier = "strong"
 
+[models.carbon]
+id = "gemini-4-carbon"
+family = "google"
+cli = "antigravity"
+tier = "frontier"
+
+[models.fable]
+id = "claude-fable-5-2"
+family = "anthropic"
+cli = "claude"
+tier = "frontier"
+
 [models.sonnet]
 id = "claude-sonnet-5-5"
 family = "anthropic"
 cli = "claude"
 tier = "routine"
 
-[models.sol]
-id = "gpt-6.2-sol"
-family = "openai"
-cli = "codex"
-tier = "strong"
-
-[models.neon]
-id = "gemini-4-neon"
-family = "google"
-cli = "antigravity"
-tier = "frontier"
-
 [models.argon]
 id = "gemini-4-argon"
 family = "google"
 cli = "antigravity"
 tier = "strong"
-
-[models.carbon]
-id = "gemini-4-carbon"
-family = "google"
-cli = "antigravity"
-tier = "frontier"
 
 [models.flash]
 id = "gemini-3.8-flash"
@@ -66,11 +62,6 @@ option = "effort"
 run = ["claude", "-p", "--model", "{id}", "--effort", "{effort}"]
 review = ["claude", "-p", "--model", "{id}", "--effort", "{effort}"]
 
-[cli.codex]
-option = "model_reasoning_effort"
-run = ["codex", "exec", "-c", "model=\"{id}\"", "-c", "model_reasoning_effort=\"{effort}\""]
-review = ["codex", "review", "-c", "model=\"{id}\"", "-c", "model_reasoning_effort=\"{effort}\""]
-
 [cli.antigravity]
 option = "thought_level"
 delegate_tool = "delegate_task"
@@ -79,52 +70,33 @@ delegate_tool = "delegate_task"
 [providers.anthropic]
 option = "effort"
 cache_ttl_minutes = 60
+subagent_cache_ttl_minutes = 5
 warm_idle_minutes = 50
 compact_window_tokens = 500000
 warm_context_tokens = 200000
-cache_note = "1h subagent TTL when CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL is set; 5m default otherwise"
-
-[providers.openai]
-option = "model_reasoning_effort"
-cache_ttl_minutes = 10
-warm_idle_minutes = 5
-compact_window_tokens = 272000
-warm_context_tokens = 150000
-cache_note = "automatic prompt caching (~5-10m window, no separate cache-write surcharge)"
+reset_context_tokens = 150000
+max_turns_before_handoff = 80
 
 [providers.google]
 option = "thought_level"
 cache_ttl_minutes = 60
+subagent_cache_ttl_minutes = 60
 warm_idle_minutes = 50
 compact_window_tokens = 1000000
 warm_context_tokens = 250000
-cache_note = "implicit prompt caching in Antigravity / T3 Code (no separate 5m/1h write tiers)"
-
-# Quotas the conditions refer to.
-[limits.codex_weekly]
-meaning = "percent of the weekly Codex limit left"
-read = "codex app-server, method account/rateLimits/read: 100 - usedPercent of the window whose windowDurationMins is 10080 (primary or secondary)"
-
-[roles.design]
-purpose = "plans, interface design, final synthesis, judgment calls"
-choices = [
-  { model = "fable", effort = "high" },
-  { model = "opus", effort = "high" },
-  { model = "neon", effort = "high" },
-  { model = "carbon", effort = "high" },
-]
+reset_context_tokens = 185000
+max_turns_before_handoff = 80
 
 [roles.implement]
-purpose = "writing code against a spec or brief"
+purpose = "structural, architectural, and regular code against a spec or ticket contract"
 choices = [
-  { model = "opus", effort = "medium" },
-  { model = "sol", effort = "xhigh", when = { limit = { codex_weekly = 15 } } },
   { model = "neon", effort = "medium" },
+  { model = "opus", effort = "medium" },
   { model = "argon", effort = "medium" },
 ]
 
 [roles.visual]
-purpose = "UI, layout and anything judged by how it looks"
+purpose = "UI, layout, styling, and anything judged visually"
 only_families = ["anthropic", "google"]
 choices = [
   { model = "opus", effort = "high" },
@@ -132,52 +104,71 @@ choices = [
 ]
 
 [roles.review]
-purpose = "independent review of finished work"
+purpose = "independent blind review of finished work"
 choices = [
-  { model = "sol", effort = "medium", when = { not_family = true, limit = { codex_weekly = 15 } } },
-  { model = "opus", effort = "medium", when = { not_family = true } },
   { model = "carbon", effort = "medium", when = { not_family = true } },
-  { model = "neon", effort = "medium", when = { not_family = true } },
-  { model = "opus", effort = "medium", note = "same family as the implementer: fresh context only, say so in the report" },
+  { model = "fable", effort = "high", when = { not_family = true } },
+  { model = "carbon", effort = "medium", note = "same family as the implementer: fresh context only, say so in the report" },
+  { model = "fable", effort = "high", note = "same family as the implementer: fresh context only, say so in the report" },
 ]
 
-[roles.routine]
-purpose = "token-heavy, low-risk work: bulk edits, renames, running checks, doc mirroring"
+[roles.critique]
+purpose = "challenging plans, trade-offs, and architectural proposals without executing them"
 choices = [
-  { model = "sol", effort = "medium", when = { limit = { codex_weekly = 15 } } },
-  { model = "opus", effort = "medium" },
-  { model = "flash", effort = "medium" },
+  { model = "carbon", effort = "high" },
+  { model = "fable", effort = "high" },
+]
+
+[roles.specify]
+purpose = "specs, pre-lane Specifier notes, and mid-flight Advisor calls"
+choices = [
+  { model = "carbon", effort = "high" },
+  { model = "fable", effort = "high" },
+]
+
+[roles.design]
+purpose = "interface design, architecture synthesis, and judgment calls (alias-compatible with specify)"
+choices = [
+  { model = "carbon", effort = "high" },
+  { model = "fable", effort = "high" },
+]
+
+[roles.audit]
+purpose = "security, correctness, test, friction, and orchestration audits"
+choices = [
+  { model = "carbon", effort = "high" },
+  { model = "fable", effort = "high" },
 ]
 
 [roles.scout]
-purpose = "read-only scouting inside the repository: map code, find where something lives, list call sites; no judgment or proposal"
+purpose = "read-only repository mapping, call-site discovery, and doc/changelog verification"
+forbid_models = ["opus", "neon", "fable", "carbon"]
 choices = [
-  { model = "sol", effort = "medium", when = { limit = { codex_weekly = 15 } } },
   { model = "sonnet", effort = "medium" },
   { model = "flash", effort = "medium" },
 ]
 
-[roles.research]
-purpose = "reading docs and sources, collecting facts, release notes"
+[roles.routine]
+purpose = "token-heavy, low-risk mechanical edits, renames, running checks, and doc mirroring"
+forbid_models = ["opus", "neon", "fable", "carbon"]
 choices = [
-  { model = "opus", effort = "medium" },
-  { model = "sonnet", effort = "medium", note = "plain reading and grep only" },
+  { model = "sonnet", effort = "medium" },
   { model = "argon", effort = "medium" },
-  { model = "flash", effort = "medium", note = "plain reading and grep only" },
+  { model = "flash", effort = "medium" },
 ]
 
-[roles.audit]
-purpose = "security and correctness audits; a strong model verifies every finding"
+[roles.research]
+purpose = "reading docs and primary sources, collecting facts and release notes"
+forbid_models = ["opus", "neon", "fable", "carbon"]
 choices = [
-  { model = "fable", effort = "high" },
-  { model = "opus", effort = "high" },
-  { model = "carbon", effort = "high" },
-  { model = "neon", effort = "high" },
+  { model = "argon", effort = "medium" },
+  { model = "sonnet", effort = "medium", note = "plain reading and grep only" },
+  { model = "flash", effort = "medium", note = "plain reading and grep only" },
 ]
 
 # Relative price weights read by `tokenfather` (tokenfather/pricing.py).
 # `cache_write_short` / `cache_write_long` map to providers with tiered cache-write TTLs
-# (e.g. Anthropic 5m / 1h); providers with implicit or automatic caching (OpenAI, Google)
+# (e.g. Anthropic 5m / 1h); providers with implicit or automatic caching (Google)
 # use `cache_write_default = 1.0`. `tier_multiplier` scales weighted units across tiers.
 [pricing.default]
 input = 1.0
@@ -214,15 +205,6 @@ cache_write_short = 1.25
 cache_write_long = 2.0
 cache_write_default = 1.25
 tier_multiplier = 0.2
-
-[pricing.sol]
-input = 1.0
-output = 4.0
-cache_read = 0.1
-cache_write_short = 1.0
-cache_write_long = 1.0
-cache_write_default = 1.0
-tier_multiplier = 0.6
 
 [pricing.neon]
 input = 1.0
