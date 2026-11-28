@@ -336,6 +336,61 @@ class FrictionT3Tests(unittest.TestCase):
             self.assertEqual(len(turns), 1)
             self.assertEqual(turns[0]["project"], "batch-app")
 
+    def test_t3_batched_read_file_containing_command_markers_is_ignored_and_preserves_pairing(self):
+        with tempfile.TemporaryDirectory(prefix="mastack-t3-pos-") as tmp:
+            base = pathlib.Path(tmp)
+            cfg = base / "config"
+            state = base / "state"
+            journal = base / "journal" / "events.jsonl"
+            app = base / "repos" / "pos-app"
+            (app / ".git").mkdir(parents=True)
+            fixture_file = app / "test_fixture.py"
+            fixture_file.write_text('SAMPLE = "Command exited with code 0."\n')
+            logs_dir = (
+                base / "t3" / "antigravity" / "hash-04" / "antigravity-acp"
+                / "brain" / "conv-pos-1" / ".system_generated" / "logs"
+            )
+            cfg.mkdir()
+            logs_dir.mkdir(parents=True)
+            (cfg / "friction.json").write_text(json.dumps({
+                "sources": {
+                    "claude": str(base / "empty-claude"),
+                    "codex": str(base / "empty-codex"),
+                    "t3": str(base / "t3"),
+                },
+            }))
+
+            # read_file output intentionally contains "Command exited with code 0." and exceeds 8K chars.
+            tricky_read = "1: SAMPLE = 'Command exited with code 0.\\nCommand output:'\n" + ("f" * 9_000)
+            real_cmd_out = "Command exited with code 0.\n\nCommand output:\n" + ("r" * 8_500)
+            lines = [
+                {
+                    "step_index": 0, "type": "PLANNER_RESPONSE", "source": "MODEL",
+                    "created_at": "2026-11-28T11:00:00Z",
+                    "tool_calls": [
+                        {"name": "read_file", "args": {"Path": json.dumps(str(fixture_file))}},
+                        {"name": "run_command", "args": {"CommandLine": json.dumps("bun run verify")}},
+                    ],
+                },
+                {"step_index": 1, "type": "GENERIC", "source": "MODEL",
+                 "created_at": "2026-11-28T11:00:01Z", "content": tricky_read},
+                {"step_index": 2, "type": "GENERIC", "source": "MODEL",
+                 "created_at": "2026-11-28T11:00:02Z", "content": real_cmd_out},
+            ]
+            (logs_dir / "transcript.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+
+            env = _t3_env(cfg, state, journal)
+            proc = subprocess.run([sys.executable, str(ROOT / "bin/friction"), "scan"],
+                                  env=env, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+            events = [json.loads(line) for line in journal.read_text().splitlines() if line]
+            self.assertEqual(
+                [(e["rule"], e["component"], e["project"], e["session"]) for e in events],
+                [("large-bash-output", "bun/run", "pos-app", "conv-pos-1")],
+                json.dumps(events, indent=1),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

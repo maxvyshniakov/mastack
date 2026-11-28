@@ -166,9 +166,10 @@ class Scanner:
 
     # ---- the detectors, shared by both transcript formats ----------------------------------------------------
 
-    def tool_output(self, ctx: dict, text: str, cwd, ts, command: str | None = None) -> None:
+    def tool_output(self, ctx: dict, text: str, cwd, ts, command: str | None = None, size: int | None = None) -> None:
         if command is not None:
-            large = fj.large_bash_output(text, command, cwd, session=ctx["session"], source="mastack-scan", ts=ts)
+            large = fj.large_bash_output(text, command, cwd, session=ctx["session"], source="mastack-scan", ts=ts,
+                                         size=size)
             if large:
                 self.emit(large)
         if "error TS" not in text:
@@ -310,7 +311,7 @@ class Scanner:
                         if name == "Bash":
                             tool_id = block.get("id")
                             if isinstance(tool_id, str) and tool_id:
-                                pending[tool_id] = str(tool.get("command") or "")
+                                pending[tool_id] = str(tool.get("command") or "")[:240]
                         elif name in ("Edit", "MultiEdit"):
                             edits = tool.get("edits") if isinstance(tool.get("edits"), list) else [tool]
                             for change in edits:
@@ -318,14 +319,16 @@ class Scanner:
                                           str(change.get("new_string") or ""), cwd, ts)
                 continue
             if isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "tool_result":
-                        inner = block.get("content")
-                        text = inner if isinstance(inner, str) else "\n".join(
-                            str(b.get("text") or "") for b in inner if isinstance(b, dict)) if isinstance(inner, list) else ""
-                        tool_use_id = block.get("tool_use_id")
-                        cmd = pending.pop(tool_use_id, None) if isinstance(tool_use_id, str) else None
-                        self.tool_output(ctx, text, cwd, ts, command=cmd)
+                result_blocks = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_result"]
+                single_result = len(result_blocks) == 1
+                for block in result_blocks:
+                    inner = block.get("content")
+                    text = inner if isinstance(inner, str) else "\n".join(
+                        str(b.get("text") or "") for b in inner if isinstance(b, dict)) if isinstance(inner, list) else ""
+                    tool_use_id = block.get("tool_use_id")
+                    cmd = pending.pop(tool_use_id, None) if isinstance(tool_use_id, str) else None
+                    real_size = _claude_tool_result_size(item if single_result else {}, text)
+                    self.tool_output(ctx, text, cwd, ts, command=cmd, size=real_size)
                 continue
             if subagent or item.get("isSidechain") or item.get("isMeta"):
                 continue
@@ -378,7 +381,7 @@ class Scanner:
                 call_id = payload.get("call_id")
                 shell_cmd = _codex_shell_command(payload)
                 if isinstance(call_id, str) and call_id and shell_cmd is not None:
-                    pending[call_id] = shell_cmd
+                    pending[call_id] = shell_cmd[:240]
                 body = str(payload.get("input") or payload.get("arguments") or "")
                 ctx["agent"] = (ctx["agent"] + "\n" + body[:4000])[-AGENT_CONTEXT:]
                 for file, removed, added in patches(body):
@@ -449,22 +452,44 @@ class Scanner:
             elif kind == "GENERIC" and content:
                 explicit_cmd = "Command exited with code" in content or "Command output:" in content
                 is_file_read = bool(re.search(r"(?:^|\n)Showing lines \d+-\d+ of \d+", content))
-                if explicit_cmd:
-                    cmd = pending_commands.pop(0) if pending_commands else ""
-                    for idx, (call_name, _) in enumerate(pending_calls):
-                        if call_name == "run_command":
-                            pending_calls.pop(idx)
-                            break
-                    self.tool_output(ctx, content, cwd, ts, command=cmd)
-                elif pending_calls:
+                if pending_calls:
                     head_name, head_cmd = pending_calls.pop(0)
-                    if head_name == "run_command" and not is_file_read:
+                    if head_name == "run_command":
                         if pending_commands:
                             pending_commands.pop(0)
-                        self.tool_output(ctx, content, cwd, ts, command=head_cmd if head_cmd is not None else "")
+                        if not is_file_read:
+                            self.tool_output(ctx, content, cwd, ts, command=head_cmd if head_cmd is not None else "")
+                elif explicit_cmd:
+                    cmd = pending_commands.pop(0) if pending_commands else ""
+                    self.tool_output(ctx, content, cwd, ts, command=cmd)
                 elif pending_commands and not is_file_read:
                     cmd = pending_commands.pop(0)
                     self.tool_output(ctx, content, cwd, ts, command=cmd)
+
+
+_PERSISTED_SIZE_RE = re.compile(r"Output too large\s*\(\s*(\d+(?:\.\d+)?)\s*(KB|MB|B)\s*\)", re.I)
+
+
+def _claude_tool_result_size(item: dict, text: str) -> int | None:
+    """Recover true output size when Claude Code replaces a large tool result with <persisted-output>."""
+    res = item.get("toolUseResult")
+    if isinstance(res, dict):
+        persisted = res.get("persistedOutputSize")
+        if isinstance(persisted, int) and not isinstance(persisted, bool) and persisted > len(text):
+            return persisted
+        stdout = res.get("stdout") if isinstance(res.get("stdout"), str) else ""
+        stderr = res.get("stderr") if isinstance(res.get("stderr"), str) else ""
+        total = len(stdout) + len(stderr)
+        if total > len(text):
+            return total
+    if "<persisted-output>" in text:
+        m = _PERSISTED_SIZE_RE.search(text)
+        if m:
+            amount = float(m.group(1))
+            unit = m.group(2).upper()
+            mult = 1024 * 1024 if unit == "MB" else 1024 if unit == "KB" else 1
+            return int(amount * mult)
+    return None
 
 
 CODEX_SHELL_TOOLS = frozenset({
@@ -1090,7 +1115,22 @@ def run_init(args) -> int:
         return 0
 
     cfg_path = fj.config_dir() / "friction.json"
-    existing = fj.load_config() if cfg_path.is_file() else {}
+    existing: dict = {}
+    if cfg_path.is_file():
+        try:
+            raw_existing = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as err:
+            if not args.force:
+                print(f"friction init: {cfg_path}: cannot parse existing JSON ({err}); fix it or pass --force",
+                      file=sys.stderr)
+                return 1
+            raw_existing = {}
+        if not isinstance(raw_existing, dict):
+            if not args.force:
+                print(f"friction init: {cfg_path}: expected a JSON object; fix it or pass --force", file=sys.stderr)
+                return 1
+            raw_existing = {}
+        existing = raw_existing
 
     if args.force or not existing:
         merged: dict = {

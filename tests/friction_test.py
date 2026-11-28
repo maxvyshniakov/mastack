@@ -454,6 +454,26 @@ class ScanTests(FrictionCase):
         self.assertEqual(len(turns), 1)
         self.assertEqual(turns[0]["text"], "Please run the diff")
 
+    def test_scan_recovers_claude_persisted_output_size(self):
+        app = str(self.app)
+        claude_proj = self.claude / "-home-app"
+        persisted_placeholder = "<persisted-output>\nOutput too large (33 KB). Full output saved to: /tmp/out.txt\n</persisted-output>"
+        (claude_proj / "s-persisted.jsonl").write_text("\n".join([
+            claude_line("assistant", [
+                {"type": "tool_use", "id": "p1", "name": "Bash", "input": {"command": "git diff HEAD~1"}},
+            ], cwd=app),
+            claude_line("user", [
+                {"type": "tool_result", "tool_use_id": "p1", "content": persisted_placeholder},
+            ], cwd=app, toolUseResult={"persistedOutputSize": 33800}),
+        ]) + "\n")
+
+        self.run_friction("scan")
+        large = [e for e in self.events() if e["rule"] == "large-bash-output" and e["session"] == "s-persisted"]
+        self.assertEqual(len(large), 1, json.dumps(self.events(), indent=1))
+        self.assertEqual(large[0]["component"], "git/diff")
+        self.assertIn("33800 chars: git diff HEAD~1", large[0]["detail"])
+        self.assertEqual(friction_journal.problems(large[0]), [])
+
 
 class InitTests(FrictionCase):
     def test_init_discovers_scoped_packages_idempotently_and_preserves_customizations(self):
@@ -512,6 +532,20 @@ class InitTests(FrictionCase):
         forced = self.config_data()
         self.assertEqual(forced["packages"]["@acme/kit-a"]["aliases"], ["Kit A"])
         self.assertEqual(forced["sources"], {"t3": "/custom/t3"})
+
+    def test_init_refuses_malformed_existing_friction_json_without_force(self):
+        cfg_file = self.config / "friction.json"
+        malformed = '{"packages": {},}'
+        cfg_file.write_text(malformed)
+
+        proc = self.run_friction("init", "--workspace", str(self.home), check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("cannot parse existing JSON", proc.stderr)
+        self.assertEqual(cfg_file.read_text(), malformed, "malformed config must not be overwritten without --force")
+
+        self.run_friction("init", "--workspace", str(self.home), "--force")
+        parsed = json.loads(cfg_file.read_text())
+        self.assertIn("packages", parsed)
 
 
 def git(cwd, *args) -> str:

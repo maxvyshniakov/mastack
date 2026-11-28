@@ -98,5 +98,6 @@ a file and record it via `lanefather review <id> --record <file> --reviewer <ali
 }
 ```
 
-Use `"findings": []` when `"verdict"` is `"approve"`. Include `"P0"`–`"P3"`
-severities only (omit `W*` leads from `findings`).
+Use `"findings": []` when there are none (`"verdict": "approve"` may also carry
+non-blocking `P3` findings). Include `"P0"`–`"P3"` severities only (omit `W*`
+leads from `findings`).
