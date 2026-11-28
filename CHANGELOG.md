@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- `models.md`, `skills/orchestrate`, `skills/cross-review`, `skills/critique`,
+  `skills/orchestration-audit`, `bin/friction`, `bin/install`:
+  - Codified the 3-Tier Judgment Scout Policy (`Tier 1: review`/Advisor = `0`
+    scouts; `Tier 2: Council critique` = `0` sub-scouts via `critique --pair`;
+    `Tier 3`: wide `specify`/`design`/`audit` across `>= 2` repos or `> 25`
+    files = `1–3` pointer-only `sonnet`/`flash` scouts `<= 15` calls &
+    `<= 2,500` chars + mandatory first-hand `read_file` verification,
+    `depth <= 1`).
+  - Updated `implementer.md`, `reviewer-brief.md`, and `orchestrate` for
+    batched parallel whole-file reads, warm-context handoff ceilings
+    (`reset_context_tokens` `150K`/`185K`, `max_turns_before_handoff` `80`),
+    and the canonical fenced `json` review findings trailer recordable via
+    `lanefather review <id> --record <file> --reviewer <alias>`.
+  - Wired `>8K` `large-bash-output` journaling into `bin/friction scan` across
+    `Scanner.t3` (with FIFO batched `run_command` tracking), `Scanner.codex`,
+    and `Scanner.claude` (deduplicated against `mastack-hook`), allowed `scan`
+    to emit tool-level notes and `owner-turns.jsonl` with a warning when
+    `friction.json` has no packages, and added `bin/friction init` (and
+    first-time `bin/install` provisioning) to discover local scoped packages
+    dynamically into `~/.config/mastack/friction.json`.
 - `models.toml`, `bin/role`, `hooks/model_roles.py`, `hooks/agent_role.py`,
   `hooks/codex_credits.py`, `models.md`: simplified model routing to two active
   families (`anthropic`, `google`) on `schema = 1`, retiring `sol` / `codex`

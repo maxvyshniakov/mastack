@@ -93,6 +93,38 @@ class SkillLintTests(unittest.TestCase):
             with self.subTest(alias=alias):
                 self.assertIn(alias, models_md, f"model {alias!r} used in models.toml is missing from models.md")
 
+    def test_scout_policy_batched_reads_and_review_json_trailer_contracts(self):
+        models_md = (ROOT / "models.md").read_text()
+        for marker in ("Tier 1", "Tier 2", "Tier 3", "Pointer-only"):
+            self.assertIn(marker, models_md, f"models.md missing {marker!r}")
+
+        orch = (SKILLS_DIR / "orchestrate" / "SKILL.md").read_text()
+        for marker in ("reset_context_tokens", "max_turns_before_handoff", "Tier 1", "Tier 2", "Tier 3", "--record"):
+            self.assertIn(marker, orch, f"orchestrate/SKILL.md missing {marker!r}")
+
+        impl = (SKILLS_DIR / "orchestrate" / "references" / "implementer.md").read_text()
+        self.assertIn("reset_context_tokens", impl)
+        self.assertIn("max_turns_before_handoff", impl)
+        self.assertIn("whole-file reads", impl)
+        self.assertNotIn("read only needed line ranges", impl.lower())
+
+        xrev = (SKILLS_DIR / "cross-review" / "SKILL.md").read_text()
+        for marker in ("Tier 1", "--record", "--pair"):
+            self.assertIn(marker, xrev, f"cross-review/SKILL.md missing {marker!r}")
+
+        rbrief = (SKILLS_DIR / "cross-review" / "references" / "reviewer-brief.md").read_text()
+        for marker in ("Tier 1", "whole-file reads", "--record", '"findings"', '"verdict"', '"falsifier"'):
+            self.assertIn(marker, rbrief, f"reviewer-brief.md missing {marker!r}")
+        self.assertNotIn("Read (line ranges)", rbrief)
+
+        critique = (SKILLS_DIR / "critique" / "SKILL.md").read_text()
+        self.assertIn("critique --pair", critique)
+        self.assertIn("Tier 2", critique)
+
+        audit = (SKILLS_DIR / "orchestration-audit" / "SKILL.md").read_text()
+        self.assertIn("Tier 3", audit)
+        self.assertIn("reset_context_tokens", audit)
+
 
 if __name__ == "__main__":
     unittest.main()

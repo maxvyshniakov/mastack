@@ -25,11 +25,18 @@ only after a command fails: every help or status call rereads your whole context
   claims; put a larger one under `Questions` or `Garden`.
 - Keep the diff to your tickets; other lanes edit nearby files on parallel
   branches.
-- Keep tool output small (every tool result stays in context on later turns):
-  wrap noisy commands (>8K output) with `<orchestrate skill dir>/scripts/quiet-cap -- <cmd>`, read only
-  needed line ranges, cap searches (`grep -m`, `| head`), run `git show --stat`
-  / `git diff --stat` before a full diff, and tail or grep logs instead of
-  printing them whole.
+- Batch parallel whole-file reads (up to the ~800-line tool cap) or complete
+  structural blocks instead of sequential narrow `Read` line slices or shell
+  `sed`/`head`/`tail`/`cat` file slicing (every extra turn resends the whole
+  context).
+- Keep command output small (every tool result stays in context on later turns):
+  wrap noisy commands (>8K output) with `<orchestrate skill dir>/scripts/quiet-cap -- <cmd>`,
+  cap searches (`grep -m`, `| head`), run `git show --stat` / `git diff --stat`
+  before a full diff, and tail or grep logs instead of printing them whole.
+- Respect warm-context ceilings (`reset_context_tokens`: `150K` Anthropic,
+  `185K` Google; `max_turns_before_handoff`: `80`): if your session approaches
+  either ceiling before finishing, commit clean WIP on your lane branch and
+  hand back so the orchestrator can continue in a fresh session.
 - Use the brief's focused checks for your edit-check loop, never the full lane
   check; run heavy focused checks through the project's slot wrapper. Multi-minute
   checks run in the background — wait for the completion notice, never in an

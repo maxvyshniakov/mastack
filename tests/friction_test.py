@@ -385,6 +385,168 @@ class ScanTests(FrictionCase):
         self.run_friction("scan")
         self.assertEqual(sum(1 for e in self.events() if e["kind"] == "type-error"), 2)
 
+    def test_scan_journals_large_bash_output_from_claude_and_codex_and_dedups_against_hook(self):
+        big = "z" * (friction_journal.LARGE_OUTPUT_THRESHOLD + 250)
+        app = str(self.app)
+        # Claude session with one Read (>8K, ignored) and two Bash (>8K, one pre-logged by hook).
+        claude_proj = self.claude / "-home-app"
+        (claude_proj / "s-big.jsonl").write_text("\n".join([
+            claude_line("assistant", [
+                {"type": "tool_use", "id": "r1", "name": "Read", "input": {"file_path": f"{app}/src/panel.tsx"}},
+                {"type": "tool_use", "id": "b1", "name": "Bash", "input": {"command": "git diff HEAD~1"}},
+                {"type": "tool_use", "id": "b2", "name": "Bash", "input": {"command": "bun run test"}},
+            ], cwd=app),
+            claude_line("user", [
+                {"type": "tool_result", "tool_use_id": "r1", "content": big},
+                {"type": "tool_result", "tool_use_id": "b1", "content": big},
+                {"type": "tool_result", "tool_use_id": "b2", "content": big},
+            ], cwd=app),
+        ]) + "\n")
+        # Codex session with a large shell output.
+        codex_lines = [
+            {"timestamp": "2026-11-10T12:00:00Z", "type": "session_meta", "payload": {"id": "cx-big", "cwd": app}},
+            {"timestamp": "2026-11-10T12:00:01Z", "type": "response_item", "payload": {
+                "type": "function_call", "call_id": "c1", "name": "exec_command",
+                "arguments": json.dumps({"cmd": "git log -p -n 5"}),
+            }},
+            {"timestamp": "2026-11-10T12:00:02Z", "type": "response_item", "payload": {
+                "type": "function_call_output", "call_id": "c1", "output": big,
+            }},
+        ]
+        (self.codex / "2026" / "11" / "10" / "rollout-cx-big.jsonl").write_text(
+            "\n".join(json.dumps(c) for c in codex_lines) + "\n"
+        )
+        # Pre-seed hook event for s-big git diff HEAD~1 to verify deduplication.
+        hook_ev = friction_journal.large_bash_output(big, "git diff HEAD~1", self.app, session="s-big",
+                                                     source="mastack-hook")
+        friction_journal.append([hook_ev], {"FRICTION_JOURNAL": str(self.journal)})
+
+        self.run_friction("scan")
+        large = [e for e in self.events() if e["rule"] == "large-bash-output"]
+        self.assertEqual(sorted((e["component"], e["session"], e["source"]) for e in large), sorted([
+            ("git/diff", "s-big", "mastack-hook"),
+            ("bun/run", "s-big", "mastack-scan"),
+            ("git/log", "cx-big", "mastack-scan"),
+        ]), json.dumps(large, indent=1))
+        for ev in large:
+            self.assertEqual(friction_journal.problems(ev), [])
+
+    def test_scan_without_friction_json_warns_and_still_records_large_output_and_owner_turns(self):
+        big = "w" * (friction_journal.LARGE_OUTPUT_THRESHOLD + 100)
+        app = str(self.app)
+        default_claude = self.home / ".claude" / "projects" / "-home-app"
+        default_claude.mkdir(parents=True)
+        (default_claude / "s-nocfg.jsonl").write_text("\n".join([
+            claude_line("user", "Please run the diff", cwd=app),
+            claude_line("assistant", [{"type": "tool_use", "id": "b1", "name": "Bash",
+                                       "input": {"command": "git diff"}}], cwd=app),
+            claude_line("user", [{"type": "tool_result", "tool_use_id": "b1", "content": big}], cwd=app),
+        ]) + "\n")
+        (self.config / "friction.json").unlink()
+
+        proc = self.run_friction("scan")
+        self.assertIn("warning: no packages", proc.stderr)
+        large = [e for e in self.events() if e["rule"] == "large-bash-output"]
+        self.assertEqual(len(large), 1)
+        self.assertEqual((large[0]["component"], large[0]["package"], large[0]["source"]),
+                         ("git/diff", "mastack", "mastack-scan"))
+        turns = [json.loads(l) for l in (self.tmp / "hook-state" / "owner-turns.jsonl").read_text().splitlines() if l]
+        self.assertEqual(len(turns), 1)
+        self.assertEqual(turns[0]["text"], "Please run the diff")
+
+    def test_scan_recovers_claude_persisted_output_size(self):
+        app = str(self.app)
+        claude_proj = self.claude / "-home-app"
+        persisted_placeholder = "<persisted-output>\nOutput too large (33 KB). Full output saved to: /tmp/out.txt\n</persisted-output>"
+        (claude_proj / "s-persisted.jsonl").write_text("\n".join([
+            claude_line("assistant", [
+                {"type": "tool_use", "id": "p1", "name": "Bash", "input": {"command": "git diff HEAD~1"}},
+            ], cwd=app),
+            claude_line("user", [
+                {"type": "tool_result", "tool_use_id": "p1", "content": persisted_placeholder},
+            ], cwd=app, toolUseResult={"persistedOutputSize": 33800}),
+        ]) + "\n")
+
+        self.run_friction("scan")
+        large = [e for e in self.events() if e["rule"] == "large-bash-output" and e["session"] == "s-persisted"]
+        self.assertEqual(len(large), 1, json.dumps(self.events(), indent=1))
+        self.assertEqual(large[0]["component"], "git/diff")
+        self.assertIn("33800 chars: git diff HEAD~1", large[0]["detail"])
+        self.assertEqual(friction_journal.problems(large[0]), [])
+
+
+class InitTests(FrictionCase):
+    def test_init_discovers_scoped_packages_idempotently_and_preserves_customizations(self):
+        (self.config / "friction.json").unlink()
+        ws = self.home / "ws"
+        # Repo A: monorepo with private root + scoped package using exports["."].types
+        repo_a = ws / "kit-a"
+        (repo_a / ".git").mkdir(parents=True)
+        (repo_a / "package.json").write_text(json.dumps({"name": "kit-a-workspace", "private": True}))
+        pkg_a = repo_a / "packages" / "kit-a"
+        (pkg_a / "dist").mkdir(parents=True)
+        (pkg_a / "package.json").write_text(json.dumps({
+            "name": "@acme/kit-a",
+            "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}},
+        }))
+        # Repo B: scoped package using top-level types
+        pkg_b = ws / "grid-b" / "packages" / "grid-b"
+        (pkg_b / "dist").mkdir(parents=True)
+        (pkg_b / "package.json").write_text(json.dumps({
+            "name": "@acme/grid-b",
+            "types": "./dist/index.d.ts",
+        }))
+        # Private or unscoped packages must be skipped.
+        ignored = ws / "app-c"
+        ignored.mkdir(parents=True)
+        (ignored / "package.json").write_text(json.dumps({"name": "plain-app", "types": "./dist/index.d.ts"}))
+        priv = ws / "priv-d"
+        priv.mkdir(parents=True)
+        (priv / "package.json").write_text(json.dumps({"name": "@acme/private-app", "private": True,
+                                                        "types": "./dist/index.d.ts"}))
+
+        dry = self.run_friction("init", "--workspace", str(ws), "--dry-run")
+        self.assertFalse((self.config / "friction.json").exists(), "--dry-run writes nothing")
+        dry_cfg = json.loads(dry.stdout)
+        self.assertEqual(dry_cfg["scopes"], ["@acme/"])
+        self.assertEqual(sorted(dry_cfg["packages"]), ["@acme/grid-b", "@acme/kit-a"])
+
+        self.run_friction("init", "--workspace", str(ws))
+        cfg = self.config_data()
+        self.assertEqual(cfg["scopes"], ["@acme/"])
+        self.assertEqual(cfg["packages"]["@acme/kit-a"]["aliases"], ["Kit A"])
+        self.assertEqual(cfg["packages"]["@acme/kit-a"]["types"], ["~/ws/kit-a/packages/kit-a/dist/index.d.ts"])
+        self.assertEqual(cfg["packages"]["@acme/grid-b"]["types"], ["~/ws/grid-b/packages/grid-b/dist/index.d.ts"])
+
+        # User customizations & sources survive a repeat init.
+        cfg["packages"]["@acme/kit-a"]["aliases"] = ["Custom Kit"]
+        cfg["sources"] = {"t3": "/custom/t3"}
+        (self.config / "friction.json").write_text(json.dumps(cfg))
+        self.run_friction("init", "--workspace", str(ws))
+        after = self.config_data()
+        self.assertEqual(after["packages"]["@acme/kit-a"]["aliases"], ["Custom Kit"])
+        self.assertEqual(after["sources"], {"t3": "/custom/t3"})
+
+        # --force resets discovered package entries while keeping sources.
+        self.run_friction("init", "--workspace", str(ws), "--force")
+        forced = self.config_data()
+        self.assertEqual(forced["packages"]["@acme/kit-a"]["aliases"], ["Kit A"])
+        self.assertEqual(forced["sources"], {"t3": "/custom/t3"})
+
+    def test_init_refuses_malformed_existing_friction_json_without_force(self):
+        cfg_file = self.config / "friction.json"
+        malformed = '{"packages": {},}'
+        cfg_file.write_text(malformed)
+
+        proc = self.run_friction("init", "--workspace", str(self.home), check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("cannot parse existing JSON", proc.stderr)
+        self.assertEqual(cfg_file.read_text(), malformed, "malformed config must not be overwritten without --force")
+
+        self.run_friction("init", "--workspace", str(self.home), "--force")
+        parsed = json.loads(cfg_file.read_text())
+        self.assertIn("packages", parsed)
+
 
 def git(cwd, *args) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
